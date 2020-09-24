@@ -1,0 +1,73 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Engine">
+      <UniqueIdentifier>{cf2d66f0-4691-40f3-a930-f56b1f003c95}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine\Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Engine\Lib Files">
+      <UniqueIdentifier>{4cf94e77-ee31-4f65-992f-9fe3edec928e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine\Shaders">
+      <UniqueIdentifier>{5ab2e276-ef80-480c-933f-c957f168ba29}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\engine\Shaders\pbr_standard.h">
+      <Filter>Engine\Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\Camera.h">
+      <Filter>Engine\Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\Controls.h">
+      <Filter>Engine\Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\Model.h">
+      <Filter>Engine\Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\Texture.h">
+      <Filter>Engine\Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\Shaders\Shader.h">
+      <Filter>Engine\Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\Shaders\Shader_Constants.h">
+      <Filter>Engine\Shaders</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\engine\Main.cpp">
+      <Filter>Engine\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\Controls.cpp">
+      <Filter>Engine\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\Texture.cpp">
+      <Filter>Engine\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="include\glad\glad.c">
+      <Filter>Engine\Lib Files</Filter>
+    </ClCompile>
+    <ClCompile Include="include\nv_dds\nv_dds.cpp">
+      <Filter>Engine\Lib Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\Model.cpp">
+      <Filter>Engine\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\Camera.cpp">
+      <Filter>Engine\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\Shaders\pbr_standard.cpp">
+      <Filter>Engine\Shaders</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\Shaders\Shader.cpp">
+      <Filter>Engine\Shaders</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\shaders\Shader_Constants.cpp">
+      <Filter>Engine\Shaders</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
