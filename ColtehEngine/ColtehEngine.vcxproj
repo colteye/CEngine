@@ -19,25 +19,31 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\engine\Camera.h" />
-    <ClInclude Include="src\engine\Controls.h" />
-    <ClInclude Include="src\engine\Model.h" />
-    <ClInclude Include="src\engine\Shaders\pbr_standard.h" />
-    <ClInclude Include="src\engine\Shaders\Shader.h" />
-    <ClInclude Include="src\engine\Shaders\Shader_Constants.h" />
-    <ClInclude Include="src\engine\Texture.h" />
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="include\glad\glad.c" />
     <ClCompile Include="include\nv_dds\nv_dds.cpp" />
-    <ClCompile Include="src\engine\Camera.cpp" />
-    <ClCompile Include="src\engine\Controls.cpp" />
-    <ClCompile Include="src\engine\Main.cpp" />
-    <ClCompile Include="src\engine\Model.cpp" />
-    <ClCompile Include="src\engine\Shaders\pbr_standard.cpp" />
-    <ClCompile Include="src\engine\Shaders\Shader.cpp" />
-    <ClCompile Include="src\engine\shaders\Shader_Constants.cpp" />
-    <ClCompile Include="src\engine\Texture.cpp" />
+    <ClCompile Include="src\engine\camera.cpp" />
+    <ClCompile Include="src\engine\controls.cpp" />
+    <ClCompile Include="src\engine\light.cpp" />
+    <ClCompile Include="src\engine\main.cpp" />
+    <ClCompile Include="src\engine\model.cpp" />
+    <ClCompile Include="src\engine\model_importer.cpp" />
+    <ClCompile Include="src\engine\render_system.cpp" />
+    <ClCompile Include="src\engine\shaders\pbr_standard.cpp" />
+    <ClCompile Include="src\engine\shaders\shader.cpp" />
+    <ClCompile Include="src\engine\shaders\shader_constants.cpp" />
+    <ClCompile Include="src\engine\texture.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\engine\camera.h" />
+    <ClInclude Include="src\engine\controls.h" />
+    <ClInclude Include="src\engine\light.h" />
+    <ClInclude Include="src\engine\model.h" />
+    <ClInclude Include="src\engine\model_importer.h" />
+    <ClInclude Include="src\engine\render_system.h" />
+    <ClInclude Include="src\engine\shaders\pbr_standard.h" />
+    <ClInclude Include="src\engine\shaders\shader.h" />
+    <ClInclude Include="src\engine\shaders\shader_constants.h" />
+    <ClInclude Include="src\engine\texture.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>

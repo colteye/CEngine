@@ -1,12 +1,20 @@
-#include "shader_constants.h"
 #include "pbr_standard.h"
+#include "shader_constants.h"
+#include "../render_system.h"
+#include "../texture.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-PBRStandard::PBRStandard()
+PBRStandard::PBRStandard(std::string albedo_p, std::string normal_p, std::string metallic_roughness_ao_p)
 {
+	albedo_path = albedo_p;
+	normal_path = normal_p;
+	metallic_roughness_ao_path = metallic_roughness_ao_p;
+	
 	Load();
+
+	RenderSystem::RegisterShader(this);
 }
 
 void PBRStandard::SetShaderFiles()
@@ -19,7 +27,7 @@ void PBRStandard::InitializeParameters()
 {
 	light_pos_id = glGetUniformLocation(shader_id, "light_positions");
 	light_col_id = glGetUniformLocation(shader_id, "light_colors");
-	//light_pow_id = glGetUniformLocation(shader_id, "light_power");
+	light_pow_id = glGetUniformLocation(shader_id, "light_powers");
 	
 	cam_pos_id = glGetUniformLocation(shader_id, "cam_pos_world");
 
@@ -30,24 +38,27 @@ void PBRStandard::InitializeParameters()
 
 void PBRStandard::SetParametersStatic()
 {
-	glm::vec3 light_positions[4];
-	light_positions[0] = glm::vec3(0.0f, 10.0f, 7.0f);
-	light_positions[1] = glm::vec3(0.0f, 10.0f, -7.0f);
-	light_positions[2] = glm::vec3(0.0f, 20.0f, 4.0f);
-	light_positions[3] = glm::vec3(0.0f, 7.0f, 0.0f);
+	// Load textures into shader.
+	glActiveTexture(GL_TEXTURE0);
+	Texture::LoadDDS(albedo_path);
+	glUniform1i(glGetUniformLocation(shader_id, "albedo"), 0);
 
-	glm::vec3 light_colors[4];
-	light_colors[0] = glm::vec3(1.0f, 1.0f, 1.0f);
-	light_colors[2] = glm::vec3(1.0f, 0.0f, 0.0f);
-	light_colors[1] = glm::vec3(0.0f, 1.0f, 0.0f);
-	light_colors[3] = glm::vec3(0.0f, 0.0f, 1.0f);
+	glActiveTexture(GL_TEXTURE1);
+	Texture::LoadDDS(normal_path);
+	glUniform1i(glGetUniformLocation(shader_id, "normal"), 1);
 
-	glUniform3fv(light_pos_id, 4, glm::value_ptr(light_positions[0]));
-	glUniform3fv(light_col_id, 4, glm::value_ptr(light_colors[0]));
+	glActiveTexture(GL_TEXTURE2);
+	Texture::LoadDDS(metallic_roughness_ao_path);
+	glUniform1i(glGetUniformLocation(shader_id, "metallic_roughness_ao"), 2);
 
-	//glUniform3f(light_pos_id, 0.0f, 10.0f, 7.0f);
-	//glUniform3f(light_col_id, 1.0f, 1.0f, 1.0f);
-	//glUniform1f(light_pow_id, 100.0f);
+	// Load light data into shader.
+	std::vector<glm::vec3> light_pos_list = RenderSystem::GetLightPositions();
+	std::vector<glm::vec3> light_col_list = RenderSystem::GetLightColors();
+	std::vector<float> light_pow_list = RenderSystem::GetLightPowers();
+
+	glUniform3fv(light_pos_id, light_pos_list.size(), glm::value_ptr(light_pos_list[0]));
+	glUniform3fv(light_col_id, light_col_list.size(), glm::value_ptr(light_col_list[0]));
+	glUniform1fv(light_pow_id, light_pow_list.size(), &light_pow_list[0]);
 }
 
 void PBRStandard::SetParametersDynamic()
@@ -56,5 +67,4 @@ void PBRStandard::SetParametersDynamic()
 	glUniformMatrix4fv(m_id, 1, GL_FALSE, &ShaderConstants::model[0][0]);
 	glUniformMatrix4fv(v_id, 1, GL_FALSE, &ShaderConstants::view[0][0]);
 	glUniformMatrix4fv(p_id, 1, GL_FALSE, &ShaderConstants::proj[0][0]);
-
 }

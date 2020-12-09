@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PROJECT>
+    <Image File="C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/test_model/barrel_low_barrel_BaseColor.png">
+        <Compression Setting="barrel_low_barrel_BaseColor_low_barrel_BaseColor_PNG_BC3_2" Enabled="False">
+            <Source>C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/test_model/barrel_low_barrel_BaseColor.png</Source>
+            <Destination>C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/test_model/results/barrel_low_barrel_BaseColor_low_barrel_BaseColor_PNG_BC3_2.DDS</Destination>
+            <fd>BC3</fd>
+            <Quality>0.05</Quality>
+            <WeightR>0.3086</WeightR>
+            <WeightG>0.6094</WeightG>
+            <WeightB>0.082</WeightB>
+            <AlphaThreshold>0</AlphaThreshold>
+            <BlockRate>8.00</BlockRate>
+        </Compression>
+    </Image>
+    <Image File="C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/test_model/barrel_low_barrel_Masks.png">
+        <Compression Setting="barrel_low_barrel_Masks_PNG_BC3_1" Enabled="False">
+            <Source>C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/test_model/barrel_low_barrel_Masks.png</Source>
+            <Destination>C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/test_model/results/barrel_low_barrel_Masks_PNG_BC3_1.DDS</Destination>
+            <fd>BC3</fd>
+            <Quality>0.05</Quality>
+            <WeightR>0.3086</WeightR>
+            <WeightG>0.6094</WeightG>
+            <WeightB>0.082</WeightB>
+            <AlphaThreshold>0</AlphaThreshold>
+            <BlockRate>8.00</BlockRate>
+        </Compression>
+    </Image>
+    <Image File="C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/test_model/barrel_low_barrel_Normal.png">
+        <Compression Setting="barrel_low_barrel_Normal_PNG_BC3_1" Enabled="False">
+            <Source>C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/test_model/barrel_low_barrel_Normal.png</Source>
+            <Destination>C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/test_model/results/barrel_low_barrel_Normal_PNG_BC3_1.DDS</Destination>
+            <fd>BC3</fd>
+            <Quality>0.05</Quality>
+            <WeightR>0.3086</WeightR>
+            <WeightG>0.6094</WeightG>
+            <WeightB>0.082</WeightB>
+            <AlphaThreshold>0</AlphaThreshold>
+            <BlockRate>8.00</BlockRate>
+        </Compression>
+    </Image>
+</PROJECT>

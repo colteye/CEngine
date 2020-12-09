@@ -13,12 +13,14 @@
 #include "shaders/pbr_standard.h"
 #include "texture.h"
 #include "model.h"
+#include "model_importer.h"
 #include "controls.h"
 #include "camera.h"
+#include "render_system.h"
 
 
 #include "glm/gtx/string_cast.hpp"
-#include "Shaders/Shader_Constants.h"
+#include "shaders/shader_constants.h"
 
 GLFWwindow* Initialization()
 {
@@ -79,53 +81,22 @@ int main()
 	// Ensure we can capture the escape key being pressed below
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 
-	GLuint VertexArrayID;
-	glGenVertexArrays(1, &VertexArrayID);
-	glBindVertexArray(VertexArrayID);
+	RenderSystem::Initialize();
 
-	std::vector<glm::vec3> vertices;
-	std::vector<glm::vec2> uvs;
-	std::vector<glm::vec3> normals;
-	bool res = Model::LoadOBJ("chad_chin.obj", vertices, uvs, normals);
+	// Some models.
+	Model barrel_x = ModelImporter::ImportOBJ("test_model/barrel_low.obj");
+	Model barrel_y = ModelImporter::ImportOBJ("test_model/barrel_low2.obj");
+	Model floor = ModelImporter::ImportOBJ("test_model/barrel_floor.obj");
 
-	//glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices[0], GL_STATIC_DRAW);
+	// Some lights.
+	Light light_1 = Light(glm::vec3(0.0f, 10.0f, 7.0f), glm::vec3(1.0f, 1.0f, 1.0f), 1);
+	Light light_4 = Light(glm::vec3(0.0f, 7.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), 1);
 
-	// This will identify our vertex buffer
-	GLuint vertexbuffer;
-	glGenBuffers(1, &vertexbuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices[0], GL_STATIC_DRAW);
-
-	GLuint uvbuffer;
-	glGenBuffers(1, &uvbuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-	glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(glm::vec2), &uvs[0], GL_STATIC_DRAW);
-
-	GLuint normalbuffer;
-	glGenBuffers(1, &normalbuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, normalbuffer);
-	glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), &normals[0], GL_STATIC_DRAW);
-
-	// Enable depth test
-	glEnable(GL_DEPTH_TEST);
-	// Accept fragment if it closer to the camera than the former one
-	glDepthFunc(GL_LESS);
-
-	glEnable(GL_CULL_FACE);
-
-	// Shader stuff.
-	GLuint texture = Texture::LoadDDS("uvtemplate.dds");
-	PBRStandard pbr_shader;
+	// Some shaders.
+	PBRStandard pbr_shader("test_model/results/barrel_albedo.DDS", "test_model/results/barrel_normal.DDS", "test_model/results/barrel_metallic_roughness_ao.DDS");
 
 	Camera view_cam;
 	Controls control = Controls(window);
-
-	/*std::cout << glm::to_string(ShaderConstants::model_view_proj) << std::endl;
-
-	glm::vec3 position = view_cam.GetPosition();
-	glm::vec2 angles = view_cam.GetAngles();
-
-	view_cam.SetPositionAngles(position, angles);*/
 
 	double lastTime = glfwGetTime();
 	do {
@@ -135,50 +106,7 @@ int main()
 
 		control.Update(&view_cam, deltaTime);
 
-		// Clear the screen. It's not mentioned before Tutorial 02, but it can cause flickering, so it's there nonetheless.
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		pbr_shader.Update();
-
-		// Draw nothing, see you in tutorial 2 !
-		glEnableVertexAttribArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-		glVertexAttribPointer(
-			0,                  // attribute 0. No particular reason for 0, but must match the layout in the shader.
-			3,                  // size
-			GL_FLOAT,           // type
-			GL_FALSE,           // normalized?
-			0,                  // stride
-			(void*)0            // array buffer offset
-		);
-
-		glEnableVertexAttribArray(1);
-		glBindBuffer(GL_ARRAY_BUFFER, normalbuffer);
-		glVertexAttribPointer(
-			1,                                // attribute. No particular reason for 1, but must match the layout in the shader.
-			3,                                // size
-			GL_FLOAT,                         // type
-			GL_FALSE,                         // normalized?
-			0,                                // stride
-			(void*)0                          // array buffer offset	
-		);
-
-		// 2nd attribute buffer : uvs
-		glEnableVertexAttribArray(2);
-		glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-		glVertexAttribPointer(
-			2,                                // attribute. No particular reason for 1, but must match the layout in the shader.
-			2,                                // size
-			GL_FLOAT,                         // type
-			GL_FALSE,                         // normalized?
-			0,                                // stride
-			(void*)0                          // array buffer offset
-		);
-
-		// Draw the triangle !
-		glDrawArrays(GL_TRIANGLES, 0, 3160 * 3); // Starting from vertex 0; 3 vertices total -> 1 triangle
-		glDisableVertexAttribArray(0);
-		////////////////////////////////////////////////
+		RenderSystem::Render();
 
 		// Swap buffers
 		glfwSwapBuffers(window);

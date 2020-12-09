@@ -16,58 +16,76 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\engine\Shaders\pbr_standard.h">
-      <Filter>Engine\Shaders</Filter>
-    </ClInclude>
-    <ClInclude Include="src\engine\Camera.h">
-      <Filter>Engine\Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\engine\Controls.h">
-      <Filter>Engine\Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\engine\Model.h">
-      <Filter>Engine\Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\engine\Texture.h">
-      <Filter>Engine\Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\engine\Shaders\Shader.h">
-      <Filter>Engine\Shaders</Filter>
-    </ClInclude>
-    <ClInclude Include="src\engine\Shaders\Shader_Constants.h">
-      <Filter>Engine\Shaders</Filter>
-    </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="src\engine\Main.cpp">
-      <Filter>Engine\Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\engine\Controls.cpp">
-      <Filter>Engine\Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\engine\Texture.cpp">
-      <Filter>Engine\Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="include\glad\glad.c">
       <Filter>Engine\Lib Files</Filter>
     </ClCompile>
     <ClCompile Include="include\nv_dds\nv_dds.cpp">
       <Filter>Engine\Lib Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\engine\Model.cpp">
+    <ClCompile Include="src\engine\shaders\pbr_standard.cpp">
+      <Filter>Engine\Shaders</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\shaders\shader.cpp">
+      <Filter>Engine\Shaders</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\shaders\shader_constants.cpp">
+      <Filter>Engine\Shaders</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\camera.cpp">
       <Filter>Engine\Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\engine\Camera.cpp">
+    <ClCompile Include="src\engine\controls.cpp">
       <Filter>Engine\Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\engine\Shaders\pbr_standard.cpp">
-      <Filter>Engine\Shaders</Filter>
+    <ClCompile Include="src\engine\light.cpp">
+      <Filter>Engine\Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\engine\Shaders\Shader.cpp">
-      <Filter>Engine\Shaders</Filter>
+    <ClCompile Include="src\engine\main.cpp">
+      <Filter>Engine\Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\engine\shaders\Shader_Constants.cpp">
-      <Filter>Engine\Shaders</Filter>
+    <ClCompile Include="src\engine\render_system.cpp">
+      <Filter>Engine\Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\engine\texture.cpp">
+      <Filter>Engine\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\model_importer.cpp">
+      <Filter>Engine\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\model.cpp">
+      <Filter>Engine\Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\engine\shaders\pbr_standard.h">
+      <Filter>Engine\Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\shaders\shader.h">
+      <Filter>Engine\Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\shaders\shader_constants.h">
+      <Filter>Engine\Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\camera.h">
+      <Filter>Engine\Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\controls.h">
+      <Filter>Engine\Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\light.h">
+      <Filter>Engine\Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\render_system.h">
+      <Filter>Engine\Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\texture.h">
+      <Filter>Engine\Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\model_importer.h">
+      <Filter>Engine\Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\model.h">
+      <Filter>Engine\Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

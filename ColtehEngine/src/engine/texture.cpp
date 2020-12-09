@@ -2,12 +2,12 @@
 
 #include "Texture.h"
 
-GLuint Texture::LoadDDS(std::string imagepath) {
+GLuint Texture::LoadDDS(std::string image_p) {
 
 	nv_dds::CDDSImage image;
 	GLuint TextureID;
 
-	image.load(imagepath);
+	image.load(image_p);
 
 	glGenTextures(1, &TextureID);
 	glEnable(GL_TEXTURE_2D);
