@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PROJECT>
+    <Image File="C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/missing/missing.png">
+        <Compression Setting="missing_PNG_DXT1_1" Enabled="False">
+            <Source>C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/missing/missing.png</Source>
+            <Destination>C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/missing/results/missing_PNG_DXT1_1.DDS</Destination>
+            <fd>DXT1</fd>
+            <Quality>0.05</Quality>
+            <WeightR>0.3086</WeightR>
+            <WeightG>0.6094</WeightG>
+            <WeightB>0.082</WeightB>
+            <AlphaThreshold>0</AlphaThreshold>
+            <BlockRate>8.00</BlockRate>
+        </Compression>
+        <Compression Setting="missing" Enabled="False">
+            <Source>C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/missing/missing.png</Source>
+            <Destination>C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/missing/results/missing.DDS</Destination>
+            <fd>DXT5</fd>
+            <Quality>0.5</Quality>
+            <WeightR>0.3086</WeightR>
+            <WeightG>0.6094</WeightG>
+            <WeightB>0.082</WeightB>
+            <AlphaThreshold>0</AlphaThreshold>
+            <BlockRate>8.00</BlockRate>
+        </Compression>
+    </Image>
+</PROJECT>

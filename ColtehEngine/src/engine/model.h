@@ -6,18 +6,18 @@
 
 #include <glad/glad.h>
 #include <glm/glm.hpp>
+#include <unordered_map>
+#include "material.h"
+#include "mesh.h"
 
 class Model
 {
 public:
-	Model(std::vector<glm::vec3>& in_vertices,
-		std::vector<glm::vec2>& in_uvs,
-		std::vector<glm::vec3>& in_normals,
-		std::vector<glm::vec3>& in_tangents);
+	std::string model_name;
+	Model(std::unordered_map<std::string, Mesh>& in_meshes, std::unordered_map<std::string, Material*>& in_mats);
 
-	std::vector<glm::vec3> vertices;
-	std::vector<glm::vec2> uvs;
-	std::vector<glm::vec3> normals;
-	std::vector<glm::vec3> tangents;
+private:
+	std::unordered_map<std::string, Mesh> meshes;
+	std::unordered_map<std::string, Material*> mats;
 };
 #endif

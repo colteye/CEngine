@@ -25,6 +25,8 @@
     <ClCompile Include="src\engine\controls.cpp" />
     <ClCompile Include="src\engine\light.cpp" />
     <ClCompile Include="src\engine\main.cpp" />
+    <ClCompile Include="src\engine\material.cpp" />
+    <ClCompile Include="src\engine\mesh.cpp" />
     <ClCompile Include="src\engine\model.cpp" />
     <ClCompile Include="src\engine\model_importer.cpp" />
     <ClCompile Include="src\engine\render_system.cpp" />
@@ -37,6 +39,8 @@
     <ClInclude Include="src\engine\camera.h" />
     <ClInclude Include="src\engine\controls.h" />
     <ClInclude Include="src\engine\light.h" />
+    <ClInclude Include="src\engine\material.h" />
+    <ClInclude Include="src\engine\mesh.h" />
     <ClInclude Include="src\engine\model.h" />
     <ClInclude Include="src\engine\model_importer.h" />
     <ClInclude Include="src\engine\render_system.h" />

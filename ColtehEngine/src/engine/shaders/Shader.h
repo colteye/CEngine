@@ -8,7 +8,12 @@ class Shader
 {
 public:
 	void Load();
-	void Update() { SetParametersDynamic(); };
+	void Use() { glUseProgram(shader_id); }
+	void SetParameters() 
+	{ 
+		SetParametersStatic();
+		SetParametersDynamic();
+	};
 
 protected:
 	virtual void SetShaderFiles() = 0;

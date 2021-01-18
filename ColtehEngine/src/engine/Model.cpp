@@ -2,15 +2,17 @@
 #include "render_system.h"
 #include <string>
 
-Model::Model(std::vector<glm::vec3>& in_vertices,
-	std::vector<glm::vec2>& in_uvs,
-	std::vector<glm::vec3>& in_normals,
-	std::vector<glm::vec3>& in_tangents)
+Model::Model(
+	std::unordered_map<std::string, Mesh>& in_meshes,
+	std::unordered_map<std::string, Material*>& in_mats)
 {
-	vertices = in_vertices;
-	uvs = in_uvs;
-	normals = in_normals;
-	tangents = in_tangents;
+	meshes = in_meshes;
+	mats = in_mats;
 
-	RenderSystem::RegisterModel(this);
+	// Register all meshes.
+	// Materials should already be registered!
+	for (auto& it : meshes)
+	{
+		RenderSystem::RegisterMesh(&it.second);
+	}
 }

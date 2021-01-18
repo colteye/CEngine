@@ -99,9 +99,4 @@ void Shader::Load() {
 	glDeleteShader(fragment_id);
 
 	InitializeParameters();
-
-	glUseProgram(shader_id);
-
-	// only initialize on load.
-	SetParametersStatic();
 }

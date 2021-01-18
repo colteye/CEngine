@@ -10,7 +10,6 @@ GLuint Texture::LoadDDS(std::string image_p) {
 	image.load(image_p);
 
 	glGenTextures(1, &TextureID);
-	glEnable(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, TextureID);
 
 	glCompressedTexImage2DARB(GL_TEXTURE_2D, 0, image.get_format(),
@@ -31,6 +30,5 @@ GLuint Texture::LoadDDS(std::string image_p) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-
 	return TextureID;
 }

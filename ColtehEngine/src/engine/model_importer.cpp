@@ -4,8 +4,9 @@
 #include <string>
 #include <sstream>
 #include <regex>
+#include <unordered_map>
 
-Model ModelImporter::ImportOBJ(std::string model_p)
+Model ModelImporter::ImportOBJ(std::string model_p, std::unordered_map<std::string, Material*> in_mats)
 {
 	std::vector<glm::vec3> temp_vertices;
 	std::vector<glm::vec2> temp_uvs;
@@ -16,8 +17,15 @@ Model ModelImporter::ImportOBJ(std::string model_p)
 	std::vector<glm::vec3> out_normals;
 	std::vector<glm::vec3> out_tangents;
 
+	//std::vector<Material*> out_mats;
+	//std::vector<Mesh> out_meshes;
+
+	std::unordered_map<std::string, Material*> out_mats;
+	std::unordered_map<std::string, Mesh> out_meshes;
+
 	std::ifstream model_file;
 	model_file.open(model_p);
+
 
 	if (!model_file.is_open())
 	{
@@ -25,6 +33,9 @@ Model ModelImporter::ImportOBJ(std::string model_p)
 	}
 
 	std::string line;
+	std::string current_mesh_name = "";
+	std::string current_mat_name = "";
+
 	while (std::getline(model_file, line))
 	{
 		if (line.at(0) == 'v')
@@ -70,7 +81,7 @@ Model ModelImporter::ImportOBJ(std::string model_p)
 
 			if (tokens.size() != indexes_size)
 			{
-				std::cout << "File can't be read by our simple parser: Try exporting with other options\n";
+				std::cout << "File can't be read by this simple parser: Try exporting with other options\n";
 			}
 
 			for (int i = 0; i < indexes_size; i+=3)
@@ -109,8 +120,57 @@ Model ModelImporter::ImportOBJ(std::string model_p)
 			out_tangents.push_back(tangent);
 			out_tangents.push_back(tangent);
 		}
+		else if (line.at(0) == 'o')
+		{
+			if (current_mesh_name != "")
+			{
+				// Clear arrays, time to add new data sequentially.
+				temp_vertices.clear();
+				temp_uvs.clear();
+				temp_normals.clear();
+
+				out_vertices.clear();
+				out_normals.clear();
+				out_uvs.clear();
+				out_tangents.clear();
+			}
+
+			// Instantiate new mesh.
+			// Get name after "o ".
+			std::string mesh_name = line.substr(2);
+			out_meshes[mesh_name] = Mesh();
+			current_mesh_name = mesh_name;
+			std::cout << "creating new mesh\n";
+		}
+		else if (line.find("usemtl") != std::string::npos)
+		{
+			if (current_mat_name != "")
+			{
+				out_meshes[current_mesh_name].addMaterialMeshData(out_mats[current_mat_name], out_vertices, out_uvs, out_normals, out_tangents);
+
+				std::cout << out_vertices.size();
+
+				// Clear arrays, time to add new data sequentially.
+				temp_vertices.clear();
+				temp_uvs.clear();
+				temp_normals.clear();
+
+				out_vertices.clear();
+				out_uvs.clear();
+				out_normals.clear();
+				out_tangents.clear();
+			}
+
+			// Get name after "usemtl ".
+			std::string mat_name = line.substr(7);
+			out_mats[mat_name] = in_mats[mat_name];
+			current_mat_name = mat_name;
+
+			std::cout << "new material coming in.";
+		}
 	}
+	out_meshes[current_mesh_name].addMaterialMeshData(out_mats[current_mat_name], out_vertices, out_uvs, out_normals, out_tangents);
 
 	model_file.close();
-	return Model(out_vertices, out_uvs, out_normals, out_tangents);
+	return Model(out_meshes, out_mats);
 }
