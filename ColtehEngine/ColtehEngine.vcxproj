@@ -33,12 +33,14 @@
     <ClCompile Include="src\engine\shaders\pbr_standard.cpp" />
     <ClCompile Include="src\engine\shaders\shader.cpp" />
     <ClCompile Include="src\engine\shaders\shader_constants.cpp" />
+    <ClCompile Include="src\engine\shaders\ssao.cpp" />
     <ClCompile Include="src\engine\texture.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\engine\camera.h" />
     <ClInclude Include="src\engine\controls.h" />
     <ClInclude Include="src\engine\light.h" />
+    <ClInclude Include="src\engine\Main.h" />
     <ClInclude Include="src\engine\material.h" />
     <ClInclude Include="src\engine\mesh.h" />
     <ClInclude Include="src\engine\model.h" />
@@ -47,6 +49,7 @@
     <ClInclude Include="src\engine\shaders\pbr_standard.h" />
     <ClInclude Include="src\engine\shaders\shader.h" />
     <ClInclude Include="src\engine\shaders\shader_constants.h" />
+    <ClInclude Include="src\engine\shaders\ssao.h" />
     <ClInclude Include="src\engine\texture.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

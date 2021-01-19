@@ -24,4 +24,17 @@
             <BlockRate>8.00</BlockRate>
         </Compression>
     </Image>
+    <Image File="C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/random.png">
+        <Compression Setting="random" Enabled="False">
+            <Source>C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/random.png</Source>
+            <Destination>C:/Users/colte/Documents/Side_Projects/CEngine/ColtehEngine/results/random.DDS</Destination>
+            <fd>DXT3</fd>
+            <Quality>0.05</Quality>
+            <WeightR>0.3086</WeightR>
+            <WeightG>0.6094</WeightG>
+            <WeightB>0.082</WeightB>
+            <AlphaThreshold>0</AlphaThreshold>
+            <BlockRate>8.00</BlockRate>
+        </Compression>
+    </Image>
 </PROJECT>

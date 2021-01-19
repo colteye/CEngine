@@ -9,7 +9,7 @@ class Shader
 public:
 	void Load();
 	void Use() { glUseProgram(shader_id); }
-	void SetParameters() 
+	void Update() 
 	{ 
 		SetParametersStatic();
 		SetParametersDynamic();

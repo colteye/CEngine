@@ -36,6 +36,11 @@ Model ModelImporter::ImportOBJ(std::string model_p, std::unordered_map<std::stri
 	std::string current_mesh_name = "";
 	std::string current_mat_name = "";
 
+	// Remove offset for face indexes when loading in data.
+	int vert_offset = 0;
+	int norm_offset = 0;
+	int uv_offset = 0;
+
 	while (std::getline(model_file, line))
 	{
 		if (line.at(0) == 'v')
@@ -90,20 +95,20 @@ Model ModelImporter::ImportOBJ(std::string model_p, std::unordered_map<std::stri
 				indexes[i + 1] = std::atoi(tokens[i + 1].c_str()) - 1;
 				indexes[i + 2] = std::atoi(tokens[i + 2].c_str()) - 1;
 
-				out_vertices.push_back(temp_vertices[indexes[i]]);
-				out_uvs.push_back(temp_uvs[indexes[i + 1]]);
-				out_normals.push_back(temp_normals[indexes[i + 2]]);
+				out_vertices.push_back(temp_vertices[indexes[i] - vert_offset]);
+				out_uvs.push_back(temp_uvs[indexes[i + 1] - uv_offset]);
+				out_normals.push_back(temp_normals[indexes[i + 2] - norm_offset]);
 			}
 
 			// Shortcuts for vertices
-			glm::vec3 & v0 = temp_vertices[indexes[0]];
-			glm::vec3 & v1 = temp_vertices[indexes[3]];
-			glm::vec3 & v2 = temp_vertices[indexes[6]];
+			glm::vec3 & v0 = temp_vertices[indexes[0] - vert_offset];
+			glm::vec3 & v1 = temp_vertices[indexes[3] - vert_offset];
+			glm::vec3 & v2 = temp_vertices[indexes[6] - vert_offset];
 
 			// Shortcuts for UVs
-			glm::vec2 & uv0 = temp_uvs[indexes[1]];
-			glm::vec2 & uv1 = temp_uvs[indexes[4]];
-			glm::vec2 & uv2 = temp_uvs[indexes[7]];
+			glm::vec2 & uv0 = temp_uvs[indexes[1] - uv_offset];
+			glm::vec2 & uv1 = temp_uvs[indexes[4] - uv_offset];
+			glm::vec2 & uv2 = temp_uvs[indexes[7] - uv_offset];
 
 			// Edges of the triangle : position delta
 			glm::vec3 deltaPos1 = v1 - v0;
@@ -114,7 +119,7 @@ Model ModelImporter::ImportOBJ(std::string model_p, std::unordered_map<std::stri
 			glm::vec2 deltaUV2 = uv2 - uv0;
 
 			float r = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x);
-			glm::vec3 tangent = (deltaPos1 * deltaUV2.y - deltaPos2 * deltaUV1.y)*r;
+			glm::vec3 tangent = (deltaPos1 * deltaUV2.y - deltaPos2 * deltaUV1.y) * r;
 
 			out_tangents.push_back(tangent);
 			out_tangents.push_back(tangent);
@@ -124,6 +129,13 @@ Model ModelImporter::ImportOBJ(std::string model_p, std::unordered_map<std::stri
 		{
 			if (current_mesh_name != "")
 			{
+				// If going to next mesh, time to export!
+				out_meshes[current_mesh_name].addMaterialMeshData(out_mats[current_mat_name], out_vertices, out_uvs, out_normals, out_tangents);
+
+				vert_offset += temp_vertices.size();
+				uv_offset += temp_uvs.size();
+				norm_offset += temp_normals.size();
+
 				// Clear arrays, time to add new data sequentially.
 				temp_vertices.clear();
 				temp_uvs.clear();
@@ -140,20 +152,13 @@ Model ModelImporter::ImportOBJ(std::string model_p, std::unordered_map<std::stri
 			std::string mesh_name = line.substr(2);
 			out_meshes[mesh_name] = Mesh();
 			current_mesh_name = mesh_name;
-			std::cout << "creating new mesh\n";
 		}
 		else if (line.find("usemtl") != std::string::npos)
 		{
 			if (current_mat_name != "")
 			{
+				// If going to next material, time to export!
 				out_meshes[current_mesh_name].addMaterialMeshData(out_mats[current_mat_name], out_vertices, out_uvs, out_normals, out_tangents);
-
-				std::cout << out_vertices.size();
-
-				// Clear arrays, time to add new data sequentially.
-				temp_vertices.clear();
-				temp_uvs.clear();
-				temp_normals.clear();
 
 				out_vertices.clear();
 				out_uvs.clear();
@@ -165,10 +170,9 @@ Model ModelImporter::ImportOBJ(std::string model_p, std::unordered_map<std::stri
 			std::string mat_name = line.substr(7);
 			out_mats[mat_name] = in_mats[mat_name];
 			current_mat_name = mat_name;
-
-			std::cout << "new material coming in.";
 		}
 	}
+	// If done, time to export!
 	out_meshes[current_mesh_name].addMaterialMeshData(out_mats[current_mat_name], out_vertices, out_uvs, out_normals, out_tangents);
 
 	model_file.close();

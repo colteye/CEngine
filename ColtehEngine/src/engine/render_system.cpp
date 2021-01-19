@@ -3,17 +3,14 @@
 
 #define DEFAULT_BUFFER_SIZE 10000000
 
-/*GLuint RenderSystem::vertex_buffer;
-GLuint RenderSystem::uv_buffer;
-GLuint RenderSystem::normal_buffer;
-GLuint RenderSystem::tangent_buffer;
+GLuint RenderSystem::g_buffer, RenderSystem::g_position, RenderSystem::g_normal, RenderSystem::g_color, RenderSystem::rbo_depth;
 
-size_t RenderSystem::vertex_buffer_length = 0;
-size_t RenderSystem::uv_buffer_length = 0;
-size_t RenderSystem::normal_buffer_length = 0;
-size_t RenderSystem::tangent_buffer_length = 0;
+GLuint RenderSystem::quad_VAO, RenderSystem::quad_VBO;
 
-std::vector<Model*> RenderSystem::model_list;*/
+int RenderSystem::window_width, RenderSystem::window_height;
+
+// Add SSAO!
+SSAO *RenderSystem::ssao;
 
 std::unordered_map<Shader*, ShaderBuffers> RenderSystem::shader_buffer_dict;
 std::unordered_map<Material*, MaterialRenderData> RenderSystem::material_render_dict;
@@ -23,25 +20,10 @@ std::vector<glm::vec3> RenderSystem::light_pos_list;
 std::vector<glm::vec3> RenderSystem::light_col_list;
 std::vector<float> RenderSystem::light_pow_list;
 
-void RenderSystem::Initialize()
+void RenderSystem::Initialize(int in_window_width, int in_window_height)
 {
-	// Initialize our buffers.
-	/*glGenBuffers(1, &vertex_buffer);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
-	glBufferData(GL_ARRAY_BUFFER, DEFAULT_BUFFER_SIZE, nullptr, GL_STATIC_DRAW);
 
-	glGenBuffers(1, &uv_buffer);
-	glBindBuffer(GL_ARRAY_BUFFER, uv_buffer);
-	glBufferData(GL_ARRAY_BUFFER, DEFAULT_BUFFER_SIZE, nullptr, GL_STATIC_DRAW);
-
-	glGenBuffers(1, &normal_buffer);
-	glBindBuffer(GL_ARRAY_BUFFER, normal_buffer);
-	glBufferData(GL_ARRAY_BUFFER, DEFAULT_BUFFER_SIZE, nullptr, GL_STATIC_DRAW);
-
-	glGenBuffers(1, &tangent_buffer);
-	glBindBuffer(GL_ARRAY_BUFFER, tangent_buffer);
-	glBufferData(GL_ARRAY_BUFFER, DEFAULT_BUFFER_SIZE, nullptr, GL_STATIC_DRAW);*/
-
+	//////// BASE PARAMETERS /////////
 	// Enable depth test
 	glEnable(GL_DEPTH_TEST);
 	// Accept fragment if it closer to the camera than the former one
@@ -49,10 +31,36 @@ void RenderSystem::Initialize()
 
 	glEnable(GL_CULL_FACE);
 
-	/*vertex_buffer_length = 0;
-	uv_buffer_length = 0;
-	normal_buffer_length = 0;
-	tangent_buffer_length = 0;*/
+	glGenFramebuffers(1, &g_buffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, g_buffer);
+
+	glGenTextures(1, &g_color);
+	glBindTexture(GL_TEXTURE_2D, g_color);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, in_window_width, in_window_height, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_color, 0);
+
+	glGenTextures(1, &rbo_depth);
+	glBindTexture(GL_TEXTURE_2D, rbo_depth);
+	glTexImage2D(GL_TEXTURE_2D, 0,GL_DEPTH_COMPONENT24, 1024, 768, 0,GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); 
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, rbo_depth, 0);
+
+
+	// - tell OpenGL which color attachments we'll use (of this framebuffer) for rendering 
+	GLenum attachments[2] = { GL_COLOR_ATTACHMENT0, GL_DEPTH_ATTACHMENT };
+	glDrawBuffers(2, attachments);
+
+	ssao = new SSAO();
+	ssao->SetTextures(g_color, rbo_depth);
+
+	window_width = in_window_width;
+	window_height = in_window_height;
 }
 
 void RenderSystem::RegisterMesh(Mesh *mesh)
@@ -177,34 +185,7 @@ void RenderSystem::RegisterMaterial(Material * material)
 	shader_buffer_dict[material->shader].materials.push_back(material);
 }
 
-/*void RenderSystem::RegisterModel(Model *model)
-{
-	// Keep track of different models.
-	model_list.push_back(model);
-
-	size_t vertex_size = model->vertices.size() * sizeof(glm::vec3);
-	size_t uv_size = model->uvs.size() * sizeof(glm::vec2);
-	size_t normal_size = model->normals.size() * sizeof(glm::vec3);
-	size_t tangent_size = model->tangents.size() * sizeof(glm::vec3);
-
-	// Add necessary data to buffers to render.
-	glNamedBufferSubData(vertex_buffer, vertex_buffer_length, vertex_size, &model->vertices[0]);
-	glNamedBufferSubData(uv_buffer, uv_buffer_length, uv_size, &model->uvs[0]);
-	glNamedBufferSubData(normal_buffer, normal_buffer_length, normal_size, &model->normals[0]);
-	glNamedBufferSubData(tangent_buffer, tangent_buffer_length, tangent_size, &model->tangents[0]);
-
-	// Update counters.
-	vertex_buffer_length += vertex_size;
-	uv_buffer_length += uv_size;
-	normal_buffer_length += normal_size;
-	tangent_buffer_length += tangent_size;
-
-	// Split vertex buffer by material?
-
-}*/
-
 // Render all materials for each shader at a time.
-
 unsigned int RenderSystem::RegisterLight(glm::vec3 light_pos, glm::vec3 light_col, float light_pow)
 {
 	// Can feed these directly into any shader.
@@ -243,6 +224,9 @@ const std::vector<float>& RenderSystem::GetLightPowers()
 
 void RenderSystem::Render()
 {
+	glBindFramebuffer(GL_FRAMEBUFFER, g_buffer);
+	//glViewport(0, 0, window_width, window_height);
+
 	// Clear the screen.
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -260,8 +244,46 @@ void RenderSystem::Render()
 				&material_render_dict[material].start_indexes[0],
 				&material_render_dict[material].counts[0], 
 				material_render_dict[material].counts.size()); // Starting from vertex 0; 3 vertices total -> 1 triangle
-
 		}
 	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	//glViewport(0, 0, window_width, window_height);
+
+	// Clear the screen
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	ssao->Use();
+	ssao->Update();
+
+	// Render screenspace quad for everything!
+	RenderScreenSpaceQuad();
+
+}
+
+void RenderSystem::RenderScreenSpaceQuad()
+{
+	if (quad_VAO == 0)
+	{
+		float quadVertices[] = {
+		-1.0f, -1.0f, 0.0f,
+		 1.0f, -1.0f, 0.0f,
+		-1.0f,  1.0f, 0.0f,
+		-1.0f,  1.0f, 0.0f,
+		 1.0f, -1.0f, 0.0f,
+		 1.0f,  1.0f, 0.0f,
+		};
+		// setup plane VAO
+		glGenVertexArrays(1, &quad_VAO);
+		glGenBuffers(1, &quad_VBO);
+		glBindVertexArray(quad_VAO);
+		glBindBuffer(GL_ARRAY_BUFFER, quad_VBO);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	}
+	glBindVertexArray(quad_VAO);
+
+	glDrawArrays(GL_TRIANGLES, 0, 6); // 2*3 indices starting at 0 -> 2 triangles
 	glBindVertexArray(0);
 }

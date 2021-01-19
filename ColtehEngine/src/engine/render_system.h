@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <glad/glad.h>
+#include "shaders/ssao.h"
 
 
 #include <iostream>
@@ -43,7 +44,7 @@ struct ShaderBuffers {
 class RenderSystem
 {
 public:
-	static void Initialize();
+	static void Initialize(int window_width, int window_height);
 	
 	static void Render();
 
@@ -59,18 +60,16 @@ public:
 
 private:
 
+	static GLuint g_buffer, g_position, g_normal, g_color, rbo_depth;
+	static GLuint quad_VAO, quad_VBO;
+	static SSAO *ssao;
+
+	static int window_width, window_height;
+
 	static ShaderBuffers InitShaderBuffers(Shader* shader);
-	/*static GLuint vertex_buffer;
-	static GLuint uv_buffer;
-	static GLuint normal_buffer;
-	static GLuint tangent_buffer;
 
-	static size_t vertex_buffer_length;
-	static size_t uv_buffer_length;
-	static size_t normal_buffer_length;
-	static size_t tangent_buffer_length;
+	static void RenderScreenSpaceQuad();
 
-	static std::vector<Model*> model_list;	*/
 	static std::unordered_map<Shader*, ShaderBuffers> shader_buffer_dict;
 	static std::unordered_map<Material*, MaterialRenderData> material_render_dict;
 

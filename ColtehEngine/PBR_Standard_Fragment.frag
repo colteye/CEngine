@@ -4,7 +4,6 @@ out vec4 frag_color;
 // Data from vertex shader.
 in vec2 uv;
 in vec3 vertex_pos_world;
-
 in vec3 normal_pos_world;
 in vec3 tangent_pos_world;
 in vec3 bitangent_pos_world;
@@ -67,10 +66,10 @@ vec3 CalculateNormals()
     vec3 normal_tex = normalize(texture(normal, uv).rgb *2.0 - 1.0);
 	
     mat3 TBN = mat3(normalize(tangent_pos_world), 
-	normalize(cross(tangent_pos_world, normal_pos_world)), 
+	normalize(bitangent_pos_world), 
 	normalize(normal_pos_world));
 	
-	// Convert normal from tangent space int world space.
+	// Convert normal from tangent space into world space.
     return normalize(TBN * normal_tex);
 }
 

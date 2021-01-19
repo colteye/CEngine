@@ -22,5 +22,5 @@ Material::Material(PBRStandard *in_shader, std::string albedo_p, std::string nor
 void Material::UpdateShader()
 {
 	shader->SetTextures(albedo_tex, normal_tex, metallic_roughness_ao_tex);
-	shader->SetParameters();
+	shader->Update();
 }

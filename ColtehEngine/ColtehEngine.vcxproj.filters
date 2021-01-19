@@ -61,6 +61,9 @@
     <ClCompile Include="src\engine\mesh.cpp">
       <Filter>Engine\Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\engine\shaders\ssao.cpp">
+      <Filter>Engine\Shaders</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\engine\shaders\pbr_standard.h">
@@ -98,6 +101,10 @@
     </ClInclude>
     <ClInclude Include="src\engine\mesh.h">
       <Filter>Engine\Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\Main.h" />
+    <ClInclude Include="src\engine\shaders\ssao.h">
+      <Filter>Engine\Shaders</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

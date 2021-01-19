@@ -21,6 +21,7 @@
 
 #include "glm/gtx/string_cast.hpp"
 #include "shaders/shader_constants.h"
+#include "Main.h"
 
 GLFWwindow* Initialization()
 {
@@ -110,11 +111,15 @@ int main()
 	Model barrel_y = ModelImporter::ImportOBJ("test_model/barrel_low2.obj", { {"barrel", &barrelMaterial } });
 	Model floor = ModelImporter::ImportOBJ("test_model/barrel_floor.obj", { {"None", &floorMaterial } });
 
+	Model sphere = ModelImporter::ImportOBJ("test_model/hard_sphere.obj", { {"Mat1", &floorMaterial }, {"Mat2", &barrelMaterial } });
+
 	// Testing
 	//glm::vec3 start_pos = glm::vec3(0.0f, 10.0f, 7.0f);
 
 	// Time to initialize renderer!
-	RenderSystem::Initialize();
+	int window_width, window_height;
+	glfwGetFramebufferSize(window, &window_width, &window_height);
+	RenderSystem::Initialize(window_width, window_height);
 
 	double lastTime = glfwGetTime();
 	do {
