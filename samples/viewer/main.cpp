@@ -4,7 +4,9 @@
 #include <stdlib.h>
 #include <vector>
 
+#if defined(CENGINE_ENABLE_OPENGL)
 #include <glad/glad.h>
+#endif
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
 
@@ -18,7 +20,6 @@
 
 
 #include "glm/gtx/string_cast.hpp"
-#include "shader_constants.h"
 #include "main.h"
 
 namespace {
@@ -48,7 +49,13 @@ RenderBackendType ParseBackend(int argc, char** argv)
 		}
 	}
 
+#if defined(CENGINE_ENABLE_OPENGL)
 	return RenderBackendType::OpenGL;
+#elif defined(CENGINE_ENABLE_VULKAN)
+	return RenderBackendType::Vulkan;
+#else
+	return RenderBackendType::OpenGL;
+#endif
 }
 } // namespace
 
@@ -73,6 +80,11 @@ GLFWwindow* Initialization(RenderBackendType backend_type)
 		return window;
 	}
 
+#if !defined(CENGINE_ENABLE_OPENGL)
+	fprintf(stderr, "OpenGL was requested, but this build was compiled without OpenGL support.\n");
+	glfwTerminate();
+	return nullptr;
+#else
 	// Decide GL+GLSL versions
 #if __APPLE__
 	// GL 3.2 + GLSL 150
@@ -111,6 +123,7 @@ GLFWwindow* Initialization(RenderBackendType backend_type)
 		return nullptr;
 	}
 	return window;
+#endif
 }
 
 int main(int argc, char** argv)
@@ -141,8 +154,13 @@ int main(int argc, char** argv)
 		Camera view_cam;
 
 		// Init lighting.
-		[[maybe_unused]] Light light_1 = Light(glm::vec3(0.0f, 10.0f, 7.0f), glm::vec3(1.0f, 1.0f, 1.0f), 1);
-		[[maybe_unused]] Light light_4 = Light(glm::vec3(0.0f, 7.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), 5);
+		[[maybe_unused]] DirectionalLight sun_light =
+			DirectionalLight(glm::vec3(-0.4f, -1.0f, -0.25f), glm::vec3(1.0f, 0.96f, 0.9f), 0.35f);
+		[[maybe_unused]] PointLight key_light =
+			PointLight(glm::vec3(0.0f, 10.0f, 7.0f), glm::vec3(1.0f, 1.0f, 1.0f), 1.0f);
+		[[maybe_unused]] SpotLight spot_light =
+			SpotLight(glm::vec3(0.0f, 7.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f),
+				glm::vec3(1.0f, 1.0f, 1.0f), 5.0f, 18.0f, 32.0f);
 
 		// Init materials after the render backend.
 		Material barrelMaterial = Material(MaterialShaderType::PBRStandard,

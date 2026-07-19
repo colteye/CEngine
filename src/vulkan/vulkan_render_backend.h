@@ -16,7 +16,7 @@ public:
 	bool Initialize(GLFWwindow* window, int window_width, int window_height) override;
 	void Shutdown() override;
 	void Render() override;
-	void RegisterMesh(const Mesh* mesh) override;
+	void RegisterRenderable(const Renderable& renderable) override;
 	void RegisterMaterial(Material* material) override;
 
 private:

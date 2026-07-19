@@ -3,6 +3,7 @@
 
 class Material;
 class Mesh;
+struct Renderable;
 struct GLFWwindow;
 
 enum class RenderBackendType
@@ -19,7 +20,7 @@ public:
 	virtual bool Initialize(GLFWwindow* window, int window_width, int window_height) = 0;
 	virtual void Shutdown() = 0;
 	virtual void Render() = 0;
-	virtual void RegisterMesh(const Mesh* mesh) = 0;
+	virtual void RegisterRenderable(const Renderable& renderable) = 0;
 	virtual void RegisterMaterial(Material* material) = 0;
 };
 

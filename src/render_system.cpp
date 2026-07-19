@@ -1,22 +1,39 @@
 #include "render_system.h"
 
+#if defined(CENGINE_ENABLE_OPENGL)
 #include "opengl/opengl_render_backend.h"
+#endif
 
 #if defined(CENGINE_ENABLE_VULKAN)
 #include "vulkan/vulkan_render_backend.h"
 #endif
 
+#include <algorithm>
 #include <iostream>
+
+namespace {
+constexpr size_t kMaxGpuLights = 64;
+static_assert(sizeof(GpuLight) == sizeof(glm::vec4) * 4, "GpuLight must stay tightly packed as four vec4 lanes.");
+}
 
 std::unique_ptr<IRenderBackend> RenderSystem::backend;
 
-std::vector<glm::vec3> RenderSystem::light_pos_list;
-std::vector<glm::vec3> RenderSystem::light_col_list;
-std::vector<float> RenderSystem::light_pow_list;
+std::vector<Renderable> RenderSystem::renderables;
+std::vector<LightRecord> RenderSystem::direct_lights;
+std::vector<GpuLight> RenderSystem::gpu_lights;
+RenderFrameConstants RenderSystem::frame_constants;
+uint64_t RenderSystem::light_revision = 1;
+bool RenderSystem::lights_dirty = true;
 
 void RenderSystem::Initialize(int window_width, int window_height)
 {
+#if defined(CENGINE_ENABLE_OPENGL)
 	(void)Initialize(RenderBackendType::OpenGL, nullptr, window_width, window_height);
+#elif defined(CENGINE_ENABLE_VULKAN)
+	(void)Initialize(RenderBackendType::Vulkan, nullptr, window_width, window_height);
+#else
+	std::cout << "No render backend is enabled for this build.\n";
+#endif
 }
 
 bool RenderSystem::Initialize(RenderBackendType backend_type, GLFWwindow* window, int window_width, int window_height)
@@ -26,7 +43,12 @@ bool RenderSystem::Initialize(RenderBackendType backend_type, GLFWwindow* window
 	switch (backend_type)
 	{
 	case RenderBackendType::OpenGL:
+#if defined(CENGINE_ENABLE_OPENGL)
 		backend = std::make_unique<OpenGLRenderBackend>();
+#else
+		std::cout << "OpenGL backend was requested, but this build was compiled without OpenGL support.\n";
+		return false;
+#endif
 		break;
 	case RenderBackendType::Vulkan:
 #if defined(CENGINE_ENABLE_VULKAN)
@@ -44,6 +66,7 @@ bool RenderSystem::Initialize(RenderBackendType backend_type, GLFWwindow* window
 		return false;
 	}
 
+	gpu_lights.reserve(kMaxGpuLights);
 	return true;
 }
 
@@ -55,9 +78,11 @@ void RenderSystem::Shutdown()
 		backend.reset();
 	}
 
-	light_pos_list.clear();
-	light_col_list.clear();
-	light_pow_list.clear();
+	renderables.clear();
+	direct_lights.clear();
+	gpu_lights.clear();
+	light_revision = 1;
+	lights_dirty = true;
 }
 
 void RenderSystem::Render()
@@ -70,10 +95,41 @@ void RenderSystem::Render()
 
 void RenderSystem::RegisterMesh(const Mesh* mesh)
 {
+	if (mesh == nullptr)
+	{
+		return;
+	}
+
+	for (const auto& it : mesh->GetMaterialMeshData())
+	{
+		Renderable renderable;
+		renderable.mesh = mesh;
+		renderable.material = it.first;
+		renderable.transform = glm::mat4(1.0f);
+		renderable.local_bounds = it.second.local_bounds.valid ? it.second.local_bounds : CalculateBounds(it.second.vertices);
+		renderable.world_bounds = TransformBounds(renderable.local_bounds, renderable.transform);
+		RegisterRenderable(renderable);
+	}
+}
+
+RenderableHandle RenderSystem::RegisterRenderable(const Renderable& renderable)
+{
+	Renderable stored = renderable;
+	if (stored.mesh != nullptr && !stored.local_bounds.valid)
+	{
+		stored.local_bounds = stored.mesh->GetLocalBounds();
+	}
+	stored.world_bounds = TransformBounds(stored.local_bounds, stored.transform);
+
+	const size_t id = renderables.size();
+	renderables.push_back(stored);
+
 	if (backend != nullptr)
 	{
-		backend->RegisterMesh(mesh);
+		backend->RegisterRenderable(renderables.back());
 	}
+
+	return static_cast<RenderableHandle>(id);
 }
 
 void RenderSystem::RegisterMaterial(Material* material)
@@ -84,37 +140,106 @@ void RenderSystem::RegisterMaterial(Material* material)
 	}
 }
 
-unsigned int RenderSystem::RegisterLight(const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow)
+LightHandle RenderSystem::RegisterLight(const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow)
 {
-	size_t id = light_pos_list.size();
-	light_pos_list.push_back(light_pos);
-	light_col_list.push_back(light_col);
-	light_pow_list.push_back(light_pow);
-
-	return static_cast<unsigned int>(id);
+	LightRecord light;
+	light.type = LightType::Point;
+	light.position = light_pos;
+	light.color = light_col;
+	light.intensity = light_pow;
+	return RegisterLight(light);
 }
 
-void RenderSystem::UpdateLight(unsigned int id, const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow)
+void RenderSystem::UpdateLight(LightHandle id, const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow)
 {
-	if (id < light_pos_list.size())
+	LightRecord light;
+	light.type = LightType::Point;
+	light.position = light_pos;
+	light.color = light_col;
+	light.intensity = light_pow;
+	UpdateLight(id, light);
+}
+
+LightHandle RenderSystem::RegisterLight(const LightRecord& light)
+{
+	const size_t id = direct_lights.size();
+	direct_lights.push_back(light);
+	lights_dirty = true;
+	++light_revision;
+	return static_cast<LightHandle>(id);
+}
+
+void RenderSystem::UpdateLight(LightHandle id, const LightRecord& light)
+{
+	if (id < direct_lights.size())
 	{
-		light_pos_list[id] = light_pos;
-		light_col_list[id] = light_col;
-		light_pow_list[id] = light_pow;
+		direct_lights[id] = light;
+		lights_dirty = true;
+		++light_revision;
 	}
 }
 
-const std::vector<glm::vec3>& RenderSystem::GetLightPositions()
+const std::vector<Renderable>& RenderSystem::GetRenderables()
 {
-	return light_pos_list;
+	return renderables;
 }
 
-const std::vector<glm::vec3>& RenderSystem::GetLightColors()
+const std::vector<LightRecord>& RenderSystem::GetDirectLights()
 {
-	return light_col_list;
+	return direct_lights;
 }
 
-const std::vector<float>& RenderSystem::GetLightPowers()
+const std::vector<GpuLight>& RenderSystem::GetGpuLights()
 {
-	return light_pow_list;
+	if (lights_dirty)
+	{
+		RebuildGpuLights();
+	}
+	return gpu_lights;
+}
+
+uint64_t RenderSystem::GetLightRevision()
+{
+	return light_revision;
+}
+
+size_t RenderSystem::GetMaxGpuLights()
+{
+	return kMaxGpuLights;
+}
+
+void RenderSystem::SetFrameConstants(const RenderFrameConstants& constants)
+{
+	frame_constants = constants;
+}
+
+const RenderFrameConstants& RenderSystem::GetFrameConstants()
+{
+	return frame_constants;
+}
+
+void RenderSystem::RebuildGpuLights()
+{
+	gpu_lights.clear();
+
+	for (const LightRecord& light : direct_lights)
+	{
+		if (!light.enabled)
+		{
+			continue;
+		}
+		if (gpu_lights.size() >= kMaxGpuLights)
+		{
+			break;
+		}
+
+		GpuLight gpu_light;
+		gpu_light.position_range = glm::vec4(light.position, light.range);
+		gpu_light.direction_spot = glm::vec4(light.direction, light.spot_outer_cos);
+		gpu_light.color_intensity = glm::vec4(light.color, light.intensity);
+		gpu_light.params = glm::vec4(static_cast<float>(light.type), light.spot_inner_cos, 0.0f, 0.0f);
+		gpu_lights.push_back(gpu_light);
+	}
+
+	lights_dirty = false;
 }

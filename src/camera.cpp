@@ -3,7 +3,7 @@
 #include <cmath>
 #include <stdio.h>
 
-#include "shader_constants.h"
+#include "render_system.h"
 #include "camera.h"
 
 Camera::Camera()
@@ -50,8 +50,10 @@ void Camera::UpdateMatrices()
 
 	m_model = glm::mat4(1.0f);
 
-	ShaderConstants::model = m_model;
-	ShaderConstants::view = m_view;
-	ShaderConstants::proj = m_projection;
-	ShaderConstants::camera_position = m_position;
+	RenderFrameConstants constants;
+	constants.model = m_model;
+	constants.view = m_view;
+	constants.proj = m_projection;
+	constants.camera_position = m_position;
+	RenderSystem::SetFrameConstants(constants);
 }

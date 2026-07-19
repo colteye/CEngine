@@ -184,7 +184,7 @@ void VulkanRenderBackend::Render()
 	current_frame = (current_frame + 1) % kMaxFramesInFlight;
 }
 
-void VulkanRenderBackend::RegisterMesh(const Mesh* /*mesh*/)
+void VulkanRenderBackend::RegisterRenderable(const Renderable& /*renderable*/)
 {
 	static bool warned = false;
 	if (!warned)

@@ -2,13 +2,23 @@
 #define RENDER_SYSTEM_H
 
 #include "light.h"
-#include "model.h"
 #include "render_backend.h"
+#include "renderable.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
 struct GLFWwindow;
+
+struct RenderFrameConstants
+{
+	glm::vec3 camera_position = glm::vec3(0.0f);
+	glm::mat4 model = glm::mat4(1.0f);
+	glm::mat4 view = glm::mat4(1.0f);
+	glm::mat4 proj = glm::mat4(1.0f);
+};
 
 class RenderSystem
 {
@@ -20,21 +30,32 @@ public:
 	static void Render();
 
 	static void RegisterMesh(const Mesh* mesh);
+	static RenderableHandle RegisterRenderable(const Renderable& renderable);
 	static void RegisterMaterial(Material* material);
 
-	static unsigned int RegisterLight(const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow);
-	static void UpdateLight(unsigned int id, const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow);
+	static LightHandle RegisterLight(const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow);
+	static void UpdateLight(LightHandle id, const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow);
+	static LightHandle RegisterLight(const LightRecord& light);
+	static void UpdateLight(LightHandle id, const LightRecord& light);
 
-	static const std::vector<glm::vec3>& GetLightPositions();
-	static const std::vector<glm::vec3>& GetLightColors();
-	static const std::vector<float>& GetLightPowers();
+	static const std::vector<Renderable>& GetRenderables();
+	static const std::vector<LightRecord>& GetDirectLights();
+	static const std::vector<GpuLight>& GetGpuLights();
+	static uint64_t GetLightRevision();
+	static size_t GetMaxGpuLights();
+	static void SetFrameConstants(const RenderFrameConstants& constants);
+	static const RenderFrameConstants& GetFrameConstants();
 
 private:
+	static void RebuildGpuLights();
+
 	static std::unique_ptr<IRenderBackend> backend;
 
-	// These properties must be separated for OpenGL.
-	static std::vector<glm::vec3> light_pos_list;
-	static std::vector<glm::vec3> light_col_list;
-	static std::vector<float> light_pow_list;
+	static std::vector<Renderable> renderables;
+	static std::vector<LightRecord> direct_lights;
+	static std::vector<GpuLight> gpu_lights;
+	static RenderFrameConstants frame_constants;
+	static uint64_t light_revision;
+	static bool lights_dirty;
 };
 #endif

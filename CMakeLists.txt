@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.22)
 project(CEngine VERSION 0.1.0 LANGUAGES C CXX)
 
 option(CENGINE_BUILD_VIEWER "Build the interactive CEngine viewer executable." ON)
+option(CENGINE_ENABLE_OPENGL "Build the OpenGL 3.3 render backend." ON)
 option(CENGINE_USE_SYSTEM_GLFW "Use an installed system GLFW package instead of fetching GLFW source." OFF)
 option(CENGINE_FETCH_GLFW_X11 "Build the X11 backend when GLFW is fetched on Linux." ON)
 option(CENGINE_FETCH_GLFW_WAYLAND "Build the Wayland backend when GLFW is fetched on Linux." OFF)
@@ -100,15 +101,16 @@ endfunction()
 
 ce_setup_glfw(CEngine_GLFW_TARGET)
 
-set(CENGINE_OPENGL_SHADER_SOURCES
-    src/opengl/shaders/pbr_standard.vert
-    src/opengl/shaders/pbr_standard.frag
-    src/opengl/shaders/ssao.vert
-    src/opengl/shaders/ssao.frag
-)
+if(CENGINE_ENABLE_OPENGL)
+    set(CENGINE_OPENGL_SHADER_SOURCES
+        src/opengl/shaders/pbr_standard.vert
+        src/opengl/shaders/pbr_standard.frag
+        src/opengl/shaders/ssao.vert
+        src/opengl/shaders/ssao.frag
+    )
+endif()
 
 set(CENGINE_CORE_SOURCES
-    third_party/glad/src/glad.c
     third_party/nv_dds/src/nv_dds.cpp
     src/camera.cpp
     src/controls.cpp
@@ -117,14 +119,20 @@ set(CENGINE_CORE_SOURCES
     src/mesh.cpp
     src/model.cpp
     src/model_importer.cpp
-    src/opengl/opengl_render_backend.cpp
-    src/opengl/opengl_texture.cpp
-    src/opengl/shaders/pbr_standard.cpp
-    src/opengl/shaders/shader.cpp
-    src/opengl/shaders/ssao.cpp
+    src/renderable.cpp
     src/render_system.cpp
-    src/shader_constants.cpp
 )
+
+if(CENGINE_ENABLE_OPENGL)
+    list(APPEND CENGINE_CORE_SOURCES
+        third_party/glad/src/glad.c
+        src/opengl/opengl_render_backend.cpp
+        src/opengl/opengl_texture.cpp
+        src/opengl/shaders/pbr_standard.cpp
+        src/opengl/shaders/shader.cpp
+        src/opengl/shaders/ssao.cpp
+    )
+endif()
 
 if(CENGINE_ENABLE_VULKAN)
     find_package(Vulkan QUIET)
@@ -142,11 +150,17 @@ add_library(CEngineCore STATIC ${CENGINE_CORE_SOURCES})
 
 target_include_directories(CEngineCore
     SYSTEM PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glad/include"
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glm"
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlohmann/include"
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nv_dds/include"
 )
+
+if(CENGINE_ENABLE_OPENGL)
+    target_include_directories(CEngineCore
+        SYSTEM PUBLIC
+            "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glad/include"
+    )
+endif()
 
 target_include_directories(CEngineCore
     PUBLIC
@@ -163,22 +177,25 @@ endif()
 
 target_compile_definitions(CEngineCore
     PUBLIC
-        GL_SILENCE_DEPRECATION
         GLFW_INCLUDE_NONE
 )
 
+if(CENGINE_ENABLE_OPENGL)
+    target_compile_definitions(CEngineCore PUBLIC CENGINE_ENABLE_OPENGL GL_SILENCE_DEPRECATION)
+endif()
+
 if(MSVC)
-    set_source_files_properties(
-        third_party/glad/src/glad.c
-        third_party/nv_dds/src/nv_dds.cpp
-        PROPERTIES COMPILE_OPTIONS /W0
-    )
+    set(CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/nv_dds/src/nv_dds.cpp)
+    if(CENGINE_ENABLE_OPENGL)
+        list(APPEND CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/glad/src/glad.c)
+    endif()
+    set_source_files_properties(${CENGINE_SILENCED_THIRD_PARTY_SOURCES} PROPERTIES COMPILE_OPTIONS /W0)
 else()
-    set_source_files_properties(
-        third_party/glad/src/glad.c
-        third_party/nv_dds/src/nv_dds.cpp
-        PROPERTIES COMPILE_OPTIONS -w
-    )
+    set(CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/nv_dds/src/nv_dds.cpp)
+    if(CENGINE_ENABLE_OPENGL)
+        list(APPEND CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/glad/src/glad.c)
+    endif()
+    set_source_files_properties(${CENGINE_SILENCED_THIRD_PARTY_SOURCES} PROPERTIES COMPILE_OPTIONS -w)
 endif()
 
 if(MSVC)
@@ -189,12 +206,15 @@ endif()
 
 
 if(CENGINE_BUILD_VIEWER)
-    ce_setup_opengl(CEngine_OPENGL_TARGET)
     add_executable(CEngine
         samples/viewer/main.cpp
     )
 
-    target_link_libraries(CEngine PRIVATE CEngineCore ${CEngine_OPENGL_TARGET})
+    target_link_libraries(CEngine PRIVATE CEngineCore)
+    if(CENGINE_ENABLE_OPENGL)
+        ce_setup_opengl(CEngine_OPENGL_TARGET)
+        target_link_libraries(CEngine PRIVATE ${CEngine_OPENGL_TARGET})
+    endif()
 
     set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT CEngine)
     set_target_properties(CEngine PROPERTIES
@@ -213,14 +233,16 @@ if(CENGINE_BUILD_VIEWER)
                 "$<TARGET_FILE_DIR:CEngine>/assets"
     )
 
-    add_custom_command(TARGET CEngine POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E make_directory
-                "$<TARGET_FILE_DIR:CEngine>/shaders/opengl"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-                ${CENGINE_OPENGL_SHADER_SOURCES}
-                "$<TARGET_FILE_DIR:CEngine>/shaders/opengl"
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    )
+    if(CENGINE_ENABLE_OPENGL)
+        add_custom_command(TARGET CEngine POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E make_directory
+                    "$<TARGET_FILE_DIR:CEngine>/shaders/opengl"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                    ${CENGINE_OPENGL_SHADER_SOURCES}
+                    "$<TARGET_FILE_DIR:CEngine>/shaders/opengl"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        )
+    endif()
 endif()
 
 include(Tooling)

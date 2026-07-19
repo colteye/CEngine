@@ -216,19 +216,24 @@ void OpenGLRenderBackend::Shutdown()
 	window_height = 0;
 }
 
-void OpenGLRenderBackend::RegisterMesh(const Mesh* mesh)
+void OpenGLRenderBackend::RegisterRenderable(const Renderable& renderable)
 {
-	assert(mesh != nullptr);
+	assert(renderable.mesh != nullptr);
+	assert(renderable.material != nullptr);
 
-	const std::unordered_map<Material*, MeshData>& mesh_data_dict = mesh->GetMaterialMeshData();
-
-	for (const auto& it : mesh_data_dict)
+	const std::unordered_map<Material*, MeshData>& mesh_data_dict = renderable.mesh->GetMaterialMeshData();
+	const auto mesh_data_it = mesh_data_dict.find(renderable.material);
+	if (mesh_data_it == mesh_data_dict.end())
 	{
-		assert(it.first != nullptr);
-		const MeshData& current_mesh_data = it.second;
+		return;
+	}
+
+	{
+		Material* material = renderable.material;
+		const MeshData& current_mesh_data = mesh_data_it->second;
 		if (current_mesh_data.vertices.empty())
 		{
-			continue;
+			return;
 		}
 
 		assert(current_mesh_data.uvs.size() == current_mesh_data.vertices.size());
@@ -241,7 +246,7 @@ void OpenGLRenderBackend::RegisterMesh(const Mesh* mesh)
 		size_t tangent_size = current_mesh_data.tangents.size() * sizeof(glm::vec3);
 			
 		// This assumes that the materials and shader are both already registered.
-		ShaderBuffers* current_buffers = &shader_buffer_dict.at(it.first->shader_type);
+		ShaderBuffers* current_buffers = &shader_buffer_dict.at(material->shader_type);
 		assert(CanAppendBufferData(*current_buffers, vertex_size, uv_size, normal_size, tangent_size));
 
 		glNamedBufferSubData(current_buffers->vertex_buffer, current_buffers->vertex_buffer_length,
@@ -253,8 +258,8 @@ void OpenGLRenderBackend::RegisterMesh(const Mesh* mesh)
 		glNamedBufferSubData(current_buffers->tangent_buffer, current_buffers->tangent_buffer_length,
 			tangent_size, current_mesh_data.tangents.data());
 
-		material_render_dict[it.first].counts.push_back(static_cast<GLsizei>(current_mesh_data.vertices.size()));
-		material_render_dict[it.first].start_indexes.push_back(
+		material_render_dict[material].counts.push_back(static_cast<GLsizei>(current_mesh_data.vertices.size()));
+		material_render_dict[material].start_indexes.push_back(
 			static_cast<GLint>(current_buffers->vertex_buffer_length / sizeof(glm::vec3)));
 
 		current_buffers->vertex_buffer_length += vertex_size;

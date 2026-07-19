@@ -1,6 +1,6 @@
 #include "ssao.h"
 
-#include "shader_constants.h"
+#include "render_system.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -58,9 +58,10 @@ void SSAO::SetParametersStatic()
 
 void SSAO::SetParametersDynamic()
 {
-    const glm::mat4 inverse_projection = glm::inverse(ShaderConstants::proj);
+    const RenderFrameConstants& constants = RenderSystem::GetFrameConstants();
+    const glm::mat4 inverse_projection = glm::inverse(constants.proj);
 
-    glUniformMatrix4fv(projection_id, 1, GL_FALSE, glm::value_ptr(ShaderConstants::proj));
+    glUniformMatrix4fv(projection_id, 1, GL_FALSE, glm::value_ptr(constants.proj));
     glUniformMatrix4fv(inverse_projection_id, 1, GL_FALSE, glm::value_ptr(inverse_projection));
     glUniform2f(texel_size_id, 1.0f / texture_width, 1.0f / texture_height);
 }

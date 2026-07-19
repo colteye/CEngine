@@ -13,11 +13,24 @@ uniform sampler2D albedo;
 uniform sampler2D normal;
 uniform sampler2D metallic_roughness_ao;
 
-// Lights.
-uniform vec3 light_positions[4];
-uniform vec3 light_colors[4];
-uniform float light_powers[4];
 uniform vec3 cam_pos_world;
+
+const int MAX_DIRECT_LIGHTS = 64;
+const float LIGHT_TYPE_DIRECTIONAL = 0.0;
+const float LIGHT_TYPE_POINT = 1.0;
+const float LIGHT_TYPE_SPOT = 2.0;
+
+struct GpuLight {
+    vec4 position_range;
+    vec4 direction_spot;
+    vec4 color_intensity;
+    vec4 params;
+};
+
+layout(std140) uniform DirectLightBlock {
+    vec4 light_info;
+    GpuLight lights[MAX_DIRECT_LIGHTS];
+};
 
 const float PI = 3.14159265359;
 
@@ -90,14 +103,51 @@ void main()
 	           
     // reflectance equation
     vec3 Lo = vec3(0.0);
-    for(int i = 0; i < 4; ++i) 
+    int light_count = min(int(light_info.x), MAX_DIRECT_LIGHTS);
+    for(int i = 0; i < light_count; ++i) 
     {
+        GpuLight light = lights[i];
+        float light_type = light.params.x;
+        float attenuation = 1.0;
+        float spot_factor = 1.0;
+        vec3 L = vec3(0.0);
+
         // calculate per-light radiance
-        vec3 L = normalize(light_positions[i] - vertex_pos_world);
+        if (abs(light_type - LIGHT_TYPE_DIRECTIONAL) < 0.5)
+        {
+            L = normalize(-light.direction_spot.xyz);
+        }
+        else
+        {
+            vec3 light_delta = light.position_range.xyz - vertex_pos_world;
+            float distance = length(light_delta);
+            if (distance <= 0.0001)
+            {
+                continue;
+            }
+
+            L = light_delta / distance;
+            attenuation = 1.0 / (distance * distance);
+
+            float range = light.position_range.w;
+            if (range > 0.0)
+            {
+                float range_factor = clamp(1.0 - distance / range, 0.0, 1.0);
+                attenuation *= range_factor * range_factor;
+            }
+
+            if (abs(light_type - LIGHT_TYPE_SPOT) < 0.5)
+            {
+                float theta = dot(normalize(-L), normalize(light.direction_spot.xyz));
+                float inner_cos = light.params.y;
+                float outer_cos = light.direction_spot.w;
+                float epsilon = max(inner_cos - outer_cos, 0.0001);
+                spot_factor = clamp((theta - outer_cos) / epsilon, 0.0, 1.0);
+            }
+        }
+
         vec3 H = normalize(V + L);
-        float distance    = length(light_positions[i] - vertex_pos_world);
-        float attenuation = 1.0 / (distance * distance);
-        vec3 radiance     = light_colors[i] * attenuation * 100 * light_powers[i];        
+        vec3 radiance = light.color_intensity.rgb * attenuation * 100.0 * light.color_intensity.a * spot_factor;        
         
         // cook-torrance brdf
         float NDF = DistributionGGX(N, H, roughness);        

@@ -1,10 +1,13 @@
 #include "pbr_standard.h"
 
-#include "shader_constants.h"
 #include "render_system.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
+
+namespace {
+constexpr GLuint kDirectLightBindingPoint = 0;
+}
 
 PBRStandard::PBRStandard()
 	: albedo_tex(0),
@@ -14,6 +17,15 @@ PBRStandard::PBRStandard()
     shader_program.Load("shaders/opengl/pbr_standard.vert",
                         "shaders/opengl/pbr_standard.frag");
     InitializeParameters();
+}
+
+PBRStandard::~PBRStandard()
+{
+    if (light_ubo != 0)
+    {
+        glDeleteBuffers(1, &light_ubo);
+        light_ubo = 0;
+    }
 }
 
 void PBRStandard::Use() const
@@ -30,9 +42,19 @@ void PBRStandard::Update()
 void PBRStandard::InitializeParameters()
 {
     const GLuint shader_id = shader_program.GetId();
-    light_pos_id = glGetUniformLocation(shader_id, "light_positions");
-    light_col_id = glGetUniformLocation(shader_id, "light_colors");
-    light_pow_id = glGetUniformLocation(shader_id, "light_powers");
+    const GLuint light_block_index = glGetUniformBlockIndex(shader_id, "DirectLightBlock");
+    if (light_block_index != GL_INVALID_INDEX)
+    {
+        glUniformBlockBinding(shader_id, light_block_index, kDirectLightBindingPoint);
+    }
+
+    glGenBuffers(1, &light_ubo);
+    glBindBuffer(GL_UNIFORM_BUFFER, light_ubo);
+    glBufferData(GL_UNIFORM_BUFFER,
+                 static_cast<GLsizeiptr>(sizeof(glm::vec4) + RenderSystem::GetMaxGpuLights() * sizeof(GpuLight)),
+                 nullptr, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, kDirectLightBindingPoint, light_ubo);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
     cam_pos_id = glGetUniformLocation(shader_id, "cam_pos_world");
 
@@ -69,22 +91,27 @@ void PBRStandard::SetParametersStatic()
 
 void PBRStandard::SetParametersDynamic()
 {
-    glUniform3f(cam_pos_id, ShaderConstants::camera_position[0],
-                ShaderConstants::camera_position[1], ShaderConstants::camera_position[2]);
-    glUniformMatrix4fv(m_id, 1, GL_FALSE, &ShaderConstants::model[0][0]);
-    glUniformMatrix4fv(v_id, 1, GL_FALSE, &ShaderConstants::view[0][0]);
-    glUniformMatrix4fv(p_id, 1, GL_FALSE, &ShaderConstants::proj[0][0]);
+    const RenderFrameConstants& constants = RenderSystem::GetFrameConstants();
+    glUniform3f(cam_pos_id, constants.camera_position[0],
+                constants.camera_position[1], constants.camera_position[2]);
+    glUniformMatrix4fv(m_id, 1, GL_FALSE, &constants.model[0][0]);
+    glUniformMatrix4fv(v_id, 1, GL_FALSE, &constants.view[0][0]);
+    glUniformMatrix4fv(p_id, 1, GL_FALSE, &constants.proj[0][0]);
 
-    const std::vector<glm::vec3>& light_pos_list = RenderSystem::GetLightPositions();
-    const std::vector<glm::vec3>& light_col_list = RenderSystem::GetLightColors();
-    const std::vector<float>& light_pow_list = RenderSystem::GetLightPowers();
-
-    if (!light_pos_list.empty())
+    const uint64_t light_revision = RenderSystem::GetLightRevision();
+    if (uploaded_light_revision != light_revision)
     {
-        glUniform3fv(light_pos_id, static_cast<GLsizei>(light_pos_list.size()),
-                     glm::value_ptr(light_pos_list[0]));
-        glUniform3fv(light_col_id, static_cast<GLsizei>(light_col_list.size()),
-                     glm::value_ptr(light_col_list[0]));
-        glUniform1fv(light_pow_id, static_cast<GLsizei>(light_pow_list.size()), light_pow_list.data());
+        const std::vector<GpuLight>& gpu_lights = RenderSystem::GetGpuLights();
+        const glm::vec4 light_info(static_cast<float>(gpu_lights.size()), 0.0f, 0.0f, 0.0f);
+
+        glBindBuffer(GL_UNIFORM_BUFFER, light_ubo);
+        glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::vec4), glm::value_ptr(light_info));
+        if (!gpu_lights.empty())
+        {
+            glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4),
+                            static_cast<GLsizeiptr>(gpu_lights.size() * sizeof(GpuLight)), gpu_lights.data());
+        }
+        glBindBuffer(GL_UNIFORM_BUFFER, 0);
+        uploaded_light_revision = light_revision;
     }
 }

@@ -3,6 +3,8 @@
 
 #include "shader.h"
 
+#include <cstdint>
+
 class PBRStandard
 {
 public:
@@ -12,6 +14,7 @@ public:
 	GLuint metallic_roughness_ao_tex;
 
 	PBRStandard();
+	~PBRStandard();
 	void Use() const;
 	void Update();
 	void SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao);
@@ -22,7 +25,8 @@ private:
 	void SetParametersDynamic();
 
 	ShaderProgram shader_program;
-	GLuint light_pos_id, light_col_id, light_pow_id;
+	GLuint light_ubo = 0;
+	uint64_t uploaded_light_revision = 0;
 	GLuint cam_pos_id;
 	GLuint m_id, v_id, p_id;
 	GLuint albedo_id, normal_id, metallic_roughness_ao_id;
