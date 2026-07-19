@@ -11,10 +11,10 @@ public:
 	void SetTextures(GLuint render, GLuint depth, int width, int height);
 
 protected:
-	virtual void SetShaderFiles();
-	virtual void InitializeParameters();
-	virtual void SetParametersStatic();
-	virtual void SetParametersDynamic();
+	void SetShaderFiles() override;
+	void InitializeParameters() override;
+	void SetParametersStatic() override;
+	void SetParametersDynamic() override;
 
 	GLuint render_tex;
 	GLuint depth_tex;

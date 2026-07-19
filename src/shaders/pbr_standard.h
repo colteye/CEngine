@@ -1,9 +1,7 @@
 #ifndef PBR_STANDARD_H
 #define PBR_STANDARD_H
 
-#include <vector>
 #include "shader.h"
-#include "../light.h"
 
 class PBRStandard : public Shader
 {
@@ -17,12 +15,10 @@ public:
 	void SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao);
 
 protected:
-	virtual void SetShaderFiles();
-	virtual void InitializeParameters();
-	virtual void SetParametersStatic();
-	virtual void SetParametersDynamic();
-
-	std::vector<Light*> *light_list;
+	void SetShaderFiles() override;
+	void InitializeParameters() override;
+	void SetParametersStatic() override;
+	void SetParametersDynamic() override;
 
 	GLuint light_pos_id, light_col_id, light_pow_id;
 	GLuint cam_pos_id;

@@ -8,29 +8,31 @@
 class Camera
 {
 public:
-	glm::vec3 GetPosition() { return position; };
-	void SetPosition(glm::vec3 pos) { position = pos; UpdateMatrices(); };
+	Camera();
 
-	glm::vec2 GetAngles() { return angles; };
-	void SetAnglesCartesian(glm::vec3 ang);
-	void SetAngles(glm::vec2 ang) { angles = ang; UpdateMatrices(); };
+	const glm::vec3& GetPosition() const { return m_position; };
+	void SetPosition(const glm::vec3& pos) { m_position = pos; UpdateMatrices(); };
 
-	void SetPositionAngles(glm::vec3 pos, glm::vec2 ang) { position = pos; angles = ang; UpdateMatrices(); };
+	const glm::vec2& GetAngles() const { return m_angles; };
+	void SetAnglesCartesian(const glm::vec3& ang);
+	void SetAngles(const glm::vec2& ang) { m_angles = ang; UpdateMatrices(); };
 
-	float GetFOV() { return field_of_view; };
-	void SetFOV(float fov) { field_of_view = fov; UpdateMatrices(); };
+	void SetPositionAngles(const glm::vec3& pos, const glm::vec2& ang) { m_position = pos; m_angles = ang; UpdateMatrices(); };
+
+	float GetFOV() const { return m_field_of_view; };
+	void SetFOV(float fov) { m_field_of_view = fov; UpdateMatrices(); };
 	
 private:
 
 	void UpdateMatrices();
-	glm::vec3 position = glm::vec3(0, 0, 5);
-	glm::vec2 angles = glm::vec2(3.14f, 0.0f);
+	glm::vec3 m_position = glm::vec3(0, 0, 5);
+	glm::vec2 m_angles = glm::vec2(3.14f, 0.0f);
 
-	glm::mat4 model;
-	glm::mat4 view;
-	glm::mat4 proj;
+	glm::mat4 m_model;
+	glm::mat4 m_view;
+	glm::mat4 m_projection;
 
-	float field_of_view = 45.0f;
+	float m_field_of_view = 45.0f;
 };
 
 #endif

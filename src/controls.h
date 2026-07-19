@@ -9,7 +9,7 @@ class Controls
 {
 public:
 	Controls(GLFWwindow* window);
-	void Update(Camera* cam, float& deltaTime);
+	void Update(Camera* cam, float delta_time);
 private:
 	GLFWwindow* glfw_window;
 };

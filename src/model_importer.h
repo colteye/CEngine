@@ -11,6 +11,7 @@
 class ModelImporter
 {
 public:
-	static Model ImportOBJ(std::string model_p, std::unordered_map<std::string, Material*> in_mats);
+	static Model ImportOBJ(const std::string& model_p,
+		const std::unordered_map<std::string, Material*>& in_mats);
 };
 #endif

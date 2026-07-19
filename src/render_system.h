@@ -1,28 +1,37 @@
 #ifndef RENDER_SYSTEM_H
 #define RENDER_SYSTEM_H
 
-#include "model.h"
 #include "light.h"
+#include "model.h"
 #include "shaders/shader.h"
-#include <string>
-#include <vector>
-#include <glad/glad.h>
 #include "shaders/ssao.h"
 
+#include <glad/glad.h>
 
-#include <iostream>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
-// Struct of data for use when rendering.
+// Draw ranges for one material in a shader-owned vertex buffer.
 // 1 VBO per shader, 1 draw call per material.
 struct MaterialRenderData {
-	std::vector<MeshData*> mesh_data = std::vector<MeshData*>();
-	std::vector<GLint> start_indexes = std::vector<GLint>();
-	std::vector<GLsizei> counts = std::vector<GLsizei>();
+	std::vector<GLint> start_indexes;
+	std::vector<GLsizei> counts;
 };
 
 struct ShaderBuffers {
+	ShaderBuffers() = default;
+	ShaderBuffers(const ShaderBuffers&) = delete;
+	ShaderBuffers& operator=(const ShaderBuffers&) = delete;
+	ShaderBuffers(ShaderBuffers&& other) noexcept;
+	ShaderBuffers& operator=(ShaderBuffers&& other) noexcept;
+	~ShaderBuffers();
+
+	void Destroy();
+
 	// Materials belonging to each shader.
-	std::vector<Material*> materials = std::vector<Material*>();
+	std::vector<Material*> materials;
 
 	GLuint vertex_array_obj = 0;
 
@@ -45,14 +54,15 @@ class RenderSystem
 {
 public:
 	static void Initialize(int window_width, int window_height);
+	static void Shutdown();
 	
 	static void Render();
 
-	static void RegisterMesh(Mesh * mesh);
-	static void RegisterMaterial(Material * material);
+	static void RegisterMesh(const Mesh* mesh);
+	static void RegisterMaterial(Material* material);
 
-	static unsigned int RegisterLight(glm::vec3 light_pos, glm::vec3 light_col, float light_pow);
-	static void UpdateLight(unsigned int id, glm::vec3 light_pos, glm::vec3 light_col, float light_pow);
+	static unsigned int RegisterLight(const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow);
+	static void UpdateLight(unsigned int id, const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow);
 
 	static const std::vector<glm::vec3>& GetLightPositions();
 	static const std::vector<glm::vec3>& GetLightColors();
@@ -60,9 +70,9 @@ public:
 
 private:
 
-	static GLuint g_buffer, g_position, g_normal, g_color, rbo_depth;
+	static GLuint g_buffer, g_color, rbo_depth;
 	static GLuint quad_VAO, quad_VBO;
-	static SSAO *ssao;
+	static std::unique_ptr<SSAO> ssao;
 
 	static int window_width, window_height;
 

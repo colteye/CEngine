@@ -1,24 +1,91 @@
 #include "model_importer.h"
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <sstream>
-#include <regex>
-#include <unordered_map>
 
-Model ModelImporter::ImportOBJ(std::string model_p, std::unordered_map<std::string, Material*> in_mats)
+#include <array>
+#include <cmath>
+#include <fstream>
+#include <iostream>
+#include <limits>
+#include <sstream>
+#include <string>
+#include <utility>
+
+namespace {
+struct FaceVertex {
+	size_t vertex = 0;
+	size_t uv = 0;
+	size_t normal = 0;
+};
+
+bool ParseFaceVertex(const std::string& token, FaceVertex& face_vertex)
+{
+	std::stringstream stream(token);
+	int vertex = 0;
+	int uv = 0;
+	int normal = 0;
+	char slash_a = '\0';
+	char slash_b = '\0';
+
+	if (!(stream >> vertex >> slash_a >> uv >> slash_b >> normal) || slash_a != '/' || slash_b != '/')
+	{
+		return false;
+	}
+
+	if (vertex <= 0 || uv <= 0 || normal <= 0)
+	{
+		return false;
+	}
+
+	face_vertex.vertex = static_cast<size_t>(vertex - 1);
+	face_vertex.uv = static_cast<size_t>(uv - 1);
+	face_vertex.normal = static_cast<size_t>(normal - 1);
+	return true;
+}
+
+bool FaceVertexInRange(const FaceVertex& face_vertex, size_t vertex_count, size_t uv_count, size_t normal_count)
+{
+	return face_vertex.vertex < vertex_count &&
+		face_vertex.uv < uv_count &&
+		face_vertex.normal < normal_count;
+}
+
+glm::vec3 CalculateTangent(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2,
+	const glm::vec2& uv0, const glm::vec2& uv1, const glm::vec2& uv2)
+{
+	const glm::vec3 delta_pos_1 = v1 - v0;
+	const glm::vec3 delta_pos_2 = v2 - v0;
+	const glm::vec2 delta_uv_1 = uv1 - uv0;
+	const glm::vec2 delta_uv_2 = uv2 - uv0;
+	const float denominator = delta_uv_1.x * delta_uv_2.y - delta_uv_1.y * delta_uv_2.x;
+
+	if (std::abs(denominator) <= std::numeric_limits<float>::epsilon())
+	{
+		return glm::vec3(0.0f);
+	}
+
+	return (delta_pos_1 * delta_uv_2.y - delta_pos_2 * delta_uv_1.y) / denominator;
+}
+} // namespace
+
+Model ModelImporter::ImportOBJ(const std::string& model_p,
+	const std::unordered_map<std::string, Material*>& in_mats)
 {
 	std::vector<glm::vec3> temp_vertices;
 	std::vector<glm::vec2> temp_uvs;
 	std::vector<glm::vec3> temp_normals;
+
+	temp_vertices.reserve(4096);
+	temp_uvs.reserve(4096);
+	temp_normals.reserve(4096);
 
 	std::vector<glm::vec3> out_vertices;
 	std::vector<glm::vec2> out_uvs;
 	std::vector<glm::vec3> out_normals;
 	std::vector<glm::vec3> out_tangents;
 
-	//std::vector<Material*> out_mats;
-	//std::vector<Mesh> out_meshes;
+	out_vertices.reserve(4096);
+	out_uvs.reserve(4096);
+	out_normals.reserve(4096);
+	out_tangents.reserve(4096);
 
 	std::unordered_map<std::string, Material*> out_mats;
 	std::unordered_map<std::string, Mesh> out_meshes;
@@ -34,124 +101,128 @@ Model ModelImporter::ImportOBJ(std::string model_p, std::unordered_map<std::stri
 	}
 
 	std::string line;
-	std::string current_mesh_name = "";
-	std::string current_mat_name = "";
+	std::string current_mesh_name;
+	std::string current_mat_name;
 
-	// Remove offset for face indexes when loading in data.
-	size_t vert_offset = 0;
-	size_t norm_offset = 0;
-	size_t uv_offset = 0;
+	auto flush_mesh_data = [&]() {
+		if (current_mesh_name.empty() || current_mat_name.empty() || out_vertices.empty())
+		{
+			out_vertices.clear();
+			out_uvs.clear();
+			out_normals.clear();
+			out_tangents.clear();
+			return;
+		}
+
+		const auto material_it = in_mats.find(current_mat_name);
+		if (material_it == in_mats.end() || material_it->second == nullptr)
+		{
+			std::cout << "Skipping OBJ material with no registered Material: " << current_mat_name << "\n";
+		}
+		else
+		{
+			out_mats[current_mat_name] = material_it->second;
+			MeshData mesh_data;
+			mesh_data.vertices = std::move(out_vertices);
+			mesh_data.uvs = std::move(out_uvs);
+			mesh_data.normals = std::move(out_normals);
+			mesh_data.tangents = std::move(out_tangents);
+			out_meshes[current_mesh_name].AddMaterialMeshData(material_it->second, std::move(mesh_data));
+		}
+
+		out_vertices.clear();
+		out_uvs.clear();
+		out_normals.clear();
+		out_tangents.clear();
+	};
 
 	while (std::getline(model_file, line))
 	{
-		if (line.empty())
+		if (line.empty() || line.at(0) == '#')
 		{
 			continue;
 		}
 
-		if (line.at(0) == 'v')
+		if (line.rfind("vt ", 0) == 0)
 		{
-			if (line.at(1) == 't')
-			{
-				line.erase(0, 2);
-				std::stringstream line_stream(line);
+			std::stringstream line_stream(line.substr(3));
 
-				glm::vec2 uv;
-				line_stream >> uv.x >> uv.y;
-				temp_uvs.push_back(uv);
-			}
-			else if (line.at(1) == 'n')
-			{
-				line.erase(0, 2);
-				std::stringstream line_stream(line);
-
-				glm::vec3 normal;
-				line_stream >> normal.x >> normal.y >> normal.z;
-				temp_normals.push_back(normal);
-			}
-			else
-			{
-				line.erase(0, 1);
-				std::stringstream line_stream(line);
-
-				glm::vec3 vertex;
-				line_stream >> vertex.x >> vertex.y >> vertex.z;
-				temp_vertices.push_back(vertex);
-			}
+			glm::vec2 uv;
+			line_stream >> uv.x >> uv.y;
+			temp_uvs.push_back(uv);
 		}
-		else if (line.at(0) == 'f')
+		else if (line.rfind("vn ", 0) == 0)
 		{
-			line.erase(0, 1);
-			const int indexes_size = 9;
-			unsigned int indexes[indexes_size];
+			std::stringstream line_stream(line.substr(3));
 
-			std::regex re("[^/ ]+");
-			//the '-1' is what makes the regex split (-1 := what was not matched)
-			std::sregex_token_iterator first{ line.begin(), line.end(), re }, last;
-			std::vector<std::string> tokens{ first, last };
-
-			if (tokens.size() != indexes_size)
-			{
-				std::cout << "File can't be read by this simple parser: Try exporting with other options\n";
-			}
-
-			for (int i = 0; i < indexes_size; i+=3)
-			{
-				indexes[i] = std::atoi(tokens[i].c_str()) - 1;
-				indexes[i + 1] = std::atoi(tokens[i + 1].c_str()) - 1;
-				indexes[i + 2] = std::atoi(tokens[i + 2].c_str()) - 1;
-
-				out_vertices.push_back(temp_vertices[indexes[i] - vert_offset]);
-				out_uvs.push_back(temp_uvs[indexes[i + 1] - uv_offset]);
-				out_normals.push_back(temp_normals[indexes[i + 2] - norm_offset]);
-			}
-
-			// Shortcuts for vertices
-			glm::vec3 & v0 = temp_vertices[indexes[0] - vert_offset];
-			glm::vec3 & v1 = temp_vertices[indexes[3] - vert_offset];
-			glm::vec3 & v2 = temp_vertices[indexes[6] - vert_offset];
-
-			// Shortcuts for UVs
-			glm::vec2 & uv0 = temp_uvs[indexes[1] - uv_offset];
-			glm::vec2 & uv1 = temp_uvs[indexes[4] - uv_offset];
-			glm::vec2 & uv2 = temp_uvs[indexes[7] - uv_offset];
-
-			// Edges of the triangle : position delta
-			glm::vec3 deltaPos1 = v1 - v0;
-			glm::vec3 deltaPos2 = v2 - v0;
-
-			// UV delta
-			glm::vec2 deltaUV1 = uv1 - uv0;
-			glm::vec2 deltaUV2 = uv2 - uv0;
-
-			float r = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x);
-			glm::vec3 tangent = (deltaPos1 * deltaUV2.y - deltaPos2 * deltaUV1.y) * r;
-
-			out_tangents.push_back(tangent);
-			out_tangents.push_back(tangent);
-			out_tangents.push_back(tangent);
+			glm::vec3 normal;
+			line_stream >> normal.x >> normal.y >> normal.z;
+			temp_normals.push_back(normal);
 		}
-		else if (line.at(0) == 'o')
+		else if (line.rfind("v ", 0) == 0)
 		{
-			if (current_mesh_name != "")
+			std::stringstream line_stream(line.substr(2));
+
+			glm::vec3 vertex;
+			line_stream >> vertex.x >> vertex.y >> vertex.z;
+			temp_vertices.push_back(vertex);
+		}
+		else if (line.rfind("f ", 0) == 0)
+		{
+			if (current_mesh_name.empty())
 			{
-				// If going to next mesh, time to export!
-				out_meshes[current_mesh_name].addMaterialMeshData(out_mats[current_mat_name], out_vertices, out_uvs, out_normals, out_tangents);
-
-				vert_offset += temp_vertices.size();
-				uv_offset += temp_uvs.size();
-				norm_offset += temp_normals.size();
-
-				// Clear arrays, time to add new data sequentially.
-				temp_vertices.clear();
-				temp_uvs.clear();
-				temp_normals.clear();
-
-				out_vertices.clear();
-				out_normals.clear();
-				out_uvs.clear();
-				out_tangents.clear();
+				current_mesh_name = "default";
+				out_meshes[current_mesh_name] = Mesh();
 			}
+
+			std::stringstream face_stream(line.substr(2));
+			std::array<std::string, 3> tokens;
+			std::string extra_token;
+			face_stream >> tokens[0] >> tokens[1] >> tokens[2] >> extra_token;
+
+			if (tokens[0].empty() || tokens[1].empty() || tokens[2].empty() || !extra_token.empty())
+			{
+				std::cout << "Skipping unsupported OBJ face: " << line << "\n";
+				continue;
+			}
+
+			std::array<FaceVertex, 3> face_vertices;
+			bool face_is_supported = true;
+			for (size_t index = 0; index < tokens.size(); ++index)
+			{
+				if (!ParseFaceVertex(tokens[index], face_vertices[index]) ||
+					!FaceVertexInRange(face_vertices[index], temp_vertices.size(), temp_uvs.size(), temp_normals.size()))
+				{
+					std::cout << "Skipping unsupported OBJ face: " << line << "\n";
+					face_is_supported = false;
+					break;
+				}
+			}
+			if (!face_is_supported)
+			{
+				continue;
+			}
+
+			const glm::vec3& v0 = temp_vertices[face_vertices[0].vertex];
+			const glm::vec3& v1 = temp_vertices[face_vertices[1].vertex];
+			const glm::vec3& v2 = temp_vertices[face_vertices[2].vertex];
+			const glm::vec2& uv0 = temp_uvs[face_vertices[0].uv];
+			const glm::vec2& uv1 = temp_uvs[face_vertices[1].uv];
+			const glm::vec2& uv2 = temp_uvs[face_vertices[2].uv];
+			const glm::vec3 tangent = CalculateTangent(v0, v1, v2, uv0, uv1, uv2);
+
+			for (const FaceVertex& face_vertex : face_vertices)
+			{
+				out_vertices.push_back(temp_vertices[face_vertex.vertex]);
+				out_uvs.push_back(temp_uvs[face_vertex.uv]);
+				out_normals.push_back(temp_normals[face_vertex.normal]);
+				out_tangents.push_back(tangent);
+			}
+
+		}
+		else if (line.rfind("o ", 0) == 0)
+		{
+			flush_mesh_data();
 
 			// Instantiate new mesh.
 			// Get name after "o ".
@@ -159,31 +230,24 @@ Model ModelImporter::ImportOBJ(std::string model_p, std::unordered_map<std::stri
 			out_meshes[mesh_name] = Mesh();
 			current_mesh_name = mesh_name;
 		}
-		else if (line.find("usemtl") != std::string::npos)
+		else if (line.rfind("usemtl ", 0) == 0)
 		{
-			if (current_mat_name != "")
+			if (current_mesh_name.empty())
 			{
-				// If going to next material, time to export!
-				out_meshes[current_mesh_name].addMaterialMeshData(out_mats[current_mat_name], out_vertices, out_uvs, out_normals, out_tangents);
-
-				out_vertices.clear();
-				out_uvs.clear();
-				out_normals.clear();
-				out_tangents.clear();
+				current_mesh_name = "default";
+				out_meshes[current_mesh_name] = Mesh();
 			}
+
+			flush_mesh_data();
 
 			// Get name after "usemtl ".
 			std::string mat_name = line.substr(7);
-			out_mats[mat_name] = in_mats[mat_name];
 			current_mat_name = mat_name;
 		}
 	}
 	// If done, time to export!
-	if (!current_mesh_name.empty() && !current_mat_name.empty())
-	{
-		out_meshes[current_mesh_name].addMaterialMeshData(out_mats[current_mat_name], out_vertices, out_uvs, out_normals, out_tangents);
-	}
+	flush_mesh_data();
 
 	model_file.close();
-	return Model(out_meshes, out_mats);
+	return Model(std::move(out_meshes), std::move(out_mats));
 }

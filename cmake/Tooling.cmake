@@ -10,7 +10,26 @@ file(GLOB_RECURSE CENGINE_TIDY_FILES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/samples/viewer/*.cpp"
 )
 
-find_program(CLANG_FORMAT_EXE NAMES clang-format)
+find_program(CLANG_FORMAT_EXE NAMES
+    clang-format
+    clang-format-19
+    clang-format-18
+    clang-format-17
+    clang-format-16
+    clang-format-15
+    clang-format.exe
+    HINTS
+        "/mnt/c/Program Files/LLVM/bin"
+        "/mnt/c/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/bin"
+        "/mnt/c/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/bin"
+        "/mnt/c/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/x64/bin"
+        "/mnt/c/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/bin"
+        "C:/Program Files/LLVM/bin"
+        "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/bin"
+        "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/bin"
+        "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/x64/bin"
+        "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/bin"
+)
 if(CLANG_FORMAT_EXE)
     add_custom_target(format
         COMMAND "${CLANG_FORMAT_EXE}" -i ${CENGINE_FORMAT_FILES}

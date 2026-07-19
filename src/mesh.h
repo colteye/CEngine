@@ -20,12 +20,9 @@ class Mesh
 {
 public:
 	std::string mesh_name;
-	void addMaterialMeshData(Material* in_mat, std::vector<glm::vec3> in_vertices,
-		std::vector<glm::vec2> in_uvs,
-		std::vector<glm::vec3> in_normals,
-		std::vector<glm::vec3> in_tangents);
+	void AddMaterialMeshData(Material* material, MeshData mesh_data);
 
-	std::unordered_map<Material*, MeshData> &getMaterialMeshData() { return material_mesh_data; };
+	const std::unordered_map<Material*, MeshData>& GetMaterialMeshData() const { return material_mesh_data; };
 
 private:
 	std::unordered_map<Material*, MeshData> material_mesh_data;

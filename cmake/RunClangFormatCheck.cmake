@@ -1,4 +1,4 @@
-file(GLOB_RECURSE FORMAT_FILES CONFIGURE_DEPENDS
+file(GLOB_RECURSE FORMAT_FILES
     "${SOURCE_DIR}/src/*.cpp"
     "${SOURCE_DIR}/samples/viewer/*.cpp"
     "${SOURCE_DIR}/src/*.h"

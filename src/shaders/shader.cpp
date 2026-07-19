@@ -1,8 +1,18 @@
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <vector>
 
 #include "shader.h"
+
+Shader::~Shader()
+{
+	if (shader_id != 0)
+	{
+		glDeleteProgram(shader_id);
+		shader_id = 0;
+	}
+}
 
 void Shader::Load() {
 
@@ -25,8 +35,8 @@ void Shader::Load() {
 	}
 	else 
 	{
-		printf("Impossible to open %s. Are you in the right directory ? Don't forget to read the FAQ !\n", vertex_file_path.c_str());
-		getchar();
+		std::cout << "Impossible to open vertex shader: " << vertex_file_path << "\n";
+		return;
 	}
 
 	// Read the Fragment Shader code from the file
@@ -38,6 +48,11 @@ void Shader::Load() {
 		sstr << fragment_stream.rdbuf();
 		fragment_code = sstr.str();
 		fragment_stream.close();
+	}
+	else
+	{
+		std::cout << "Impossible to open fragment shader: " << fragment_file_path << "\n";
+		return;
 	}
 
 	GLint result = GL_FALSE;

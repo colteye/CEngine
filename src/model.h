@@ -14,7 +14,8 @@ class Model
 {
 public:
 	std::string model_name;
-	Model(std::unordered_map<std::string, Mesh>& in_meshes, std::unordered_map<std::string, Material*>& in_mats);
+	Model(std::unordered_map<std::string, Mesh> in_meshes,
+		std::unordered_map<std::string, Material*> in_mats);
 
 private:
 	std::unordered_map<std::string, Mesh> meshes;

@@ -7,6 +7,11 @@
 class Shader
 {
 public:
+	Shader() = default;
+	Shader(const Shader&) = delete;
+	Shader& operator=(const Shader&) = delete;
+	virtual ~Shader();
+
 	void Load();
 	void Use() { glUseProgram(shader_id); }
 	void Update() 
@@ -23,7 +28,7 @@ protected:
 
 	std::string vertex_file_path;
 	std::string fragment_file_path;
-	GLuint shader_id;
+	GLuint shader_id = 0;
 };
 
 #endif

@@ -2,12 +2,23 @@
 
 #include "texture.h"
 
-GLuint Texture::LoadDDS(std::string image_p) {
+#include <iostream>
+#include <stdexcept>
+
+GLuint Texture::LoadDDS(const std::string& image_p) {
 
 	nv_dds::CDDSImage image;
-	GLuint TextureID;
+	GLuint TextureID = 0;
 
-	image.load(image_p);
+	try
+	{
+		image.load(image_p);
+	}
+	catch (const std::exception& e)
+	{
+		std::cout << "Failed to load DDS texture '" << image_p << "': " << e.what() << "\n";
+		return 0;
+	}
 
 	glGenTextures(1, &TextureID);
 	glBindTexture(GL_TEXTURE_2D, TextureID);

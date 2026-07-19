@@ -14,7 +14,11 @@ public:
 	GLuint normal_tex;
 	GLuint metallic_roughness_ao_tex;
 
-	Material(PBRStandard * in_shader, std::string albedo_p, std::string normal_p, std::string metallic_roughness_ao_p);
+	Material(PBRStandard* in_shader, const std::string& albedo_p, const std::string& normal_p,
+		const std::string& metallic_roughness_ao_p);
+	Material(const Material&) = delete;
+	Material& operator=(const Material&) = delete;
+	~Material();
 
 	void UpdateShader();
 

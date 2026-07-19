@@ -81,52 +81,60 @@ int main()
 	// Ensure we can capture the escape key being pressed below
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 
-	Controls control = Controls(window);
-
-	// Start with camera.
-	Camera view_cam;
-
-	// Init lighting.
-	[[maybe_unused]] Light light_1 = Light(glm::vec3(0.0f, 10.0f, 7.0f), glm::vec3(1.0f, 1.0f, 1.0f), 1);
-	[[maybe_unused]] Light light_4 = Light(glm::vec3(0.0f, 7.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), 5);
-
-	// Init shaders after.
-	PBRStandard pbr_shader;
-
-	// Init materials after shaders.
-	Material barrelMaterial = Material(&pbr_shader,
-		"assets/demo/barrel/results/barrel_albedo.DDS",
-		"assets/demo/barrel/results/barrel_normal.DDS",
-		"assets/demo/barrel/results/barrel_metallic_roughness_ao.DDS");
-
-	// Init models after materials.
-	Model barrel = ModelImporter::ImportOBJ("assets/demo/barrel/barrel_low.obj", { {"barrel", &barrelMaterial } });
-
-	// Testing
-	//glm::vec3 start_pos = glm::vec3(0.0f, 10.0f, 7.0f);
-
 	// Time to initialize renderer!
 	int window_width, window_height;
 	glfwGetFramebufferSize(window, &window_width, &window_height);
 	RenderSystem::Initialize(window_width, window_height);
 
-	double lastTime = glfwGetTime();
-	do {
-		double current = glfwGetTime();
-		float deltaTime = float(current - lastTime);
-		lastTime = current;
+	{
+		Controls control = Controls(window);
 
-		control.Update(&view_cam, deltaTime);
+		// Start with camera.
+		Camera view_cam;
 
-		//start_pos = glm::vec3{ start_pos.x, start_pos.y + 0.08f, start_pos.z };
-		//light_4.setPosition(start_pos);
+		// Init lighting.
+		[[maybe_unused]] Light light_1 = Light(glm::vec3(0.0f, 10.0f, 7.0f), glm::vec3(1.0f, 1.0f, 1.0f), 1);
+		[[maybe_unused]] Light light_4 = Light(glm::vec3(0.0f, 7.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), 5);
 
-		RenderSystem::Render();
+		// Init shaders after.
+		PBRStandard pbr_shader;
 
-		// Swap buffers
-		glfwSwapBuffers(window);
-		glfwPollEvents();
-	} // Check if the ESC key was pressed or the window was closed
-	while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS &&
-		glfwWindowShouldClose(window) == 0);
+		// Init materials after shaders.
+		Material barrelMaterial = Material(&pbr_shader,
+			"assets/demo/barrel/results/barrel_albedo.DDS",
+			"assets/demo/barrel/results/barrel_normal.DDS",
+			"assets/demo/barrel/results/barrel_metallic_roughness_ao.DDS");
+
+		// Init models after materials.
+		Model barrel = ModelImporter::ImportOBJ("assets/demo/barrel/barrel_low.obj", { {"barrel", &barrelMaterial } });
+
+		// Testing
+		//glm::vec3 start_pos = glm::vec3(0.0f, 10.0f, 7.0f);
+
+		double lastTime = glfwGetTime();
+		do {
+			double current = glfwGetTime();
+			float deltaTime = float(current - lastTime);
+			lastTime = current;
+
+			control.Update(&view_cam, deltaTime);
+
+			//start_pos = glm::vec3{ start_pos.x, start_pos.y + 0.08f, start_pos.z };
+			//light_4.SetPosition(start_pos);
+
+			RenderSystem::Render();
+
+			// Swap buffers
+			glfwSwapBuffers(window);
+			glfwPollEvents();
+		} // Check if the ESC key was pressed or the window was closed
+		while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS &&
+			glfwWindowShouldClose(window) == 0);
+
+		RenderSystem::Shutdown();
+	}
+
+	glfwDestroyWindow(window);
+	glfwTerminate();
+	return 0;
 }

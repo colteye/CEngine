@@ -11,7 +11,7 @@ Controls::Controls(GLFWwindow* window)
 	glfw_window = window;
 }
 
-void Controls::Update(Camera* cam, float& deltaTime)
+void Controls::Update(Camera* cam, float delta_time)
 {
 	glm::vec3 position = cam->GetPosition();
 	glm::vec2 angles = cam->GetAngles();
@@ -19,11 +19,17 @@ void Controls::Update(Camera* cam, float& deltaTime)
 	float speed = 5.0f; // 3 units / second
 	float mouseSpeed = 0.3f;
 	double xpos, ypos;
-	glfwGetCursorPos(glfw_window, &xpos, &ypos);
-	glfwSetCursorPos(glfw_window, 1024 / 2, 768 / 2);
+	int framebuffer_width = 0;
+	int framebuffer_height = 0;
+	glfwGetFramebufferSize(glfw_window, &framebuffer_width, &framebuffer_height);
 
-	angles.x += mouseSpeed * float(1024 / 2 - xpos) * deltaTime;
-	angles.y += mouseSpeed * float(768 / 2 - ypos) * deltaTime;
+	const double center_x = framebuffer_width * 0.5;
+	const double center_y = framebuffer_height * 0.5;
+	glfwGetCursorPos(glfw_window, &xpos, &ypos);
+	glfwSetCursorPos(glfw_window, center_x, center_y);
+
+	angles.x += mouseSpeed * static_cast<float>(center_x - xpos) * delta_time;
+	angles.y += mouseSpeed * static_cast<float>(center_y - ypos) * delta_time;
 
 	// Direction : Spherical coordinates to Cartesian coordinates conversion
 	glm::vec3 direction(
@@ -46,19 +52,19 @@ void Controls::Update(Camera* cam, float& deltaTime)
 	if (glfwGetKey(glfw_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) sprint = sprint_multiplier;
 	// Move forward
 	if (glfwGetKey(glfw_window, GLFW_KEY_W) == GLFW_PRESS) {
-		position += direction * speed * deltaTime * sprint;
+		position += direction * speed * delta_time * sprint;
 	}
 	// Move backward
 	if (glfwGetKey(glfw_window, GLFW_KEY_S) == GLFW_PRESS) {
-		position -= direction * speed * deltaTime * sprint;
+		position -= direction * speed * delta_time * sprint;
 	}
 	// Strafe right
 	if (glfwGetKey(glfw_window, GLFW_KEY_D) == GLFW_PRESS) {
-		position += right * speed * deltaTime * sprint;
+		position += right * speed * delta_time * sprint;
 	}
 	// Strafe left
 	if (glfwGetKey(glfw_window, GLFW_KEY_A) == GLFW_PRESS) {
-		position -= right * speed * deltaTime * sprint;
+		position -= right * speed * delta_time * sprint;
 	}
 
 	cam->SetPositionAngles(position, angles);

@@ -7,6 +7,6 @@
 class Texture
 {
 public:
-	static GLuint LoadDDS(std::string imagepath);
+	static GLuint LoadDDS(const std::string& imagepath);
 };
 #endif

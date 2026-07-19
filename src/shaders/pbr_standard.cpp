@@ -8,6 +8,9 @@
 #include <glm/gtc/type_ptr.hpp>
 
 PBRStandard::PBRStandard()
+	: albedo_tex(0),
+	  normal_tex(0),
+	  metallic_roughness_ao_tex(0)
 {
     Load();
 }
@@ -65,13 +68,16 @@ void PBRStandard::SetParametersDynamic()
     glUniformMatrix4fv(v_id, 1, GL_FALSE, &ShaderConstants::view[0][0]);
     glUniformMatrix4fv(p_id, 1, GL_FALSE, &ShaderConstants::proj[0][0]);
 
-    std::vector<glm::vec3> light_pos_list = RenderSystem::GetLightPositions();
-    std::vector<glm::vec3> light_col_list = RenderSystem::GetLightColors();
-    std::vector<float> light_pow_list = RenderSystem::GetLightPowers();
+    const std::vector<glm::vec3>& light_pos_list = RenderSystem::GetLightPositions();
+    const std::vector<glm::vec3>& light_col_list = RenderSystem::GetLightColors();
+    const std::vector<float>& light_pow_list = RenderSystem::GetLightPowers();
 
-    glUniform3fv(light_pos_id, static_cast<GLsizei>(light_pos_list.size()),
-                 glm::value_ptr(light_pos_list[0]));
-    glUniform3fv(light_col_id, static_cast<GLsizei>(light_col_list.size()),
-                 glm::value_ptr(light_col_list[0]));
-    glUniform1fv(light_pow_id, static_cast<GLsizei>(light_pow_list.size()), &light_pow_list[0]);
+    if (!light_pos_list.empty())
+    {
+        glUniform3fv(light_pos_id, static_cast<GLsizei>(light_pos_list.size()),
+                     glm::value_ptr(light_pos_list[0]));
+        glUniform3fv(light_col_id, static_cast<GLsizei>(light_col_list.size()),
+                     glm::value_ptr(light_col_list[0]));
+        glUniform1fv(light_pow_id, static_cast<GLsizei>(light_pow_list.size()), light_pow_list.data());
+    }
 }

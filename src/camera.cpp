@@ -1,48 +1,57 @@
-	#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
-	#include <stdio.h>
+#include <cmath>
+#include <stdio.h>
 
-	#include "shaders/shader_constants.h"
-	#include "camera.h"
+#include "shaders/shader_constants.h"
+#include "camera.h"
 
-	void Camera::SetAnglesCartesian(glm::vec3 ang)
-	{
-		angles = glm::vec2{ atan(ang.x/ang.y), 
-							atan(sqrt( (ang.x * ang.x) + (ang.y * ang.y) ) / ang.z) };
-	}
+Camera::Camera()
+{
+	UpdateMatrices();
+}
 
-	void Camera::UpdateMatrices()
-	{
-		// Direction : Spherical coordinates to Cartesian coordinates conversion
-		glm::vec3 direction(
-			cos(angles.y) * sin(angles.x),
-			sin(angles.y),
-			cos(angles.y) * cos(angles.x)
-		);
+void Camera::SetAnglesCartesian(const glm::vec3& ang)
+{
+	m_angles = glm::vec2{
+		std::atan2(ang.x, ang.y),
+		std::atan2(std::sqrt((ang.x * ang.x) + (ang.y * ang.y)), ang.z)
+	};
+	UpdateMatrices();
+}
 
-		// Right vector
-		glm::vec3 right = glm::vec3(
-			sin(angles.x - glm::pi<float>() / 2.0f),
-			0,
-			cos(angles.x - glm::pi<float>() / 2.0f)
-		);
+void Camera::UpdateMatrices()
+{
+	// Direction : Spherical coordinates to Cartesian coordinates conversion
+	glm::vec3 direction(
+		std::cos(m_angles.y) * std::sin(m_angles.x),
+		std::sin(m_angles.y),
+		std::cos(m_angles.y) * std::cos(m_angles.x)
+	);
 
-		// Up vector : perpendicular to both direction and right
-		glm::vec3 up = glm::cross(right, direction);
+	// Right vector
+	glm::vec3 right = glm::vec3(
+		std::sin(m_angles.x - glm::pi<float>() / 2.0f),
+		0,
+		std::cos(m_angles.x - glm::pi<float>() / 2.0f)
+	);
 
-		// Projection matrix : 45&deg; Field of View, 4:3 ratio, display range : 0.1 unit <-> 100 units
-		proj = glm::perspective(glm::radians(field_of_view), 4.0f / 3.0f, 0.1f, 100.0f);
-		// Camera matrix
-		view = glm::lookAt(
-			position,           // Camera is here
-			position + direction, // and looks here : at the same position, plus "direction"
-			up                  // Head is up (set to 0,-1,0 to look upside-down)
-		);
+	// Up vector : perpendicular to both direction and right
+	glm::vec3 up = glm::cross(right, direction);
 
-		model = glm::mat4(1.0f);
+	// Projection matrix : 45 degree Field of View, 4:3 ratio, display range : 0.1 unit <-> 100 units
+	m_projection = glm::perspective(glm::radians(m_field_of_view), 4.0f / 3.0f, 0.1f, 100.0f);
+	// Camera matrix
+	m_view = glm::lookAt(
+		m_position,           // Camera is here
+		m_position + direction, // and looks here : at the same position, plus "direction"
+		up                  // Head is up (set to 0,-1,0 to look upside-down)
+	);
 
-		ShaderConstants::model = model;
-		ShaderConstants::view = view;
-		ShaderConstants::proj = proj;
-		ShaderConstants::camera_position = position;
-	}
+	m_model = glm::mat4(1.0f);
+
+	ShaderConstants::model = m_model;
+	ShaderConstants::view = m_view;
+	ShaderConstants::proj = m_projection;
+	ShaderConstants::camera_position = m_position;
+}

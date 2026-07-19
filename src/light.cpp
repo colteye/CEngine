@@ -1,30 +1,28 @@
-#include <nv_dds/nv_dds.h>
-
 #include "light.h"
 #include "render_system.h"
 
-Light::Light(glm::vec3 pos, glm::vec3 col, float pow)
+Light::Light(const glm::vec3& pos, const glm::vec3& col, float pow)
+	: m_id(RenderSystem::RegisterLight(pos, col, pow)),
+	  m_position(pos),
+	  m_color(col),
+	  m_power(pow)
 {
-	l_id = RenderSystem::RegisterLight(pos, col, pow);
-	l_pos = pos;
-	l_col = col;
-	l_pow = pow;
 }
 
-void Light::setPosition(glm::vec3 pos)
+void Light::SetPosition(const glm::vec3& pos)
 {
-	RenderSystem::UpdateLight(l_id, pos, l_col, l_pow);
-	l_pos = pos;
+	RenderSystem::UpdateLight(m_id, pos, m_color, m_power);
+	m_position = pos;
 }
 
-void Light::setColor(glm::vec3 col)
+void Light::SetColor(const glm::vec3& col)
 {
-	RenderSystem::UpdateLight(l_id, l_pos, col, l_pow);
-	l_col = col;
+	RenderSystem::UpdateLight(m_id, m_position, col, m_power);
+	m_color = col;
 }
 
-void Light::setPower(float pow)
+void Light::SetPower(float pow)
 {
-	RenderSystem::UpdateLight(l_id, l_pos, l_col, pow);
-	l_pow = pow;
+	RenderSystem::UpdateLight(m_id, m_position, m_color, pow);
+	m_power = pow;
 }
