@@ -2,6 +2,17 @@
 
 CEngine is now built with CMake instead of Visual Studio project files.
 
+## Repository layout
+
+- `src/` contains engine-owned runtime code.
+- `samples/viewer/` contains the sample viewer executable.
+- `third_party/` contains vendored source/header dependencies.
+- `assets/engine/` contains engine runtime assets such as shaders and utility textures.
+- `assets/demo/` contains sample runtime assets.
+- `assets/source/` contains source/import-time art files that are not loaded directly by the viewer.
+- `cmake/` contains project CMake helper modules.
+
+
 ## Build
 
 ```sh
@@ -33,6 +44,8 @@ On Linux, fetched GLFW still needs the development packages for the selected
 desktop backend. The default fetched backend is X11; use
 `-DCENGINE_FETCH_GLFW_WAYLAND=ON -DCENGINE_FETCH_GLFW_X11=OFF` for Wayland, or
 use the `debug-headless` preset for a compile/link check on minimal images.
+
+The viewer copies the full `assets/` tree beside the executable after each build.
 
 ## Tooling
 

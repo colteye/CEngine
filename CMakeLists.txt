@@ -49,62 +49,6 @@ function(ce_setup_opengl out_target)
     set(${out_target} CEngineOpenGL PARENT_SCOPE)
 endfunction()
 
-add_library(CEngineCore STATIC
-    CEngine/include/glad/glad.c
-    CEngine/include/nv_dds/nv_dds.cpp
-    CEngine/src/engine/camera.cpp
-    CEngine/src/engine/controls.cpp
-    CEngine/src/engine/light.cpp
-    CEngine/src/engine/material.cpp
-    CEngine/src/engine/mesh.cpp
-    CEngine/src/engine/model.cpp
-    CEngine/src/engine/model_importer.cpp
-    CEngine/src/engine/render_system.cpp
-    CEngine/src/engine/shaders/pbr_standard.cpp
-    CEngine/src/engine/shaders/shader.cpp
-    CEngine/src/engine/shaders/shader_constants.cpp
-    CEngine/src/engine/shaders/ssao.cpp
-    CEngine/src/engine/texture.cpp
-)
-
-target_include_directories(CEngineCore
-    SYSTEM PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}/CEngine/include"
-)
-
-target_include_directories(CEngineCore
-    PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}/CEngine/src/engine"
-)
-
-target_link_libraries(CEngineCore PRIVATE ${CMAKE_DL_LIBS})
-
-target_compile_definitions(CEngineCore
-    PUBLIC
-        GL_SILENCE_DEPRECATION
-        GLFW_INCLUDE_NONE
-)
-
-if(MSVC)
-    set_source_files_properties(
-        CEngine/include/glad/glad.c
-        CEngine/include/nv_dds/nv_dds.cpp
-        PROPERTIES COMPILE_OPTIONS /W0
-    )
-else()
-    set_source_files_properties(
-        CEngine/include/glad/glad.c
-        CEngine/include/nv_dds/nv_dds.cpp
-        PROPERTIES COMPILE_OPTIONS -w
-    )
-endif()
-
-if(MSVC)
-    target_compile_options(CEngineCore PRIVATE /W4 /permissive- /Zc:__cplusplus)
-else()
-    target_compile_options(CEngineCore PRIVATE -Wall -Wextra -Wpedantic)
-endif()
-
 function(ce_setup_glfw out_target)
     if(CENGINE_USE_SYSTEM_GLFW)
         find_package(glfw3 QUIET CONFIG)
@@ -153,15 +97,76 @@ function(ce_setup_glfw out_target)
     set(${out_target} glfw PARENT_SCOPE)
 endfunction()
 
+ce_setup_glfw(CEngine_GLFW_TARGET)
+
+add_library(CEngineCore STATIC
+    third_party/glad/src/glad.c
+    third_party/nv_dds/src/nv_dds.cpp
+    src/camera.cpp
+    src/controls.cpp
+    src/light.cpp
+    src/material.cpp
+    src/mesh.cpp
+    src/model.cpp
+    src/model_importer.cpp
+    src/render_system.cpp
+    src/shaders/pbr_standard.cpp
+    src/shaders/shader.cpp
+    src/shaders/shader_constants.cpp
+    src/shaders/ssao.cpp
+    src/texture.cpp
+)
+
+target_include_directories(CEngineCore
+    SYSTEM PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glad/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glm"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlohmann/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nv_dds/include"
+)
+
+target_include_directories(CEngineCore
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+
+target_link_libraries(CEngineCore PUBLIC ${CEngine_GLFW_TARGET})
+target_link_libraries(CEngineCore PRIVATE ${CMAKE_DL_LIBS})
+
+target_compile_definitions(CEngineCore
+    PUBLIC
+        GL_SILENCE_DEPRECATION
+        GLFW_INCLUDE_NONE
+)
+
+if(MSVC)
+    set_source_files_properties(
+        third_party/glad/src/glad.c
+        third_party/nv_dds/src/nv_dds.cpp
+        PROPERTIES COMPILE_OPTIONS /W0
+    )
+else()
+    set_source_files_properties(
+        third_party/glad/src/glad.c
+        third_party/nv_dds/src/nv_dds.cpp
+        PROPERTIES COMPILE_OPTIONS -w
+    )
+endif()
+
+if(MSVC)
+    target_compile_options(CEngineCore PRIVATE /W4 /permissive- /Zc:__cplusplus)
+else()
+    target_compile_options(CEngineCore PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+
 if(CENGINE_BUILD_VIEWER)
     ce_setup_opengl(CEngine_OPENGL_TARGET)
-    ce_setup_glfw(CEngine_GLFW_TARGET)
-
     add_executable(CEngine
-        CEngine/src/engine/main.cpp
+        samples/viewer/main.cpp
     )
 
-    target_link_libraries(CEngine PRIVATE CEngineCore ${CEngine_OPENGL_TARGET} ${CEngine_GLFW_TARGET})
+    target_link_libraries(CEngine PRIVATE CEngineCore ${CEngine_OPENGL_TARGET})
 
     set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT CEngine)
     set_target_properties(CEngine PROPERTIES
@@ -174,27 +179,11 @@ if(CENGINE_BUILD_VIEWER)
         target_compile_options(CEngine PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 
-    foreach(asset_dir IN ITEMS missing test_model)
-        add_custom_command(TARGET CEngine POST_BUILD
-            COMMAND "${CMAKE_COMMAND}" -E copy_directory
-                    "${CMAKE_CURRENT_SOURCE_DIR}/CEngine/${asset_dir}"
-                    "$<TARGET_FILE_DIR:CEngine>/${asset_dir}"
-        )
-    endforeach()
-
-    foreach(asset_file IN ITEMS
-        PBR_Standard_Vertex.vert
-        PBR_Standard_Fragment.frag
-        SSAO_Vertex.vert
-        SSAO_Fragment.frag
-        random.DDS
+    add_custom_command(TARGET CEngine POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+                "$<TARGET_FILE_DIR:CEngine>/assets"
     )
-        add_custom_command(TARGET CEngine POST_BUILD
-            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-                    "${CMAKE_CURRENT_SOURCE_DIR}/CEngine/${asset_file}"
-                    "$<TARGET_FILE_DIR:CEngine>/${asset_file}"
-        )
-    endforeach()
 endif()
 
 include(Tooling)

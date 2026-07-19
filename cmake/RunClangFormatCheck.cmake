@@ -1,6 +1,8 @@
 file(GLOB_RECURSE FORMAT_FILES CONFIGURE_DEPENDS
-    "${SOURCE_DIR}/CEngine/src/engine/*.cpp"
-    "${SOURCE_DIR}/CEngine/src/engine/*.h"
+    "${SOURCE_DIR}/src/*.cpp"
+    "${SOURCE_DIR}/samples/viewer/*.cpp"
+    "${SOURCE_DIR}/src/*.h"
+    "${SOURCE_DIR}/samples/viewer/*.h"
 )
 
 set(FAILED_FILES "")

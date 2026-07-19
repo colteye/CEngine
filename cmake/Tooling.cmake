@@ -1,10 +1,13 @@
 file(GLOB_RECURSE CENGINE_FORMAT_FILES CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/CEngine/src/engine/*.cpp"
-    "${CMAKE_SOURCE_DIR}/CEngine/src/engine/*.h"
+    "${CMAKE_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_SOURCE_DIR}/samples/viewer/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/*.h"
+    "${CMAKE_SOURCE_DIR}/samples/viewer/*.h"
 )
 
 file(GLOB_RECURSE CENGINE_TIDY_FILES CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/CEngine/src/engine/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_SOURCE_DIR}/samples/viewer/*.cpp"
 )
 
 find_program(CLANG_FORMAT_EXE NAMES clang-format)
