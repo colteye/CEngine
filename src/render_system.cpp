@@ -9,7 +9,6 @@ GLuint RenderSystem::quad_VAO, RenderSystem::quad_VBO;
 
 int RenderSystem::window_width, RenderSystem::window_height;
 
-// Add SSAO!
 SSAO *RenderSystem::ssao;
 
 std::unordered_map<Shader*, ShaderBuffers> RenderSystem::shader_buffer_dict;
@@ -37,14 +36,16 @@ void RenderSystem::Initialize(int in_window_width, int in_window_height)
 	glGenTextures(1, &g_color);
 	glBindTexture(GL_TEXTURE_2D, g_color);
 
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, in_window_width, in_window_height, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, in_window_width, in_window_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_color, 0);
 
 	glGenTextures(1, &rbo_depth);
 	glBindTexture(GL_TEXTURE_2D, rbo_depth);
-	glTexImage2D(GL_TEXTURE_2D, 0,GL_DEPTH_COMPONENT24, 1024, 768, 0,GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, in_window_width, in_window_height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -52,12 +53,11 @@ void RenderSystem::Initialize(int in_window_width, int in_window_height)
 	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, rbo_depth, 0);
 
 
-	// - tell OpenGL which color attachments we'll use (of this framebuffer) for rendering 
-	GLenum attachments[2] = { GL_COLOR_ATTACHMENT0, GL_DEPTH_ATTACHMENT };
-	glDrawBuffers(2, attachments);
+	GLenum attachments[1] = { GL_COLOR_ATTACHMENT0 };
+	glDrawBuffers(1, attachments);
 
 	ssao = new SSAO();
-	ssao->SetTextures(g_color, rbo_depth);
+	ssao->SetTextures(g_color, rbo_depth, in_window_width, in_window_height);
 
 	window_width = in_window_width;
 	window_height = in_window_height;
@@ -229,7 +229,7 @@ const std::vector<float>& RenderSystem::GetLightPowers()
 void RenderSystem::Render()
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, g_buffer);
-	//glViewport(0, 0, window_width, window_height);
+	glViewport(0, 0, window_width, window_height);
 
 	// Clear the screen.
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -258,7 +258,7 @@ void RenderSystem::Render()
 	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	//glViewport(0, 0, window_width, window_height);
+	glViewport(0, 0, window_width, window_height);
 
 	// Clear the screen
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

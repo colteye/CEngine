@@ -15,6 +15,22 @@ CEngine is now built with CMake instead of Visual Studio project files.
 
 ## Build
 
+From a Windows command prompt:
+
+```bat
+cmake --preset windows-debug
+cmake --build --preset windows-debug
+```
+
+Windows release builds use:
+
+```bat
+cmake --preset windows-release
+cmake --build --preset windows-release
+```
+
+The cross-platform presets are:
+
 ```sh
 cmake --preset debug
 cmake --build --preset debug

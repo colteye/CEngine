@@ -1,20 +1,14 @@
 #ifndef SSAO_H
 #define SSAO_H
 
-#include <vector>
 #include "shader.h"
-#include "../light.h"
 
 class SSAO : public Shader
 {
 public:
 
-	GLuint random_tex;
-	GLuint render_tex;
-	GLuint depth_tex;
-
 	SSAO();
-	void SetTextures(GLuint render, GLuint depth);
+	void SetTextures(GLuint render, GLuint depth, int width, int height);
 
 protected:
 	virtual void SetShaderFiles();
@@ -22,9 +16,13 @@ protected:
 	virtual void SetParametersStatic();
 	virtual void SetParametersDynamic();
 
-	GLuint cam_pos_id;
-	GLuint m_id, v_id, p_id;
-	GLuint render_id, depth_id, random_id;
+	GLuint render_tex;
+	GLuint depth_tex;
+	GLuint render_id, depth_id;
+	GLuint projection_id, inverse_projection_id, texel_size_id;
+
+	int texture_width;
+	int texture_height;
 
 };
 

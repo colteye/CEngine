@@ -1,16 +1,17 @@
 #include "ssao.h"
 
 #include "shader_constants.h"
-#include "../render_system.h"
-#include "../texture.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 SSAO::SSAO()
+	: render_tex(0),
+	  depth_tex(0),
+	  texture_width(1),
+	  texture_height(1)
 {
     Load();
-    random_tex = Texture::LoadDDS("assets/engine/textures/random.DDS");
 }
 
 void SSAO::SetShaderFiles()
@@ -21,21 +22,20 @@ void SSAO::SetShaderFiles()
 
 void SSAO::InitializeParameters()
 {
-    cam_pos_id = glGetUniformLocation(shader_id, "cam_pos_world");
-
-    m_id = glGetUniformLocation(shader_id, "model");
-    v_id = glGetUniformLocation(shader_id, "view");
-    p_id = glGetUniformLocation(shader_id, "projection");
-
     render_id = glGetUniformLocation(shader_id, "render_tex");
-    random_id = glGetUniformLocation(shader_id, "random_tex");
     depth_id = glGetUniformLocation(shader_id, "depth_tex");
+
+    projection_id = glGetUniformLocation(shader_id, "projection");
+    inverse_projection_id = glGetUniformLocation(shader_id, "inverse_projection");
+    texel_size_id = glGetUniformLocation(shader_id, "texel_size");
 }
 
-void SSAO::SetTextures(GLuint render, GLuint depth)
+void SSAO::SetTextures(GLuint render, GLuint depth, int width, int height)
 {
     render_tex = render;
     depth_tex = depth;
+    texture_width = width;
+    texture_height = height;
 }
 
 void SSAO::SetParametersStatic()
@@ -47,17 +47,13 @@ void SSAO::SetParametersStatic()
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, depth_tex);
     glUniform1i(depth_id, 1);
-
-    glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, random_tex);
-    glUniform1i(random_id, 2);
 }
 
 void SSAO::SetParametersDynamic()
 {
-    glUniform3f(cam_pos_id, ShaderConstants::camera_position[0],
-                ShaderConstants::camera_position[1], ShaderConstants::camera_position[2]);
-    glUniformMatrix4fv(m_id, 1, GL_FALSE, &ShaderConstants::model[0][0]);
-    glUniformMatrix4fv(v_id, 1, GL_FALSE, &ShaderConstants::view[0][0]);
-    glUniformMatrix4fv(p_id, 1, GL_FALSE, &ShaderConstants::proj[0][0]);
+    const glm::mat4 inverse_projection = glm::inverse(ShaderConstants::proj);
+
+    glUniformMatrix4fv(projection_id, 1, GL_FALSE, glm::value_ptr(ShaderConstants::proj));
+    glUniformMatrix4fv(inverse_projection_id, 1, GL_FALSE, glm::value_ptr(inverse_projection));
+    glUniform2f(texel_size_id, 1.0f / texture_width, 1.0f / texture_height);
 }
