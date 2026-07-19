@@ -36,6 +36,15 @@ bld/
 [Ll]og/
 [Ll]ogs/
 
+# CMake build trees
+[Bb]uild/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+
 # Visual Studio 2015/2017 cache/options directory
 .vs/
 # Uncomment if you have tasks that create the project's static files in wwwroot

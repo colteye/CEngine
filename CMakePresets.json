@@ -1,0 +1,48 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "debug-headless",
+      "displayName": "Debug Headless Compile Check",
+      "binaryDir": "${sourceDir}/build/debug-headless",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CENGINE_FETCH_GLFW_X11": "OFF",
+        "CENGINE_FETCH_GLFW_WAYLAND": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "debug-headless",
+      "configurePreset": "debug-headless"
+    }
+  ]
+}

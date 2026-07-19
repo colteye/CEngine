@@ -1,0 +1,13 @@
+# Blender MTL File: 'None'
+# Material Count: 1
+
+newmtl barrel
+Ns 544.444463
+Ka 0.462963 0.462963 0.462963
+Kd 0.800000 0.800000 0.800000
+Ks 0.896296 0.896296 0.896296
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 3
+map_Bump barrel_low_barrel_Normal.png
