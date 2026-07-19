@@ -1,8 +1,7 @@
 #include "pbr_standard.h"
 
 #include "shader_constants.h"
-#include "../render_system.h"
-#include "../texture.h"
+#include "render_system.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -12,17 +11,25 @@ PBRStandard::PBRStandard()
 	  normal_tex(0),
 	  metallic_roughness_ao_tex(0)
 {
-    Load();
+    shader_program.Load("shaders/opengl/pbr_standard.vert",
+                        "shaders/opengl/pbr_standard.frag");
+    InitializeParameters();
 }
 
-void PBRStandard::SetShaderFiles()
+void PBRStandard::Use() const
 {
-    vertex_file_path = "assets/engine/shaders/pbr_standard.vert";
-    fragment_file_path = "assets/engine/shaders/pbr_standard.frag";
+    shader_program.Use();
+}
+
+void PBRStandard::Update()
+{
+    SetParametersStatic();
+    SetParametersDynamic();
 }
 
 void PBRStandard::InitializeParameters()
 {
+    const GLuint shader_id = shader_program.GetId();
     light_pos_id = glGetUniformLocation(shader_id, "light_positions");
     light_col_id = glGetUniformLocation(shader_id, "light_colors");
     light_pow_id = glGetUniformLocation(shader_id, "light_powers");

@@ -1,10 +1,10 @@
-#ifndef TEXTURE_H
-#define TEXTURE_H
+#ifndef OPENGL_TEXTURE_H
+#define OPENGL_TEXTURE_H
 
 #include <string>
 #include <glad/glad.h>
 
-class Texture
+class OpenGLTexture
 {
 public:
 	static GLuint LoadDDS(const std::string& imagepath);

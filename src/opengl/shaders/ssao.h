@@ -3,19 +3,21 @@
 
 #include "shader.h"
 
-class SSAO : public Shader
+class SSAO
 {
 public:
 
 	SSAO();
+	void Use() const;
+	void Update();
 	void SetTextures(GLuint render, GLuint depth, int width, int height);
 
-protected:
-	void SetShaderFiles() override;
-	void InitializeParameters() override;
-	void SetParametersStatic() override;
-	void SetParametersDynamic() override;
+private:
+	void InitializeParameters();
+	void SetParametersStatic();
+	void SetParametersDynamic();
 
+	ShaderProgram shader_program;
 	GLuint render_tex;
 	GLuint depth_tex;
 	GLuint render_id, depth_id;

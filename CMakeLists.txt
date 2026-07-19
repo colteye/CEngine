@@ -6,6 +6,7 @@ option(CENGINE_BUILD_VIEWER "Build the interactive CEngine viewer executable." O
 option(CENGINE_USE_SYSTEM_GLFW "Use an installed system GLFW package instead of fetching GLFW source." OFF)
 option(CENGINE_FETCH_GLFW_X11 "Build the X11 backend when GLFW is fetched on Linux." ON)
 option(CENGINE_FETCH_GLFW_WAYLAND "Build the Wayland backend when GLFW is fetched on Linux." OFF)
+option(CENGINE_ENABLE_VULKAN "Build the Vulkan render backend when the Vulkan SDK is available." ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -99,7 +100,14 @@ endfunction()
 
 ce_setup_glfw(CEngine_GLFW_TARGET)
 
-add_library(CEngineCore STATIC
+set(CENGINE_OPENGL_SHADER_SOURCES
+    src/opengl/shaders/pbr_standard.vert
+    src/opengl/shaders/pbr_standard.frag
+    src/opengl/shaders/ssao.vert
+    src/opengl/shaders/ssao.frag
+)
+
+set(CENGINE_CORE_SOURCES
     third_party/glad/src/glad.c
     third_party/nv_dds/src/nv_dds.cpp
     src/camera.cpp
@@ -109,13 +117,28 @@ add_library(CEngineCore STATIC
     src/mesh.cpp
     src/model.cpp
     src/model_importer.cpp
+    src/opengl/opengl_render_backend.cpp
+    src/opengl/opengl_texture.cpp
+    src/opengl/shaders/pbr_standard.cpp
+    src/opengl/shaders/shader.cpp
+    src/opengl/shaders/ssao.cpp
     src/render_system.cpp
-    src/shaders/pbr_standard.cpp
-    src/shaders/shader.cpp
-    src/shaders/shader_constants.cpp
-    src/shaders/ssao.cpp
-    src/texture.cpp
+    src/shader_constants.cpp
 )
+
+if(CENGINE_ENABLE_VULKAN)
+    find_package(Vulkan QUIET)
+
+    if(Vulkan_FOUND)
+        list(APPEND CENGINE_CORE_SOURCES
+            src/vulkan/vulkan_render_backend.cpp
+        )
+    else()
+        message(WARNING "CENGINE_ENABLE_VULKAN is ON, but Vulkan was not found. Building without the Vulkan backend.")
+    endif()
+endif()
+
+add_library(CEngineCore STATIC ${CENGINE_CORE_SOURCES})
 
 target_include_directories(CEngineCore
     SYSTEM PUBLIC
@@ -132,6 +155,11 @@ target_include_directories(CEngineCore
 
 target_link_libraries(CEngineCore PUBLIC ${CEngine_GLFW_TARGET})
 target_link_libraries(CEngineCore PRIVATE ${CMAKE_DL_LIBS})
+
+if(CENGINE_ENABLE_VULKAN AND Vulkan_FOUND)
+    target_link_libraries(CEngineCore PUBLIC Vulkan::Vulkan)
+    target_compile_definitions(CEngineCore PUBLIC CENGINE_ENABLE_VULKAN)
+endif()
 
 target_compile_definitions(CEngineCore
     PUBLIC
@@ -183,6 +211,15 @@ if(CENGINE_BUILD_VIEWER)
         COMMAND "${CMAKE_COMMAND}" -E copy_directory
                 "${CMAKE_CURRENT_SOURCE_DIR}/assets"
                 "$<TARGET_FILE_DIR:CEngine>/assets"
+    )
+
+    add_custom_command(TARGET CEngine POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+                "$<TARGET_FILE_DIR:CEngine>/shaders/opengl"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                ${CENGINE_OPENGL_SHADER_SOURCES}
+                "$<TARGET_FILE_DIR:CEngine>/shaders/opengl"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
 endif()
 

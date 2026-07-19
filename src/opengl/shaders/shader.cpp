@@ -5,19 +5,17 @@
 
 #include "shader.h"
 
-Shader::~Shader()
+ShaderProgram::~ShaderProgram()
 {
-	if (shader_id != 0)
+	if (program_id != 0)
 	{
-		glDeleteProgram(shader_id);
-		shader_id = 0;
+		glDeleteProgram(program_id);
+		program_id = 0;
 	}
 }
 
-void Shader::Load() {
-
-	SetShaderFiles();
-
+bool ShaderProgram::Load(const std::string& vertex_file_path, const std::string& fragment_file_path)
+{
 	// Create the shaders
 	GLuint vertex_id = glCreateShader(GL_VERTEX_SHADER);
 	GLuint fragment_id = glCreateShader(GL_FRAGMENT_SHADER);
@@ -36,7 +34,9 @@ void Shader::Load() {
 	else 
 	{
 		std::cout << "Impossible to open vertex shader: " << vertex_file_path << "\n";
-		return;
+		glDeleteShader(vertex_id);
+		glDeleteShader(fragment_id);
+		return false;
 	}
 
 	// Read the Fragment Shader code from the file
@@ -52,7 +52,9 @@ void Shader::Load() {
 	else
 	{
 		std::cout << "Impossible to open fragment shader: " << fragment_file_path << "\n";
-		return;
+		glDeleteShader(vertex_id);
+		glDeleteShader(fragment_id);
+		return false;
 	}
 
 	GLint result = GL_FALSE;
@@ -92,26 +94,26 @@ void Shader::Load() {
 
 	// Link the program
 	printf("Linking program\n");
-	shader_id = glCreateProgram();
-	glAttachShader(shader_id, vertex_id);
-	glAttachShader(shader_id, fragment_id);
-	glLinkProgram(shader_id);
+	program_id = glCreateProgram();
+	glAttachShader(program_id, vertex_id);
+	glAttachShader(program_id, fragment_id);
+	glLinkProgram(program_id);
 
 	// Check the program
-	glGetProgramiv(shader_id, GL_LINK_STATUS, &result);
-	glGetProgramiv(shader_id, GL_INFO_LOG_LENGTH, &log_length);
+	glGetProgramiv(program_id, GL_LINK_STATUS, &result);
+	glGetProgramiv(program_id, GL_INFO_LOG_LENGTH, &log_length);
 	if (log_length > 0) 
 	{
 		std::vector<char> prog_error_msg(log_length + 1);
-		glGetProgramInfoLog(shader_id, log_length, nullptr, &prog_error_msg[0]);
+		glGetProgramInfoLog(program_id, log_length, nullptr, &prog_error_msg[0]);
 		printf("%s\n", &prog_error_msg[0]);
 	}
 
-	glDetachShader(shader_id, vertex_id);
-	glDetachShader(shader_id, fragment_id);
+	glDetachShader(program_id, vertex_id);
+	glDetachShader(program_id, fragment_id);
 
 	glDeleteShader(vertex_id);
 	glDeleteShader(fragment_id);
 
-	InitializeParameters();
+	return result == GL_TRUE;
 }

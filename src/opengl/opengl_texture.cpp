@@ -1,11 +1,11 @@
 #include <nv_dds/nv_dds.h>
 
-#include "texture.h"
+#include "opengl_texture.h"
 
 #include <iostream>
 #include <stdexcept>
 
-GLuint Texture::LoadDDS(const std::string& image_p) {
+GLuint OpenGLTexture::LoadDDS(const std::string& image_p) {
 
 	nv_dds::CDDSImage image;
 	GLuint TextureID = 0;

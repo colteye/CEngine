@@ -11,17 +11,24 @@ SSAO::SSAO()
 	  texture_width(1),
 	  texture_height(1)
 {
-    Load();
+    shader_program.Load("shaders/opengl/ssao.vert", "shaders/opengl/ssao.frag");
+    InitializeParameters();
 }
 
-void SSAO::SetShaderFiles()
+void SSAO::Use() const
 {
-    vertex_file_path = "assets/engine/shaders/ssao.vert";
-    fragment_file_path = "assets/engine/shaders/ssao.frag";
+    shader_program.Use();
+}
+
+void SSAO::Update()
+{
+    SetParametersStatic();
+    SetParametersDynamic();
 }
 
 void SSAO::InitializeParameters()
 {
+    const GLuint shader_id = shader_program.GetId();
     render_id = glGetUniformLocation(shader_id, "render_tex");
     depth_id = glGetUniformLocation(shader_id, "depth_tex");
 

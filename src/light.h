@@ -2,7 +2,6 @@
 #define LIGHT_H
 
 #include <string>
-#include <glad/glad.h>
 #include <glm/glm.hpp>
 
 class Light

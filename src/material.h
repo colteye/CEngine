@@ -2,27 +2,31 @@
 #define MATERIAL_H
 
 #include <string>
-#include <glad/glad.h>
-#include "shaders/shader.h"
-#include "shaders/pbr_standard.h"
+
+enum class MaterialShaderType
+{
+	PBRStandard
+};
 
 class Material
 {
 public:
-	
-	GLuint albedo_tex;
-	GLuint normal_tex;
-	GLuint metallic_roughness_ao_tex;
-
-	Material(PBRStandard* in_shader, const std::string& albedo_p, const std::string& normal_p,
+	Material(MaterialShaderType in_shader_type, const std::string& albedo_p, const std::string& normal_p,
 		const std::string& metallic_roughness_ao_p);
 	Material(const Material&) = delete;
 	Material& operator=(const Material&) = delete;
-	~Material();
+	~Material() = default;
 
-	void UpdateShader();
+	const std::string& GetAlbedoPath() const { return albedo_path; }
+	const std::string& GetNormalPath() const { return normal_path; }
+	const std::string& GetMetallicRoughnessAoPath() const { return metallic_roughness_ao_path; }
 
 	std::string material_name;
-	PBRStandard *shader;
+	MaterialShaderType shader_type = MaterialShaderType::PBRStandard;
+
+private:
+	std::string albedo_path;
+	std::string normal_path;
+	std::string metallic_roughness_ao_path;
 };
 #endif

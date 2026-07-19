@@ -3,7 +3,7 @@
 #include <cmath>
 #include <stdio.h>
 
-#include "shaders/shader_constants.h"
+#include "shader_constants.h"
 #include "camera.h"
 
 Camera::Camera()

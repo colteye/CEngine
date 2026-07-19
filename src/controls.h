@@ -1,7 +1,6 @@
 #ifndef CONTROLS_H
 #define CONTROLS_H
 
-#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include "camera.h"
 
