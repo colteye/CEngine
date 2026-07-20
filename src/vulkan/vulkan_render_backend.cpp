@@ -194,6 +194,11 @@ void VulkanRenderBackend::RegisterRenderable(const Renderable& /*renderable*/)
 	}
 }
 
+void VulkanRenderBackend::UpdateRenderableTransform(RenderableHandle /*handle*/, const glm::mat4& /*transform*/,
+	const Bounds& /*world_bounds*/)
+{
+}
+
 void VulkanRenderBackend::RenderDepthOnly(const glm::mat4& /*view*/, const glm::mat4& /*projection*/,
 	uint32_t /*native_depth_texture*/, int /*texture_width*/, int /*texture_height*/)
 {

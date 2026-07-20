@@ -144,6 +144,22 @@ RenderableHandle RenderSystem::RegisterRenderable(const Renderable& renderable)
 	return static_cast<RenderableHandle>(id);
 }
 
+void RenderSystem::UpdateRenderableTransform(RenderableHandle handle, const glm::mat4& transform)
+{
+	if (handle >= renderables.size())
+	{
+		return;
+	}
+
+	Renderable& renderable = renderables[handle];
+	renderable.transform = transform;
+	renderable.world_bounds = TransformBounds(renderable.local_bounds, renderable.transform);
+	if (backend != nullptr)
+	{
+		backend->UpdateRenderableTransform(handle, renderable.transform, renderable.world_bounds);
+	}
+}
+
 void RenderSystem::RegisterMaterial(Material* material)
 {
 	if (backend != nullptr)

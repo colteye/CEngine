@@ -41,6 +41,7 @@ public:
 
 	static void RegisterMesh(const Mesh* mesh);
 	static RenderableHandle RegisterRenderable(const Renderable& renderable);
+	static void UpdateRenderableTransform(RenderableHandle handle, const glm::mat4& transform);
 	static void RegisterMaterial(Material* material);
 
 	static LightHandle RegisterLight(const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow);

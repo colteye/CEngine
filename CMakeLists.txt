@@ -7,7 +7,8 @@ option(CENGINE_ENABLE_OPENGL "Build the OpenGL 3.3 render backend." ON)
 option(CENGINE_USE_SYSTEM_GLFW "Use an installed system GLFW package instead of fetching GLFW source." OFF)
 option(CENGINE_FETCH_GLFW_X11 "Build the X11 backend when GLFW is fetched on Linux." ON)
 option(CENGINE_FETCH_GLFW_WAYLAND "Build the Wayland backend when GLFW is fetched on Linux." OFF)
-option(CENGINE_ENABLE_VULKAN "Build the Vulkan render backend when the Vulkan SDK is available." ON)
+option(CENGINE_ENABLE_VULKAN "Build the Vulkan render backend when the Vulkan SDK is available." OFF)
+option(CENGINE_ENABLE_JOLT_PHYSICS "Build the Jolt Physics backend." ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -101,6 +102,27 @@ endfunction()
 
 ce_setup_glfw(CEngine_GLFW_TARGET)
 
+if(CENGINE_ENABLE_JOLT_PHYSICS)
+    include(FetchContent)
+    set(DOUBLE_PRECISION OFF CACHE BOOL "" FORCE)
+    set(GENERATE_DEBUG_SYMBOLS ON CACHE BOOL "" FORCE)
+    set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "" FORCE)
+    set(CROSS_PLATFORM_DETERMINISTIC OFF CACHE BOOL "" FORCE)
+    set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
+    set(FLOATING_POINT_EXCEPTIONS_ENABLED OFF CACHE BOOL "" FORCE)
+    set(CPP_EXCEPTIONS_ENABLED OFF CACHE BOOL "" FORCE)
+    set(CPP_RTTI_ENABLED OFF CACHE BOOL "" FORCE)
+    set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "" FORCE)
+    set(OBJECT_LAYER_BITS 16 CACHE STRING "" FORCE)
+    FetchContent_Declare(
+        JoltPhysics
+        GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
+        GIT_TAG v5.6.0
+        SOURCE_SUBDIR Build
+    )
+    FetchContent_MakeAvailable(JoltPhysics)
+endif()
+
 if(CENGINE_ENABLE_OPENGL)
     set(CENGINE_OPENGL_SHADER_SOURCES
         src/opengl/shaders/deferred_lighting.frag
@@ -127,9 +149,16 @@ set(CENGINE_CORE_SOURCES
     src/mesh.cpp
     src/model.cpp
     src/model_importer.cpp
+    src/physics/physics_system.cpp
     src/renderable.cpp
     src/render_system.cpp
 )
+
+if(CENGINE_ENABLE_JOLT_PHYSICS)
+    list(APPEND CENGINE_CORE_SOURCES
+        src/physics/jolt/jolt_physics_backend.cpp
+    )
+endif()
 
 if(CENGINE_ENABLE_OPENGL)
     list(APPEND CENGINE_CORE_SOURCES
@@ -185,6 +214,14 @@ target_include_directories(CEngineCore
 target_link_libraries(CEngineCore PUBLIC ${CEngine_GLFW_TARGET})
 target_link_libraries(CEngineCore PRIVATE ${CMAKE_DL_LIBS})
 
+if(CENGINE_ENABLE_JOLT_PHYSICS)
+    target_link_libraries(CEngineCore PUBLIC Jolt)
+    target_compile_definitions(CEngineCore PUBLIC CENGINE_ENABLE_JOLT_PHYSICS)
+    if(DEFINED JoltPhysics_SOURCE_DIR)
+        target_include_directories(CEngineCore SYSTEM PUBLIC "${JoltPhysics_SOURCE_DIR}")
+    endif()
+endif()
+
 if(CENGINE_ENABLE_VULKAN AND Vulkan_FOUND)
     target_link_libraries(CEngineCore PUBLIC Vulkan::Vulkan)
     target_compile_definitions(CEngineCore PUBLIC CENGINE_ENABLE_VULKAN)
@@ -204,11 +241,17 @@ if(MSVC)
     if(CENGINE_ENABLE_OPENGL)
         list(APPEND CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/glad/src/glad.c)
     endif()
+    if(CENGINE_ENABLE_JOLT_PHYSICS)
+        set_source_files_properties(src/physics/jolt/jolt_physics_backend.cpp PROPERTIES COMPILE_OPTIONS /wd4003)
+    endif()
     set_source_files_properties(${CENGINE_SILENCED_THIRD_PARTY_SOURCES} PROPERTIES COMPILE_OPTIONS /W0)
 else()
     set(CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/nv_dds/src/nv_dds.cpp)
     if(CENGINE_ENABLE_OPENGL)
         list(APPEND CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/glad/src/glad.c)
+    endif()
+    if(CENGINE_ENABLE_JOLT_PHYSICS)
+        set_source_files_properties(src/physics/jolt/jolt_physics_backend.cpp PROPERTIES COMPILE_OPTIONS -Wno-pedantic)
     endif()
     set_source_files_properties(${CENGINE_SILENCED_THIRD_PARTY_SOURCES} PROPERTIES COMPILE_OPTIONS -w)
 endif()

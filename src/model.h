@@ -17,7 +17,7 @@ public:
 	std::string model_name;
 	Model(std::unordered_map<std::string, Mesh> in_meshes,
 		std::unordered_map<std::string, Material*> in_mats, bool auto_register = true);
-	void RegisterRenderables(const glm::mat4& transform,
+	std::vector<RenderableHandle> RegisterRenderables(const glm::mat4& transform,
 		uint32_t flags = RenderableFlagStatic | RenderableFlagCastsShadow | RenderableFlagReceivesShadow) const;
 
 private:

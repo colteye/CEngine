@@ -336,6 +336,18 @@ void OpenGLRenderBackend::RegisterRenderable(const Renderable& renderable)
 	}
 }
 
+void OpenGLRenderBackend::UpdateRenderableTransform(RenderableHandle handle, const glm::mat4& transform,
+	const Bounds& world_bounds)
+{
+	if (handle >= draw_items.size())
+	{
+		return;
+	}
+
+	draw_items[handle].transform = transform;
+	draw_items[handle].world_bounds = world_bounds;
+}
+
 ShaderBuffers OpenGLRenderBackend::InitShaderBuffers()
 {
 	ShaderBuffers buffers = ShaderBuffers();

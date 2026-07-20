@@ -16,8 +16,9 @@ Model::Model(
 	}
 }
 
-void Model::RegisterRenderables(const glm::mat4& transform, uint32_t flags) const
+std::vector<RenderableHandle> Model::RegisterRenderables(const glm::mat4& transform, uint32_t flags) const
 {
+	std::vector<RenderableHandle> handles;
 	for (const auto& mesh_it : meshes)
 	{
 		const Mesh& mesh = mesh_it.second;
@@ -31,7 +32,9 @@ void Model::RegisterRenderables(const glm::mat4& transform, uint32_t flags) cons
 			renderable.local_bounds = material_it.second.local_bounds.valid ?
 				material_it.second.local_bounds : CalculateBounds(material_it.second.vertices);
 			renderable.world_bounds = TransformBounds(renderable.local_bounds, transform);
-			RenderSystem::RegisterRenderable(renderable);
+			handles.push_back(RenderSystem::RegisterRenderable(renderable));
 		}
 	}
+
+	return handles;
 }

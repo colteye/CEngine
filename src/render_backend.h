@@ -1,13 +1,12 @@
 #ifndef RENDER_BACKEND_H
 #define RENDER_BACKEND_H
 
-#include <cstdint>
+#include "renderable.h"
 
-#include <glm/glm.hpp>
+#include <cstdint>
 
 class Material;
 class Mesh;
-struct Renderable;
 struct GLFWwindow;
 
 enum class RenderBackendType
@@ -27,6 +26,8 @@ public:
 	virtual void RenderDepthOnly(const glm::mat4& view, const glm::mat4& projection,
 		uint32_t native_depth_texture, int texture_width, int texture_height) = 0;
 	virtual void RegisterRenderable(const Renderable& renderable) = 0;
+	virtual void UpdateRenderableTransform(RenderableHandle handle, const glm::mat4& transform,
+		const Bounds& world_bounds) = 0;
 	virtual void RegisterMaterial(Material* material) = 0;
 };
 
