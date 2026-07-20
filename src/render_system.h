@@ -53,6 +53,7 @@ public:
 	static const std::vector<GpuLight>& GetGpuLights();
 	static uint64_t GetLightRevision();
 	static size_t GetMaxGpuLights();
+	static void SetLightShadowHandles(const std::vector<LightShadowGpuHandle>& handles);
 	static void SetFrameConstants(const RenderFrameConstants& constants);
 	static const RenderFrameConstants& GetFrameConstants();
 	static void SetAmbientLighting(const AmbientLighting& ambient);
@@ -66,6 +67,7 @@ private:
 	static std::vector<Renderable> renderables;
 	static std::vector<LightRecord> direct_lights;
 	static std::vector<GpuLight> gpu_lights;
+	static std::vector<LightShadowGpuHandle> light_shadow_handles;
 	static RenderFrameConstants frame_constants;
 	static AmbientLighting ambient_lighting;
 	static uint64_t light_revision;

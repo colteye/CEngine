@@ -13,7 +13,6 @@ enum class MaterialShaderType
 enum class MaterialRenderMode
 {
 	OpaqueDeferred,
-	OpaqueForward,
 	AlphaClip,
 	AlphaHashDither,
 	TransparentBlend,

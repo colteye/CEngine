@@ -109,6 +109,8 @@ if(CENGINE_ENABLE_OPENGL)
         src/opengl/shaders/fullscreen_blit.frag
         src/opengl/shaders/pbr_geometry_pass.vert
         src/opengl/shaders/pbr_geometry_pass.frag
+        src/opengl/shaders/point_shadow_depth.vert
+        src/opengl/shaders/point_shadow_depth.frag
         src/opengl/shaders/pbr_standard.vert
         src/opengl/shaders/pbr_standard.frag
         src/opengl/shaders/ssao.vert
@@ -133,12 +135,14 @@ if(CENGINE_ENABLE_OPENGL)
     list(APPEND CENGINE_CORE_SOURCES
         third_party/glad/src/glad.c
         src/opengl/opengl_render_backend.cpp
+        src/opengl/opengl_shadow_system.cpp
         src/opengl/opengl_texture.cpp
         src/opengl/shaders/deferred_lighting.cpp
         src/opengl/shaders/depth_only.cpp
         src/opengl/shaders/fullscreen_blit.cpp
         src/opengl/shaders/lighting_bindings.cpp
         src/opengl/shaders/pbr_geometry_pass.cpp
+        src/opengl/shaders/point_shadow_depth.cpp
         src/opengl/shaders/pbr_standard.cpp
         src/opengl/shaders/shader.cpp
         src/opengl/shaders/ssao.cpp

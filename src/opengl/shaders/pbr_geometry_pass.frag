@@ -17,8 +17,8 @@ uniform float alpha_cutoff;
 uniform int render_mode;
 uniform bool receives_shadows;
 
-const int RENDER_MODE_ALPHA_CLIP = 2;
-const int RENDER_MODE_ALPHA_HASH_DITHER = 3;
+const int RENDER_MODE_ALPHA_CLIP = 1;
+const int RENDER_MODE_ALPHA_HASH_DITHER = 2;
 
 vec3 calculate_normal()
 {

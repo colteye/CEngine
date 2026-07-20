@@ -20,17 +20,22 @@ void PBRStandard::Use() const
     shader_program.Use();
 }
 
-void PBRStandard::Update(const glm::mat4& model, const Material& material)
+void PBRStandard::Update(const glm::mat4& model, const Material& material, const OpenGLShadowGpuData& shadow_data,
+    GLuint shadow_atlas, const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_shadow_maps)
 {
     SetParametersStatic();
     SetMaterialParameters(material);
     SetParametersDynamic(model);
+    shadow_buffer.Upload(shadow_data);
+    shadow_samplers.Bind(shadow_atlas, point_shadow_maps);
 }
 
 void PBRStandard::InitializeParameters()
 {
     const GLuint shader_id = shader_program.GetId();
     direct_lights.Initialize(shader_id, "DirectLightBlock");
+    shadow_buffer.Initialize(shader_id, "ShadowBlock");
+    shadow_samplers.Initialize(shader_id);
     ambient_uniforms.Initialize(shader_id);
 
     cam_pos_id = glGetUniformLocation(shader_id, "cam_pos_world");
@@ -45,6 +50,7 @@ void PBRStandard::InitializeParameters()
     base_color_factor_id = glGetUniformLocation(shader_id, "base_color_factor");
     alpha_cutoff_id = glGetUniformLocation(shader_id, "alpha_cutoff");
     render_mode_id = glGetUniformLocation(shader_id, "render_mode");
+    receives_shadows_id = glGetUniformLocation(shader_id, "receives_shadows");
 }
 
 void PBRStandard::SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao)
@@ -75,6 +81,7 @@ void PBRStandard::SetMaterialParameters(const Material& material)
     glUniform4fv(base_color_factor_id, 1, glm::value_ptr(base_color));
     glUniform1f(alpha_cutoff_id, material.GetAlphaCutoff());
     glUniform1i(render_mode_id, static_cast<int>(material.GetRenderMode()));
+    glUniform1i(receives_shadows_id, material.ReceivesShadows() ? 1 : 0);
 }
 
 void PBRStandard::SetParametersDynamic(const glm::mat4& model)

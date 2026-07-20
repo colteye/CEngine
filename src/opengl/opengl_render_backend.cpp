@@ -228,6 +228,11 @@ bool OpenGLRenderBackend::Initialize(GLFWwindow* /*window*/, int in_window_width
 		DestroyFrameResources();
 		return false;
 	}
+	if (!shadow_system.Initialize())
+	{
+		DestroyFrameResources();
+		return false;
+	}
 
 	shader_passes.ssao = std::make_unique<SSAO>();
 	shader_passes.ssao->SetTextures(frame_resources.opaque_lit_color, frame_resources.scene_depth,
@@ -259,6 +264,7 @@ void OpenGLRenderBackend::Shutdown()
 		quad_VAO = 0;
 	}
 	DestroyFrameResources();
+	shadow_system.Destroy();
 
 	shader_buffer_dict.clear();
 	draw_items.clear();
@@ -561,7 +567,8 @@ void OpenGLRenderBackend::RenderDeferredLightingPass()
 
 	shader_passes.deferred_lighting->Use();
 	shader_passes.deferred_lighting->Update(frame_resources.g_albedo, frame_resources.g_normal_roughness,
-		frame_resources.g_material, frame_resources.scene_depth, window_width, window_height);
+		frame_resources.g_material, frame_resources.scene_depth, window_width, window_height,
+		shadow_system.GetGpuData(), shadow_system.GetAtlasTexture(), shadow_system.GetPointTextures());
 	RenderScreenSpaceQuad();
 }
 
@@ -617,7 +624,8 @@ void OpenGLRenderBackend::RenderForwardQueue(const std::vector<uint32_t>& queue,
 		glBindVertexArray(item.vertex_array_obj);
 		shader->Use();
 		shader->SetTextures(item.albedo_tex, item.normal_tex, item.metallic_roughness_ao_tex);
-		shader->Update(item.transform, *item.material);
+		shader->Update(item.transform, *item.material, shadow_system.GetGpuData(),
+			shadow_system.GetAtlasTexture(), shadow_system.GetPointTextures());
 		DrawItem(item);
 	}
 
@@ -657,7 +665,6 @@ OpenGLRenderQueue OpenGLRenderBackend::ClassifyRenderMode(MaterialRenderMode mod
 	case MaterialRenderMode::AlphaClip:
 	case MaterialRenderMode::AlphaHashDither:
 		return OpenGLRenderQueue::DeferredOpaque;
-	case MaterialRenderMode::OpaqueForward:
 	case MaterialRenderMode::Unlit:
 		return OpenGLRenderQueue::ForwardOpaque;
 	case MaterialRenderMode::TransparentBlend:
@@ -675,6 +682,7 @@ bool OpenGLRenderBackend::DrawsShadowCaster(const OpenGLDrawItem& item) const
 void OpenGLRenderBackend::Render()
 {
 	BuildRenderQueues();
+	shadow_system.Render(draw_items, render_queues);
 	RenderGeometryPass();
 	RenderDeferredLightingPass();
 	RenderAmbientOcclusionPass();

@@ -16,7 +16,8 @@ void DeferredLighting::Use() const
 }
 
 void DeferredLighting::Update(GLuint albedo, GLuint normal_roughness, GLuint material, GLuint depth,
-	int width, int height)
+	int width, int height, const OpenGLShadowGpuData& shadow_data, GLuint shadow_atlas,
+	const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_shadow_maps)
 {
 	const RenderFrameConstants& constants = RenderSystem::GetFrameConstants();
 	const glm::mat4 inverse_view = glm::inverse(constants.view);
@@ -47,12 +48,16 @@ void DeferredLighting::Update(GLuint albedo, GLuint normal_roughness, GLuint mat
 
 	ambient_uniforms.Upload();
 	direct_lights.BindAndUploadIfNeeded();
+	shadow_buffer.Upload(shadow_data);
+	shadow_samplers.Bind(shadow_atlas, point_shadow_maps);
 }
 
 void DeferredLighting::InitializeParameters()
 {
 	const GLuint shader_id = shader_program.GetId();
 	direct_lights.Initialize(shader_id, "DirectLightBlock");
+	shadow_buffer.Initialize(shader_id, "ShadowBlock");
+	shadow_samplers.Initialize(shader_id);
 	ambient_uniforms.Initialize(shader_id);
 
 	albedo_id = glGetUniformLocation(shader_id, "g_albedo");

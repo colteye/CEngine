@@ -4,6 +4,8 @@
 #include "material.h"
 #include "render_backend.h"
 #include "renderable.h"
+#include "opengl/opengl_render_data.h"
+#include "opengl/opengl_shadow_system.h"
 #include "opengl/shaders/deferred_lighting.h"
 #include "opengl/shaders/depth_only.h"
 #include "opengl/shaders/fullscreen_blit.h"
@@ -16,27 +18,6 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
-
-struct OpenGLDrawItem {
-	Material* material = nullptr;
-	glm::mat4 transform = glm::mat4(1.0f);
-	Bounds world_bounds;
-	GLint start_index = 0;
-	GLsizei count = 0;
-	uint32_t flags = 0;
-	GLuint vertex_array_obj = 0;
-	GLuint albedo_tex = 0;
-	GLuint normal_tex = 0;
-	GLuint metallic_roughness_ao_tex = 0;
-};
-
-enum class OpenGLRenderQueue
-{
-	DeferredOpaque,
-	ForwardOpaque,
-	Transparent,
-	None
-};
 
 struct OpenGLMaterialResources {
 	GLuint albedo_tex = 0;
@@ -59,15 +40,6 @@ struct OpenGLFrameResources {
 	GLuint depth_only_fbo = 0;
 
 	void Destroy();
-};
-
-struct OpenGLRenderQueues {
-	std::vector<uint32_t> opaque_deferred;
-	std::vector<uint32_t> forward;
-	std::vector<uint32_t> transparent;
-	std::vector<uint32_t> shadow_casters;
-
-	void ClearAndReserve(size_t draw_item_count);
 };
 
 struct OpenGLShaderPasses {
@@ -138,6 +110,7 @@ private:
 	int window_height = 0;
 
 	OpenGLFrameResources frame_resources;
+	OpenGLShadowSystem shadow_system;
 	OpenGLRenderQueues render_queues;
 	OpenGLShaderPasses shader_passes;
 	std::unordered_map<MaterialShaderType, ShaderBuffers> shader_buffer_dict;

@@ -16,7 +16,8 @@ public:
 
 	PBRStandard();
 	void Use() const;
-	void Update(const glm::mat4& model, const Material& material);
+	void Update(const glm::mat4& model, const Material& material, const OpenGLShadowGpuData& shadow_data,
+		GLuint shadow_atlas, const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_shadow_maps);
 	void SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao);
 
 private:
@@ -27,6 +28,8 @@ private:
 
 	ShaderProgram shader_program;
 	OpenGLDirectLightBuffer direct_lights;
+	OpenGLShadowBuffer shadow_buffer;
+	OpenGLShadowSamplers shadow_samplers;
 	OpenGLAmbientUniforms ambient_uniforms;
 	GLuint cam_pos_id;
 	GLuint m_id, v_id, p_id;
@@ -34,6 +37,7 @@ private:
 	GLuint base_color_factor_id;
 	GLuint alpha_cutoff_id;
 	GLuint render_mode_id;
+	GLuint receives_shadows_id;
 
 };
 

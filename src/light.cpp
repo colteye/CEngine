@@ -2,6 +2,7 @@
 #include "render_system.h"
 
 #include <cmath>
+#include <algorithm>
 
 namespace {
 glm::vec3 NormalizeOrDefault(const glm::vec3& value, const glm::vec3& fallback)
@@ -45,7 +46,12 @@ Light::Light(const LightRecord& record)
 	  m_range(record.range),
 	  m_spot_inner_cos(record.spot_inner_cos),
 	  m_spot_outer_cos(record.spot_outer_cos),
-	  m_enabled(record.enabled)
+	  m_enabled(record.enabled),
+	  m_casts_shadows(record.casts_shadows),
+	  m_shadow_resolution(record.shadow_resolution),
+	  m_shadow_update_rate(record.shadow_update_rate),
+	  m_shadow_bias(record.shadow_bias),
+	  m_shadow_normal_bias(record.shadow_normal_bias)
 {
 }
 
@@ -91,6 +97,31 @@ void Light::SetSpotAngles(float inner_degrees, float outer_degrees)
 	UpdateRecord();
 }
 
+void Light::SetCastsShadows(bool casts)
+{
+	m_casts_shadows = casts;
+	UpdateRecord();
+}
+
+void Light::SetShadowResolution(uint32_t resolution)
+{
+	m_shadow_resolution = std::max<uint32_t>(64, resolution);
+	UpdateRecord();
+}
+
+void Light::SetShadowUpdateRate(uint32_t frame_interval)
+{
+	m_shadow_update_rate = std::max<uint32_t>(1, frame_interval);
+	UpdateRecord();
+}
+
+void Light::SetShadowBias(float bias, float normal_bias)
+{
+	m_shadow_bias = std::max(0.0f, bias);
+	m_shadow_normal_bias = std::max(0.0f, normal_bias);
+	UpdateRecord();
+}
+
 void Light::UpdateRecord()
 {
 	LightRecord record;
@@ -103,6 +134,11 @@ void Light::UpdateRecord()
 	record.spot_inner_cos = m_spot_inner_cos;
 	record.spot_outer_cos = m_spot_outer_cos;
 	record.enabled = m_enabled;
+	record.casts_shadows = m_casts_shadows;
+	record.shadow_resolution = m_shadow_resolution;
+	record.shadow_update_rate = m_shadow_update_rate;
+	record.shadow_bias = m_shadow_bias;
+	record.shadow_normal_bias = m_shadow_normal_bias;
 	RenderSystem::UpdateLight(m_id, record);
 }
 

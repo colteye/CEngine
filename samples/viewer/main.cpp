@@ -1,7 +1,9 @@
 #include <iostream>
+#include <cmath>
 #include <cstring>
 #include <stdio.h>
 #include <stdlib.h>
+#include <utility>
 #include <vector>
 
 #if defined(CENGINE_ENABLE_OPENGL)
@@ -28,6 +30,30 @@ glm::mat4 MakeTransform(const glm::vec3& position, float yaw_degrees, float scal
 	glm::mat4 transform = glm::translate(glm::mat4(1.0f), position);
 	transform = glm::rotate(transform, glm::radians(yaw_degrees), glm::vec3(0.0f, 1.0f, 0.0f));
 	return glm::scale(transform, glm::vec3(scale));
+}
+
+MeshData MakeFloorMeshData(float half_extent)
+{
+	MeshData data;
+	data.vertices = {
+		glm::vec3(-half_extent, 0.0f, -half_extent),
+		glm::vec3(half_extent, 0.0f, half_extent),
+		glm::vec3(half_extent, 0.0f, -half_extent),
+		glm::vec3(-half_extent, 0.0f, -half_extent),
+		glm::vec3(-half_extent, 0.0f, half_extent),
+		glm::vec3(half_extent, 0.0f, half_extent),
+	};
+	data.uvs = {
+		glm::vec2(0.0f, 0.0f),
+		glm::vec2(6.0f, 6.0f),
+		glm::vec2(6.0f, 0.0f),
+		glm::vec2(0.0f, 0.0f),
+		glm::vec2(0.0f, 6.0f),
+		glm::vec2(6.0f, 6.0f),
+	};
+	data.normals.assign(data.vertices.size(), glm::vec3(0.0f, 1.0f, 0.0f));
+	data.tangents.assign(data.vertices.size(), glm::vec3(1.0f, 0.0f, 0.0f));
+	return data;
 }
 
 RenderBackendType ParseBackend(int argc, char** argv)
@@ -161,18 +187,16 @@ int main(int argc, char** argv)
 		Camera view_cam;
 
 		// Init lighting.
-		[[maybe_unused]] DirectionalLight sun_light =
-			DirectionalLight(glm::vec3(-0.4f, -1.0f, -0.25f), glm::vec3(1.0f, 0.96f, 0.9f), 0.35f);
-		[[maybe_unused]] PointLight key_light =
-			PointLight(glm::vec3(0.0f, 10.0f, 7.0f), glm::vec3(1.0f, 1.0f, 1.0f), 1.0f);
-		[[maybe_unused]] SpotLight spot_light =
-			SpotLight(glm::vec3(0.0f, 7.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f),
-				glm::vec3(1.0f, 1.0f, 1.0f), 5.0f, 18.0f, 32.0f);
+		DirectionalLight sun_light =
+			DirectionalLight(glm::vec3(-0.75f, -0.35f, -0.35f), glm::vec3(1.0f, 0.96f, 0.9f), 0.9f);
+		sun_light.SetCastsShadows(true);
+		sun_light.SetShadowResolution(2048);
+		sun_light.SetShadowBias(0.0015f, 0.025f);
 
 		AmbientLighting ambient;
 		ambient.sky_color = glm::vec3(0.42f, 0.50f, 0.62f);
 		ambient.ground_color = glm::vec3(0.18f, 0.14f, 0.10f);
-		ambient.intensity = 0.22f;
+		ambient.intensity = 0.08f;
 		ambient.enabled = true;
 		RenderSystem::SetAmbientLighting(ambient);
 
@@ -183,14 +207,6 @@ int main(int argc, char** argv)
 			"assets/demo/barrel/results/barrel_metallic_roughness_ao.DDS");
 		barrelMaterial.material_name = "Deferred barrel";
 
-		Material forwardBarrelMaterial(MaterialShaderType::PBRStandard,
-			"assets/demo/barrel/results/barrel_albedo.DDS",
-			"assets/demo/barrel/results/barrel_normal.DDS",
-			"assets/demo/barrel/results/barrel_metallic_roughness_ao.DDS");
-		forwardBarrelMaterial.material_name = "Forward opaque barrel";
-		forwardBarrelMaterial.SetRenderMode(MaterialRenderMode::OpaqueForward);
-		forwardBarrelMaterial.SetBaseColorFactor(glm::vec4(0.65f, 0.86f, 1.0f, 1.0f));
-
 		Material transparentBarrelMaterial(MaterialShaderType::PBRStandard,
 			"assets/demo/barrel/results/barrel_albedo.DDS",
 			"assets/demo/barrel/results/barrel_normal.DDS",
@@ -200,27 +216,40 @@ int main(int argc, char** argv)
 		transparentBarrelMaterial.SetBaseColorFactor(glm::vec4(0.55f, 0.95f, 1.0f, 0.42f));
 		transparentBarrelMaterial.SetCastsShadows(false);
 
+		Material floorMaterial(MaterialShaderType::PBRStandard,
+			"assets/demo/barrel/results/barrel_albedo.DDS",
+			"assets/demo/barrel/results/barrel_normal.DDS",
+			"assets/demo/barrel/results/barrel_metallic_roughness_ao.DDS");
+		floorMaterial.material_name = "Shadow receiver floor";
+		floorMaterial.SetBaseColorFactor(glm::vec4(0.48f, 0.50f, 0.48f, 1.0f));
+		floorMaterial.SetCastsShadows(false);
+
+		Mesh floorMesh;
+		floorMesh.mesh_name = "Shadow receiver floor";
+		floorMesh.AddMaterialMeshData(&floorMaterial, MakeFloorMeshData(8.0f));
+		Renderable floorRenderable;
+		floorRenderable.mesh = &floorMesh;
+		floorRenderable.material = &floorMaterial;
+		floorRenderable.local_bounds = floorMesh.GetLocalBounds();
+		floorRenderable.world_bounds = TransformBounds(floorRenderable.local_bounds, floorRenderable.transform);
+		floorRenderable.flags = RenderableFlagStatic | RenderableFlagReceivesShadow;
+		RenderSystem::RegisterRenderable(floorRenderable);
+
 		// Init models after materials.
 		Model barrel = ModelImporter::ImportOBJ("assets/demo/barrel/barrel_low.obj",
 			{ {"barrel", &barrelMaterial } }, false);
-		Model forwardBarrel = ModelImporter::ImportOBJ("assets/demo/barrel/barrel_low.obj",
-			{ {"barrel", &forwardBarrelMaterial } }, false);
 		Model transparentBarrel = ModelImporter::ImportOBJ("assets/demo/barrel/barrel_low.obj",
 			{ {"barrel", &transparentBarrelMaterial } }, false);
 
 		barrel.RegisterRenderables(MakeTransform(glm::vec3(-1.8f, 0.0f, 0.0f), -18.0f, 1.0f));
 		barrel.RegisterRenderables(MakeTransform(glm::vec3(1.8f, 0.0f, -0.25f), 22.0f, 1.0f));
 		barrel.RegisterRenderables(MakeTransform(glm::vec3(0.0f, 0.0f, -2.15f), 0.0f, 1.0f));
-		forwardBarrel.RegisterRenderables(MakeTransform(glm::vec3(0.0f, 0.0f, 1.85f), 42.0f, 1.0f));
 
 		const uint32_t transparent_flags = RenderableFlagStatic | RenderableFlagReceivesShadow;
 		transparentBarrel.RegisterRenderables(MakeTransform(glm::vec3(-0.95f, 0.0f, 0.85f), 12.0f, 0.92f),
 			transparent_flags);
 		transparentBarrel.RegisterRenderables(MakeTransform(glm::vec3(1.05f, 0.0f, 0.95f), -28.0f, 0.92f),
 			transparent_flags);
-
-		// Testing
-		//glm::vec3 start_pos = glm::vec3(0.0f, 10.0f, 7.0f);
 
 		double lastTime = glfwGetTime();
 		do {
@@ -230,8 +259,10 @@ int main(int argc, char** argv)
 
 			control.Update(&view_cam, deltaTime);
 
-			//start_pos = glm::vec3{ start_pos.x, start_pos.y + 0.08f, start_pos.z };
-			//light_4.SetPosition(start_pos);
+			const float sun_angle = static_cast<float>(current) * 0.35f;
+			const glm::vec3 sun_direction =
+				glm::normalize(glm::vec3(std::sin(sun_angle), -0.35f, std::cos(sun_angle)));
+			sun_light.SetDirection(sun_direction);
 
 			RenderSystem::Render();
 

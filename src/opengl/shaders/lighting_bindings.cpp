@@ -6,8 +6,11 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <string>
+
 namespace {
 constexpr GLuint kDirectLightBindingPoint = 0;
+constexpr GLuint kShadowBindingPoint = 1;
 }
 
 OpenGLDirectLightBuffer::~OpenGLDirectLightBuffer()
@@ -65,6 +68,68 @@ void OpenGLDirectLightBuffer::Destroy()
 		buffer = 0;
 	}
 	uploaded_revision = 0;
+}
+
+OpenGLShadowBuffer::~OpenGLShadowBuffer()
+{
+	Destroy();
+}
+
+void OpenGLShadowBuffer::Initialize(GLuint shader_id, const char* block_name)
+{
+	const GLuint block_index = glGetUniformBlockIndex(shader_id, block_name);
+	if (block_index != GL_INVALID_INDEX)
+	{
+		glUniformBlockBinding(shader_id, block_index, kShadowBindingPoint);
+	}
+
+	glGenBuffers(1, &buffer);
+	glBindBuffer(GL_UNIFORM_BUFFER, buffer);
+	glBufferData(GL_UNIFORM_BUFFER, static_cast<GLsizeiptr>(sizeof(OpenGLShadowGpuData)), nullptr, GL_DYNAMIC_DRAW);
+	glBindBufferBase(GL_UNIFORM_BUFFER, kShadowBindingPoint, buffer);
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+}
+
+void OpenGLShadowBuffer::Upload(const OpenGLShadowGpuData& data)
+{
+	glBindBufferBase(GL_UNIFORM_BUFFER, kShadowBindingPoint, buffer);
+	glBindBuffer(GL_UNIFORM_BUFFER, buffer);
+	glBufferSubData(GL_UNIFORM_BUFFER, 0, static_cast<GLsizeiptr>(sizeof(OpenGLShadowGpuData)), &data);
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+}
+
+void OpenGLShadowBuffer::Destroy()
+{
+	if (buffer != 0)
+	{
+		glDeleteBuffers(1, &buffer);
+		buffer = 0;
+	}
+}
+
+void OpenGLShadowSamplers::Initialize(GLuint shader_id)
+{
+	atlas = glGetUniformLocation(shader_id, "shadow_atlas");
+	for (int index = 0; index < OpenGLShadows::kMaxPointShadows; ++index)
+	{
+		const std::string name = "point_shadow_maps[" + std::to_string(index) + "]";
+		point_maps[index] = glGetUniformLocation(shader_id, name.c_str());
+	}
+}
+
+void OpenGLShadowSamplers::Bind(GLuint atlas_texture,
+	const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_textures) const
+{
+	glActiveTexture(GL_TEXTURE4);
+	glBindTexture(GL_TEXTURE_2D, atlas_texture);
+	glUniform1i(atlas, 4);
+
+	for (int index = 0; index < OpenGLShadows::kMaxPointShadows; ++index)
+	{
+		glActiveTexture(GL_TEXTURE5 + index);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, point_textures[index]);
+		glUniform1i(point_maps[index], 5 + index);
+	}
 }
 
 void OpenGLAmbientUniforms::Initialize(GLuint shader_id)

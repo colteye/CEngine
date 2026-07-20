@@ -1,6 +1,9 @@
 #ifndef LIGHTING_BINDINGS_H
 #define LIGHTING_BINDINGS_H
 
+#include "opengl/opengl_shadow_types.h"
+
+#include <array>
 #include <cstdint>
 
 #include <glad/glad.h>
@@ -20,6 +23,31 @@ public:
 private:
 	GLuint buffer = 0;
 	uint64_t uploaded_revision = 0;
+};
+
+class OpenGLShadowBuffer
+{
+public:
+	OpenGLShadowBuffer() = default;
+	OpenGLShadowBuffer(const OpenGLShadowBuffer&) = delete;
+	OpenGLShadowBuffer& operator=(const OpenGLShadowBuffer&) = delete;
+	~OpenGLShadowBuffer();
+
+	void Initialize(GLuint shader_id, const char* block_name);
+	void Upload(const OpenGLShadowGpuData& data);
+	void Destroy();
+
+private:
+	GLuint buffer = 0;
+};
+
+struct OpenGLShadowSamplers
+{
+	GLint atlas = -1;
+	std::array<GLint, OpenGLShadows::kMaxPointShadows> point_maps {};
+
+	void Initialize(GLuint shader_id);
+	void Bind(GLuint atlas_texture, const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_textures) const;
 };
 
 struct OpenGLAmbientUniforms

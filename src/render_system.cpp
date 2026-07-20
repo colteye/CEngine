@@ -21,6 +21,7 @@ std::unique_ptr<IRenderBackend> RenderSystem::backend;
 std::vector<Renderable> RenderSystem::renderables;
 std::vector<LightRecord> RenderSystem::direct_lights;
 std::vector<GpuLight> RenderSystem::gpu_lights;
+std::vector<LightShadowGpuHandle> RenderSystem::light_shadow_handles;
 RenderFrameConstants RenderSystem::frame_constants;
 AmbientLighting RenderSystem::ambient_lighting;
 uint64_t RenderSystem::light_revision = 1;
@@ -82,6 +83,7 @@ void RenderSystem::Shutdown()
 	renderables.clear();
 	direct_lights.clear();
 	gpu_lights.clear();
+	light_shadow_handles.clear();
 	light_revision = 1;
 	lights_dirty = true;
 }
@@ -174,6 +176,7 @@ LightHandle RenderSystem::RegisterLight(const LightRecord& light)
 {
 	const size_t id = direct_lights.size();
 	direct_lights.push_back(light);
+	light_shadow_handles.emplace_back();
 	lights_dirty = true;
 	++light_revision;
 	return static_cast<LightHandle>(id);
@@ -218,6 +221,23 @@ size_t RenderSystem::GetMaxGpuLights()
 	return kMaxGpuLights;
 }
 
+void RenderSystem::SetLightShadowHandles(const std::vector<LightShadowGpuHandle>& handles)
+{
+	if (light_shadow_handles == handles)
+	{
+		return;
+	}
+
+	light_shadow_handles = handles;
+	if (light_shadow_handles.size() < direct_lights.size())
+	{
+		light_shadow_handles.resize(direct_lights.size());
+	}
+
+	lights_dirty = true;
+	++light_revision;
+}
+
 void RenderSystem::SetFrameConstants(const RenderFrameConstants& constants)
 {
 	frame_constants = constants;
@@ -242,8 +262,9 @@ void RenderSystem::RebuildGpuLights()
 {
 	gpu_lights.clear();
 
-	for (const LightRecord& light : direct_lights)
+	for (size_t light_index = 0; light_index < direct_lights.size(); ++light_index)
 	{
+		const LightRecord& light = direct_lights[light_index];
 		if (!light.enabled)
 		{
 			continue;
@@ -257,7 +278,13 @@ void RenderSystem::RebuildGpuLights()
 		gpu_light.position_range = glm::vec4(light.position, light.range);
 		gpu_light.direction_spot = glm::vec4(light.direction, light.spot_outer_cos);
 		gpu_light.color_intensity = glm::vec4(light.color, light.intensity);
-		gpu_light.params = glm::vec4(static_cast<float>(light.type), light.spot_inner_cos, 0.0f, 0.0f);
+		LightShadowGpuHandle shadow_handle;
+		if (light_index < light_shadow_handles.size())
+		{
+			shadow_handle = light_shadow_handles[light_index];
+		}
+		gpu_light.params = glm::vec4(static_cast<float>(light.type), light.spot_inner_cos,
+			static_cast<float>(shadow_handle.index), static_cast<float>(shadow_handle.type));
 		gpu_lights.push_back(gpu_light);
 	}
 

@@ -12,13 +12,17 @@ public:
 	DeferredLighting();
 
 	void Use() const;
-	void Update(GLuint albedo, GLuint normal_roughness, GLuint material, GLuint depth, int width, int height);
+	void Update(GLuint albedo, GLuint normal_roughness, GLuint material, GLuint depth, int width, int height,
+		const OpenGLShadowGpuData& shadow_data, GLuint shadow_atlas,
+		const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_shadow_maps);
 
 private:
 	void InitializeParameters();
 
 	ShaderProgram shader_program;
 	OpenGLDirectLightBuffer direct_lights;
+	OpenGLShadowBuffer shadow_buffer;
+	OpenGLShadowSamplers shadow_samplers;
 	OpenGLAmbientUniforms ambient_uniforms;
 
 	GLint albedo_id = -1;
