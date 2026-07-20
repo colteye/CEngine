@@ -8,6 +8,7 @@
 SSAO::SSAO()
 	: render_tex(0),
 	  depth_tex(0),
+	  normal_roughness_tex(0),
 	  texture_width(1),
 	  texture_height(1)
 {
@@ -31,16 +32,19 @@ void SSAO::InitializeParameters()
     const GLuint shader_id = shader_program.GetId();
     render_id = glGetUniformLocation(shader_id, "render_tex");
     depth_id = glGetUniformLocation(shader_id, "depth_tex");
+    normal_roughness_id = glGetUniformLocation(shader_id, "normal_roughness_tex");
 
     projection_id = glGetUniformLocation(shader_id, "projection");
     inverse_projection_id = glGetUniformLocation(shader_id, "inverse_projection");
+    view_id = glGetUniformLocation(shader_id, "view");
     texel_size_id = glGetUniformLocation(shader_id, "texel_size");
 }
 
-void SSAO::SetTextures(GLuint render, GLuint depth, int width, int height)
+void SSAO::SetTextures(GLuint render, GLuint depth, GLuint normal_roughness, int width, int height)
 {
     render_tex = render;
     depth_tex = depth;
+    normal_roughness_tex = normal_roughness;
     texture_width = width;
     texture_height = height;
 }
@@ -54,6 +58,10 @@ void SSAO::SetParametersStatic()
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, depth_tex);
     glUniform1i(depth_id, 1);
+
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, normal_roughness_tex);
+    glUniform1i(normal_roughness_id, 2);
 }
 
 void SSAO::SetParametersDynamic()
@@ -63,5 +71,6 @@ void SSAO::SetParametersDynamic()
 
     glUniformMatrix4fv(projection_id, 1, GL_FALSE, glm::value_ptr(constants.proj));
     glUniformMatrix4fv(inverse_projection_id, 1, GL_FALSE, glm::value_ptr(inverse_projection));
+    glUniformMatrix4fv(view_id, 1, GL_FALSE, glm::value_ptr(constants.view));
     glUniform2f(texel_size_id, 1.0f / texture_width, 1.0f / texture_height);
 }

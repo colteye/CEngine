@@ -6,6 +6,7 @@
 #include "renderable.h"
 #include "opengl/shaders/deferred_lighting.h"
 #include "opengl/shaders/depth_only.h"
+#include "opengl/shaders/fullscreen_blit.h"
 #include "opengl/shaders/pbr_geometry_pass.h"
 #include "opengl/shaders/pbr_standard.h"
 #include "opengl/shaders/ssao.h"
@@ -23,6 +24,18 @@ struct OpenGLDrawItem {
 	GLint start_index = 0;
 	GLsizei count = 0;
 	uint32_t flags = 0;
+	GLuint vertex_array_obj = 0;
+	GLuint albedo_tex = 0;
+	GLuint normal_tex = 0;
+	GLuint metallic_roughness_ao_tex = 0;
+};
+
+enum class OpenGLRenderQueue
+{
+	DeferredOpaque,
+	ForwardOpaque,
+	Transparent,
+	None
 };
 
 struct OpenGLMaterialResources {
@@ -31,6 +44,39 @@ struct OpenGLMaterialResources {
 	GLuint metallic_roughness_ao_tex = 0;
 
 	void Destroy();
+};
+
+struct OpenGLFrameResources {
+	GLuint g_buffer_fbo = 0;
+	GLuint g_albedo = 0;
+	GLuint g_normal_roughness = 0;
+	GLuint g_material = 0;
+	GLuint scene_depth = 0;
+	GLuint opaque_lit_fbo = 0;
+	GLuint opaque_lit_color = 0;
+	GLuint scene_color_fbo = 0;
+	GLuint scene_color = 0;
+	GLuint depth_only_fbo = 0;
+
+	void Destroy();
+};
+
+struct OpenGLRenderQueues {
+	std::vector<uint32_t> opaque_deferred;
+	std::vector<uint32_t> forward;
+	std::vector<uint32_t> transparent;
+	std::vector<uint32_t> shadow_casters;
+
+	void ClearAndReserve(size_t draw_item_count);
+};
+
+struct OpenGLShaderPasses {
+	std::unique_ptr<SSAO> ssao;
+	std::unique_ptr<PBRStandard> pbr_forward;
+	std::unique_ptr<PBRGeometryPass> pbr_geometry;
+	std::unique_ptr<DeferredLighting> deferred_lighting;
+	std::unique_ptr<DepthOnly> depth_only;
+	std::unique_ptr<FullscreenBlit> fullscreen_blit;
 };
 
 struct ShaderBuffers {
@@ -76,41 +122,27 @@ private:
 	void BuildRenderQueues();
 	void RenderGeometryPass();
 	void RenderDeferredLightingPass();
-	void RenderForwardQueue(const std::vector<uint32_t>& queue);
+	void RenderAmbientOcclusionPass();
+	void RenderForwardQueue(const std::vector<uint32_t>& queue, bool transparent);
+	void PresentSceneColor();
 	void DrawItem(const OpenGLDrawItem& item) const;
-	bool DrawsInDeferredGeometry(MaterialRenderMode mode) const;
-	bool DrawsInForward(MaterialRenderMode mode) const;
-	bool DrawsTransparent(MaterialRenderMode mode) const;
+	OpenGLRenderQueue ClassifyRenderMode(MaterialRenderMode mode) const;
 	bool DrawsShadowCaster(const OpenGLDrawItem& item) const;
 	void RenderScreenSpaceQuad();
 	PBRStandard* GetShader(MaterialShaderType shader_type);
 
-	GLuint g_buffer_fbo = 0;
-	GLuint g_albedo = 0;
-	GLuint g_normal_roughness = 0;
-	GLuint g_material = 0;
-	GLuint scene_depth = 0;
-	GLuint lit_color_fbo = 0;
-	GLuint lit_color = 0;
-	GLuint depth_only_fbo = 0;
 	GLuint quad_VAO = 0;
 	GLuint quad_VBO = 0;
 
 	int window_width = 0;
 	int window_height = 0;
 
-	std::unique_ptr<SSAO> ssao;
-	std::unique_ptr<PBRStandard> pbr_shader;
-	std::unique_ptr<PBRGeometryPass> pbr_geometry_pass;
-	std::unique_ptr<DeferredLighting> deferred_lighting;
-	std::unique_ptr<DepthOnly> depth_only_shader;
+	OpenGLFrameResources frame_resources;
+	OpenGLRenderQueues render_queues;
+	OpenGLShaderPasses shader_passes;
 	std::unordered_map<MaterialShaderType, ShaderBuffers> shader_buffer_dict;
 	std::unordered_map<Material*, OpenGLMaterialResources> material_resources;
 	std::vector<OpenGLDrawItem> draw_items;
-	std::vector<uint32_t> opaque_deferred_queue;
-	std::vector<uint32_t> forward_queue;
-	std::vector<uint32_t> transparent_queue;
-	std::vector<uint32_t> shadow_caster_queue;
 };
 
 #endif

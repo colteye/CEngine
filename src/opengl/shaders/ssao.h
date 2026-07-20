@@ -10,7 +10,7 @@ public:
 	SSAO();
 	void Use() const;
 	void Update();
-	void SetTextures(GLuint render, GLuint depth, int width, int height);
+	void SetTextures(GLuint render, GLuint depth, GLuint normal_roughness, int width, int height);
 
 private:
 	void InitializeParameters();
@@ -20,8 +20,9 @@ private:
 	ShaderProgram shader_program;
 	GLuint render_tex;
 	GLuint depth_tex;
-	GLuint render_id, depth_id;
-	GLuint projection_id, inverse_projection_id, texel_size_id;
+	GLuint normal_roughness_tex;
+	GLuint render_id, depth_id, normal_roughness_id;
+	GLuint projection_id, inverse_projection_id, view_id, texel_size_id;
 
 	int texture_width;
 	int texture_height;

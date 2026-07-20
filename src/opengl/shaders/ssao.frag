@@ -5,8 +5,10 @@ layout(location = 0) out vec3 frag_color;
 
 uniform sampler2D render_tex;
 uniform sampler2D depth_tex;
+uniform sampler2D normal_roughness_tex;
 uniform mat4 projection;
 uniform mat4 inverse_projection;
+uniform mat4 view;
 uniform vec2 texel_size;
 
 const float radius = 0.65;
@@ -39,10 +41,10 @@ vec3 view_position_from_depth(vec2 tex_coord)
     return view_pos.xyz / view_pos.w;
 }
 
-vec3 view_normal_from_position(vec3 view_pos)
+vec3 view_normal_from_gbuffer(vec2 tex_coord)
 {
-    vec3 normal = normalize(cross(dFdx(view_pos), dFdy(view_pos)));
-    return normal.z < 0.0 ? -normal : normal;
+    vec3 world_normal = normalize(texture(normal_roughness_tex, tex_coord).rgb * 2.0 - 1.0);
+    return normalize(mat3(view) * world_normal);
 }
 
 float interleaved_gradient_noise(vec2 pixel)
@@ -73,8 +75,17 @@ float sample_ao(vec3 view_pos, mat3 frame, int index)
         return 0.0;
     }
 
+    float blocker_depth = texture(depth_tex, sample_uv).r;
+    if (blocker_depth >= 1.0) {
+        return 0.0;
+    }
+
     vec3 blocker_pos = view_position_from_depth(sample_uv);
     float depth_delta = abs(view_pos.z - blocker_pos.z);
+    if (depth_delta > radius * 2.0) {
+        return 0.0;
+    }
+
     float range_weight = smoothstep(0.0, 1.0, radius / max(depth_delta, 0.0001));
     float occluded = blocker_pos.z >= sample_pos.z + bias ? 1.0 : 0.0;
 
@@ -89,7 +100,7 @@ float raw_ao(vec2 tex_coord)
     }
 
     vec3 view_pos = view_position_from_depth(tex_coord);
-    vec3 normal = view_normal_from_position(view_pos);
+    vec3 normal = view_normal_from_gbuffer(tex_coord);
     float noise = interleaved_gradient_noise(gl_FragCoord.xy);
     mat3 frame = tangent_frame(normal, noise * 6.28318530718);
 
@@ -117,8 +128,18 @@ float filtered_ao()
 
     for (int i = 0; i < 4; ++i) {
         vec2 sample_uv = clamp(uv + offsets[i] * texel_size, vec2(0.0), vec2(1.0));
+        float sample_depth = texture(depth_tex, sample_uv).r;
+        if (sample_depth >= 1.0) {
+            continue;
+        }
+
         vec3 sample_pos = view_position_from_depth(sample_uv);
-        float edge_weight = exp(-abs(center_pos.z - sample_pos.z) * 12.0);
+        float depth_delta = abs(center_pos.z - sample_pos.z);
+        if (depth_delta > radius) {
+            continue;
+        }
+
+        float edge_weight = exp(-depth_delta * 12.0);
         total += raw_ao(sample_uv) * edge_weight;
         weight += edge_weight;
     }

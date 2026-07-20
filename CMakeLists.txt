@@ -106,6 +106,7 @@ if(CENGINE_ENABLE_OPENGL)
         src/opengl/shaders/deferred_lighting.frag
         src/opengl/shaders/depth_only.vert
         src/opengl/shaders/depth_only.frag
+        src/opengl/shaders/fullscreen_blit.frag
         src/opengl/shaders/pbr_geometry_pass.vert
         src/opengl/shaders/pbr_geometry_pass.frag
         src/opengl/shaders/pbr_standard.vert
@@ -135,6 +136,8 @@ if(CENGINE_ENABLE_OPENGL)
         src/opengl/opengl_texture.cpp
         src/opengl/shaders/deferred_lighting.cpp
         src/opengl/shaders/depth_only.cpp
+        src/opengl/shaders/fullscreen_blit.cpp
+        src/opengl/shaders/lighting_bindings.cpp
         src/opengl/shaders/pbr_geometry_pass.cpp
         src/opengl/shaders/pbr_standard.cpp
         src/opengl/shaders/shader.cpp
