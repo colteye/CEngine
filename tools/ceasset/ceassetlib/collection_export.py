@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import struct
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Protocol
@@ -106,6 +107,11 @@ class CollectionExportSpec:
 
 AssetPath = Callable[[Path], str]
 ObjectAssets = Callable[[BlenderObjectLike], dict[str, object]]
+Logger = Callable[[str], None]
+
+
+def elapsed(start: float) -> str:
+    return f"{time.perf_counter() - start:.2f}s"
 
 
 def clean_asset_name(name: str) -> str:
@@ -172,16 +178,43 @@ def object_role(obj: BlenderObjectLike) -> str:
     return "object"
 
 
+def matrix_multiply(left: list[list[float]], right: list[list[float]]) -> list[list[float]]:
+    return [
+        [sum(left[row][index] * right[index][column] for index in range(4)) for column in range(4)]
+        for row in range(4)
+    ]
+
+
+def blender_to_engine_matrix_rows(matrix: object | None) -> list[float]:
+    if matrix is None:
+        matrix_rows = [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    else:
+        matrix_rows = [[float(matrix[row][column]) for column in range(4)] for row in range(4)]
+
+    blender_to_engine = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, -1.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+    engine_to_blender = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, -1.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+    converted = matrix_multiply(matrix_multiply(blender_to_engine, matrix_rows), engine_to_blender)
+    return [converted[row][column] for row in range(4) for column in range(4)]
+
+
 def matrix_rows(obj: BlenderObjectLike) -> list[float]:
     matrix = getattr(obj, "matrix_world", None)
-    if matrix is None:
-        return [
-            1.0, 0.0, 0.0, 0.0,
-            0.0, 1.0, 0.0, 0.0,
-            0.0, 0.0, 1.0, 0.0,
-            0.0, 0.0, 0.0, 1.0,
-        ]
-    return [float(matrix[row][column]) for row in range(4) for column in range(4)]
+    return blender_to_engine_matrix_rows(matrix)
 
 
 def parent_name(obj: BlenderObjectLike, object_names: set[str]) -> str:
@@ -336,22 +369,32 @@ def write_collection_asset(
     default_asset_type: AssetType = AssetType.UNKNOWN,
     default_asset_name: str | None = None,
     payload_source: Path | None = None,
+    logger: Logger | None = None,
+    export_objects: Iterable[BlenderObjectLike] | None = None,
+    source_hash: int | None = None,
 ) -> Path | None:
+    start = time.perf_counter()
     spec = collection_export_spec(collection, default_asset_type, default_asset_name)
     if spec is None:
+        if logger is not None:
+            logger(f"Collection skipped: {collection.name} is not tagged as a CEngine asset")
         return None
 
     extension = RUNTIME_EXTENSIONS[spec.asset_type]
     output = output_dir_for_source(source, output_root) / f"{spec.asset_name}{extension}"
-    objects = collection_objects(collection)
+    objects = collection_objects(collection) if export_objects is None else sorted(list(export_objects), key=lambda obj: obj.name)
+    if logger is not None:
+        logger(f"Collection {collection.name}: writing {len(objects)} object row(s) -> {output}")
     payload = collection_payload(payload_source or source, spec, objects, object_assets, output.parent)
     desc = make_asset_desc(
         AssetType.ASSET,
         asset_path(output),
-        hash_file(source),
+        source_hash if source_hash is not None else hash_file(source),
         payload,
     )
     write_binary_asset(output, desc)
+    if logger is not None:
+        logger(f"Collection {collection.name}: wrote {output.name} ({len(payload)} payload bytes) in {elapsed(start)}")
     return output
 
 
@@ -364,6 +407,9 @@ def write_collection_assets(
     default_asset_type: AssetType = AssetType.UNKNOWN,
     default_asset_name: str | None = None,
     payload_source: Path | None = None,
+    logger: Logger | None = None,
+    export_objects: Iterable[BlenderObjectLike] | None = None,
+    source_hash: int | None = None,
 ) -> list[Path]:
     outputs: list[Path] = []
     for collection in collections:
@@ -376,6 +422,9 @@ def write_collection_assets(
             default_asset_type,
             default_asset_name,
             payload_source,
+            logger,
+            export_objects,
+            source_hash,
         )
         if output is not None:
             outputs.append(output)

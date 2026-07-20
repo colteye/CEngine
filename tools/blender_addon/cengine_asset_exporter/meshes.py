@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import struct
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
@@ -13,6 +14,8 @@ from ceassetlib.collection_export import clean_asset_name
 from ceassetlib.formats import AssetType
 from ceassetlib.ids import guid_from_stable_name, hash_file
 from ceassetlib.paths import generic_path, output_dir_for_source
+
+from .materials import default_material_name_for_object, object_slot_materials
 
 
 VERTEX = struct.Struct("<ffffffff")
@@ -29,6 +32,7 @@ MAX_SKIN_INFLUENCES = 4
 class MeshExport:
     source: object
     output: Path
+    material_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -43,8 +47,20 @@ class MeshBuffers:
     data: bytes
 
 
-def mesh_output_path(blend_source: Path, output_root: Path, mesh_name: str) -> Path:
-    return output_dir_for_source(blend_source, output_root) / "meshes" / f"{clean_asset_name(mesh_name)}.cmesh"
+def elapsed(start: float) -> str:
+    return f"{time.perf_counter() - start:.2f}s"
+
+
+def mesh_output_path(
+    blend_source: Path,
+    output_root: Path,
+    mesh_name: str,
+    material_name: str | None = None,
+) -> Path:
+    name = clean_asset_name(mesh_name)
+    if material_name:
+        name = f"{name}__{clean_asset_name(material_name)}"
+    return output_dir_for_source(blend_source, output_root) / "meshes" / f"{name}.cmesh"
 
 
 def mesh_objects(objects: Iterable[object]) -> list[object]:
@@ -65,17 +81,20 @@ def tuple3(value: object) -> tuple[float, float, float]:
     return (float(value[0]), float(value[1]), float(value[2]))
 
 
+def blender_to_engine_vector(value: object) -> tuple[float, float, float]:
+    x, y, z = tuple3(value)
+    return (x, z, -y)
+
+
 def tuple2(value: object) -> tuple[float, float]:
     return (float(value[0]), float(value[1]))
 
 
 def mesh_material_names(obj: object) -> list[str]:
-    names: list[str] = []
-    for slot in getattr(obj, "material_slots", ()):
-        material = getattr(slot, "material", None)
-        if material is not None:
-            names.append(material.name)
-    return names
+    materials = object_slot_materials(obj)
+    if materials:
+        return [material.name for material in materials]
+    return [default_material_name_for_object(obj)]
 
 
 def mesh_armature(obj: object) -> object | None:
@@ -158,7 +177,12 @@ def polygon_triangles(polygon: object) -> list[tuple[int, int, int]]:
     ]
 
 
-def mesh_buffers(mesh: object, obj: object | None = None, armature: object | None = None) -> MeshBuffers:
+def mesh_buffers(
+    mesh: object,
+    obj: object | None = None,
+    armature: object | None = None,
+    material_index: int | None = None,
+) -> MeshBuffers:
     vertices = getattr(mesh, "vertices", ())
     loops = getattr(mesh, "loops", ())
     polygons = getattr(mesh, "polygons", ())
@@ -174,12 +198,14 @@ def mesh_buffers(mesh: object, obj: object | None = None, armature: object | Non
     vertex_stride = SKINNED_VERTEX.size if skinned else VERTEX.size
 
     for polygon in polygons:
+        if material_index is not None and int(getattr(polygon, "material_index", 0)) != material_index:
+            continue
         for triangle in polygon_triangles(polygon):
             for loop_index in triangle:
                 loop = loops[loop_index]
                 vertex = vertices[int(loop.vertex_index)]
-                position = tuple3(vertex.co)
-                normal = tuple3(getattr(loop, "normal", (0.0, 0.0, 1.0)))
+                position = blender_to_engine_vector(vertex.co)
+                normal = blender_to_engine_vector(getattr(loop, "normal", (0.0, 0.0, 1.0)))
                 uv = tuple2(uv_data[loop_index].uv) if loop_index < len(uv_data) else (0.0, 0.0)
 
                 for axis in range(3):
@@ -242,26 +268,45 @@ def write_mesh_asset(
     material_output_path_for_name: Callable[[str], Path | None],
     skeleton_output_path_for_name: Callable[[str], Path | None],
     asset_path: Callable[[Path], str] = generic_path,
+    logger: Callable[[str], None] | None = None,
+    source_hash: int | None = None,
+    material_index: int = 0,
+    material_name: str | None = None,
+    split_by_material: bool = False,
 ) -> MeshExport:
+    start = time.perf_counter()
     material_names = mesh_material_names(obj)
-    if len(material_names) != 1:
-        raise RuntimeError(f"CEngine mesh export expects exactly one material slot: {obj.name}")
+    export_material_name = material_name or (material_names[material_index] if material_index < len(material_names) else material_names[0])
+    if not material_names:
+        raise RuntimeError(f"CEngine mesh export could not resolve one material binding: {obj.name}")
 
     armature = mesh_armature(obj)
-    buffers = mesh_buffers(obj.data, obj, armature)
-    output = mesh_output_path(blend_source, output_root, obj.name)
-    source_hash = hash_file(blend_source)
+    mesh = obj.data
+    if logger is not None:
+        logger(
+            f"Mesh {obj.name}: source vertices={len(getattr(mesh, 'vertices', ()))}, "
+            f"polygons={len(getattr(mesh, 'polygons', ()))}, loops={len(getattr(mesh, 'loops', ()))}, "
+            f"material={export_material_name}, split={split_by_material}, skinned={armature is not None}"
+        )
+    buffers = mesh_buffers(mesh, obj, armature, material_index if split_by_material else None)
+    output = mesh_output_path(blend_source, output_root, obj.name, export_material_name if split_by_material else None)
+    asset_source_hash = source_hash if source_hash is not None else hash_file(blend_source)
     del material_output_path_for_name
     del skeleton_output_path_for_name
     desc = AssetWriteDesc(
         asset_type=AssetType.MESH,
         guid=guid_from_stable_name(asset_path(output)),
-        source_hash=source_hash,
+        source_hash=asset_source_hash,
         platform_target="generic",
-        payload=mesh_metadata_payload(buffers, len(material_names), MESH_METADATA.size) + buffers.data,
+        payload=mesh_metadata_payload(buffers, 1, MESH_METADATA.size) + buffers.data,
     )
     write_binary_asset(output, desc)
-    return MeshExport(obj, output)
+    if logger is not None:
+        logger(
+            f"Mesh {obj.name}: wrote {output.name} with {buffers.vertex_count} packed vertex/vertices "
+            f"and {buffers.index_count} index/indices in {elapsed(start)}"
+        )
+    return MeshExport(obj, output, export_material_name)
 
 
 def write_mesh_assets(
@@ -271,15 +316,32 @@ def write_mesh_assets(
     material_output_path_for_name: Callable[[str], Path | None],
     skeleton_output_path_for_name: Callable[[str], Path | None],
     asset_path: Callable[[Path], str] = generic_path,
+    logger: Callable[[str], None] | None = None,
+    source_hash: int | None = None,
 ) -> list[MeshExport]:
-    return [
-        write_mesh_asset(
-            blend_source,
-            output_root,
-            obj,
-            material_output_path_for_name,
-            skeleton_output_path_for_name,
-            asset_path,
-        )
-        for obj in mesh_objects(objects)
-    ]
+    meshes = mesh_objects(objects)
+    if logger is not None:
+        logger(f"Mesh export queue: {len(meshes)} mesh object(s)")
+    outputs: list[MeshExport] = []
+    for index, obj in enumerate(meshes, start=1):
+        material_names = mesh_material_names(obj)
+        split_by_material = len(material_names) > 1
+        if logger is not None:
+            logger(f"Mesh {index}/{len(meshes)}: {obj.name} with {len(material_names)} material binding(s)")
+        for material_index, material_name in enumerate(material_names):
+            if split_by_material and logger is not None:
+                logger(f"Mesh {obj.name}: exporting material slot {material_index} ({material_name})")
+            outputs.append(write_mesh_asset(
+                blend_source,
+                output_root,
+                obj,
+                material_output_path_for_name,
+                skeleton_output_path_for_name,
+                asset_path,
+                logger,
+                source_hash,
+                material_index,
+                material_name,
+                split_by_material,
+            ))
+    return outputs

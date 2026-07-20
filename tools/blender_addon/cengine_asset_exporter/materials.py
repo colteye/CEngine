@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import struct
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
@@ -56,6 +57,40 @@ class MaterialExport:
     output: Path
 
 
+@dataclass(frozen=True)
+class DefaultMaterial:
+    name: str
+
+    def get(self, _key: str, default: object = None) -> object:
+        return default
+
+
+def elapsed(start: float) -> str:
+    return f"{time.perf_counter() - start:.2f}s"
+
+
+def default_material_name_for_object(obj: object) -> str:
+    return f"{clean_asset_name(str(getattr(obj, 'name', 'Mesh') or 'Mesh'))}_DefaultMaterial"
+
+
+def object_slot_materials(obj: object) -> list[object]:
+    materials: list[object] = []
+    for slot in getattr(obj, "material_slots", ()):
+        material = getattr(slot, "material", None)
+        if material is not None:
+            materials.append(material)
+    return materials
+
+
+def effective_material_names(obj: object) -> list[str]:
+    materials = object_slot_materials(obj)
+    if materials:
+        return [material.name for material in materials]
+    if getattr(obj, "type", "") == "MESH":
+        return [default_material_name_for_object(obj)]
+    return []
+
+
 def material_output_path(blend_source: Path, output_root: Path, material_name: str) -> Path:
     return output_dir_for_source(blend_source, output_root) / "materials" / f"{clean_asset_name(material_name)}.cmat"
 
@@ -63,11 +98,17 @@ def material_output_path(blend_source: Path, output_root: Path, material_name: s
 def object_materials(objects: Iterable[object]) -> list[object]:
     materials: list[object] = []
     seen: set[int] = set()
+    seen_default_names: set[str] = set()
     for obj in objects:
-        for slot in getattr(obj, "material_slots", ()):
-            material = getattr(slot, "material", None)
-            if material is None:
-                continue
+        slot_materials = object_slot_materials(obj)
+        if not slot_materials and getattr(obj, "type", "") == "MESH":
+            default_name = default_material_name_for_object(obj)
+            if default_name not in seen_default_names:
+                seen_default_names.add(default_name)
+                materials.append(DefaultMaterial(default_name))
+            continue
+
+        for material in slot_materials:
             key = id(material)
             if key in seen:
                 continue
@@ -130,6 +171,7 @@ def material_payload(
     material: object,
     bindings: list[TextureBinding],
     asset_path: Callable[[Path], str] = generic_path,
+    fallback_texture: Path | None = None,
 ) -> bytes:
     shader = str(getattr(material, "get", lambda _key, default=None: default)("ce_shader", "pbr"))
     shader_id = MATERIAL_SHADER_IDS.get(shader.strip().lower())
@@ -147,7 +189,10 @@ def material_payload(
 
     name_offset, name_size = append_string(material.name)
     texture_rows = bytearray()
-    for binding in bindings:
+    payload_bindings = bindings
+    if not payload_bindings and fallback_texture is not None:
+        payload_bindings = [TextureBinding("base_color", fallback_texture, fallback_texture)]
+    for binding in payload_bindings:
         slot_id = MATERIAL_TEXTURE_SLOT_IDS.get(binding.slot)
         if slot_id is None:
             continue
@@ -177,16 +222,26 @@ def write_material_asset(
     image_source_path: Callable[[object], Path | None],
     texture_output_path_for_source: Callable[[Path], Path | None],
     asset_path: Callable[[Path], str] = generic_path,
+    logger: Callable[[str], None] | None = None,
+    source_hash: int | None = None,
+    fallback_texture: Path | None = None,
 ) -> MaterialExport:
+    start = time.perf_counter()
     bindings = material_texture_bindings(material, image_source_path, texture_output_path_for_source)
     output = material_output_path(blend_source, output_root, material.name)
+    if logger is not None:
+        logger(f"Material {material.name}: {len(bindings)} texture binding(s) -> {output}")
+        if not bindings and fallback_texture is not None:
+            logger(f"Material {material.name}: using fallback texture {fallback_texture}")
     desc = make_asset_desc(
         AssetType.MATERIAL,
         asset_path(output),
-        hash_file(blend_source),
-        material_payload(blend_source, material, bindings, asset_path),
+        source_hash if source_hash is not None else hash_file(blend_source),
+        material_payload(blend_source, material, bindings, asset_path, fallback_texture),
     )
     write_binary_asset(output, desc)
+    if logger is not None:
+        logger(f"Material {material.name}: wrote {output.name} in {elapsed(start)}")
     return MaterialExport(material, output)
 
 
@@ -197,15 +252,37 @@ def write_material_assets(
     image_source_path: Callable[[object], Path | None],
     texture_output_path_for_source: Callable[[Path], Path | None],
     asset_path: Callable[[Path], str] = generic_path,
+    logger: Callable[[str], None] | None = None,
+    source_hash: int | None = None,
+    fallback_texture: Path | None = None,
 ) -> list[MaterialExport]:
-    return [
-        write_material_asset(
+    materials = object_materials(objects)
+    if logger is not None:
+        logger(f"Material export queue: {len(materials)} unique material(s)")
+        for obj in objects:
+            slot_materials = object_slot_materials(obj)
+            if getattr(obj, "type", "") != "MESH":
+                continue
+            if not slot_materials:
+                logger(f"Material fallback: {obj.name} has no material slots; generating {default_material_name_for_object(obj)}")
+            elif len(slot_materials) > 1:
+                logger(
+                    f"Material fallback: {obj.name} has {len(slot_materials)} material slots; "
+                    f"using first slot {slot_materials[0].name}"
+                )
+    outputs: list[MaterialExport] = []
+    for index, material in enumerate(materials, start=1):
+        if logger is not None:
+            logger(f"Material {index}/{len(materials)}: {material.name}")
+        outputs.append(write_material_asset(
             blend_source,
             output_root,
             material,
             image_source_path,
             texture_output_path_for_source,
             asset_path,
-        )
-        for material in object_materials(objects)
-    ]
+            logger,
+            source_hash,
+            fallback_texture,
+        ))
+    return outputs

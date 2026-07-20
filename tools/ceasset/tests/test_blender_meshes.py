@@ -15,12 +15,14 @@ from cengine_asset_exporter.meshes import (  # noqa: E402
     MESH_METADATA_MAGIC,
     SKINNED_VERTEX,
     VERTEX,
+    blender_to_engine_vector,
     mesh_buffers,
     mesh_metadata_payload,
     mesh_objects,
     mesh_output_path,
     polygon_triangles,
     write_mesh_asset,
+    write_mesh_assets,
 )
 
 
@@ -46,8 +48,9 @@ class FakeLoop:
 
 
 class FakePolygon:
-    def __init__(self, loop_indices: list[int]) -> None:
+    def __init__(self, loop_indices: list[int], material_index: int = 0) -> None:
         self.loop_indices = loop_indices
+        self.material_index = material_index
 
 
 class FakeUv:
@@ -171,12 +174,15 @@ class BlenderMeshesTests(unittest.TestCase):
 
         self.assertEqual(buffers.vertex_count, 3)
         self.assertEqual(buffers.index_count, 3)
-        self.assertEqual(buffers.bounds_min, (0.0, 0.0, 0.0))
-        self.assertEqual(buffers.bounds_max, (1.0, 2.0, 0.0))
+        self.assertEqual(buffers.bounds_min, (0.0, 0.0, -2.0))
+        self.assertEqual(buffers.bounds_max, (1.0, 0.0, -0.0))
         self.assertEqual(buffers.vertex_stride, VERTEX.size)
         self.assertFalse(buffers.skinned)
         self.assertEqual(len(buffers.data), 3 * VERTEX.size + 3 * 4)
-        self.assertEqual(VERTEX.unpack_from(buffers.data, 0), (0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0))
+        self.assertEqual(VERTEX.unpack_from(buffers.data, 0), (0.0, 0.0, -0.0, 0.0, 1.0, -0.0, 0.0, 0.0))
+
+    def test_blender_to_engine_vector_maps_z_up_to_y_up(self) -> None:
+        self.assertEqual(blender_to_engine_vector((1.0, 2.0, 3.0)), (1.0, 3.0, -2.0))
 
     def test_mesh_buffers_pack_skin_indices_and_weights(self) -> None:
         armature = FakeArmature()
@@ -203,8 +209,8 @@ class BlenderMeshesTests(unittest.TestCase):
 
         self.assertEqual(buffers.vertex_count, 6)
         self.assertEqual(buffers.index_count, 6)
-        self.assertEqual(buffers.bounds_min, (0.0, 0.0, 0.0))
-        self.assertEqual(buffers.bounds_max, (1.0, 2.0, 0.0))
+        self.assertEqual(buffers.bounds_min, (0.0, 0.0, -2.0))
+        self.assertEqual(buffers.bounds_max, (1.0, 0.0, -0.0))
 
     def test_mesh_metadata_payload_is_binary_and_dependency_indexed(self) -> None:
         buffers = mesh_buffers(FakeMesh())
@@ -251,29 +257,52 @@ class BlenderMeshesTests(unittest.TestCase):
             geometry_offset = payload_offset + metadata[15]
             self.assertEqual(data[geometry_offset : geometry_offset + 4], struct.pack("<f", 0.0))
 
-    def test_write_mesh_asset_rejects_mesh_without_one_material_slot(self) -> None:
+    def test_write_mesh_asset_generates_default_material_binding_for_empty_slots(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             blend = root / "hero.blend"
             blend.write_bytes(b"blend")
 
-            with self.assertRaisesRegex(RuntimeError, "exactly one material slot"):
-                write_mesh_asset(
-                    blend,
-                    root / "compiled",
-                    FakeObject("SM_Empty", "MESH", material_names=[]),
-                    lambda name: root / "compiled" / "hero" / "materials" / f"{name}.cmat",
-                    lambda name: root / "compiled" / "hero" / "skeletons" / f"{name}.cskel",
-                )
+            export = write_mesh_asset(
+                blend,
+                root / "compiled",
+                FakeObject("SM_Empty", "MESH", material_names=[]),
+                lambda name: root / "compiled" / "hero" / "materials" / f"{name}.cmat",
+                lambda name: root / "compiled" / "hero" / "skeletons" / f"{name}.cskel",
+            )
 
-            with self.assertRaisesRegex(RuntimeError, "exactly one material slot"):
-                write_mesh_asset(
-                    blend,
-                    root / "compiled",
-                    FakeObject("SM_Multi", "MESH", material_names=["A", "B"]),
-                    lambda name: root / "compiled" / "hero" / "materials" / f"{name}.cmat",
-                    lambda name: root / "compiled" / "hero" / "skeletons" / f"{name}.cskel",
-                )
+            self.assertEqual(export.material_name, "SM_Empty_DefaultMaterial")
+            self.assertTrue(export.output.exists())
+
+    def test_write_mesh_assets_splits_multi_material_meshes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            blend = root / "hero.blend"
+            blend.write_bytes(b"blend")
+            mesh = FakeMesh(
+                [
+                    FakePolygon([0, 1, 2], material_index=0),
+                    FakePolygon([0, 1, 2], material_index=1),
+                ]
+            )
+            obj = FakeObject("SM_Multi", "MESH", mesh, material_names=["A", "B"])
+
+            exports = write_mesh_assets(
+                blend,
+                root / "compiled",
+                [obj],
+                lambda name: root / "compiled" / "hero" / "materials" / f"{name}.cmat",
+                lambda name: root / "compiled" / "hero" / "skeletons" / f"{name}.cskel",
+            )
+
+            self.assertEqual([export.material_name for export in exports], ["A", "B"])
+            self.assertEqual([export.output.name for export in exports], ["SM_Multi__A.cmesh", "SM_Multi__B.cmesh"])
+            for export in exports:
+                data = export.output.read_bytes()
+                header = ASSET_HEADER.unpack_from(data)
+                metadata = MESH_METADATA.unpack_from(data, header[7])
+                self.assertEqual(metadata[4], 3)
+                self.assertEqual(metadata[14], 1)
 
     def test_write_skinned_mesh_asset_depends_on_skeleton(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

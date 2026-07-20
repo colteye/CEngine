@@ -1,4 +1,5 @@
 #include "assets/casset_loader.h"
+#include "assets/material_loader.h"
 #include "assets/mesh_loader.h"
 #include "assets/skeleton_loader.h"
 
@@ -19,8 +20,31 @@ namespace Renderer = CEngine::Renderer;
 
 constexpr std::array<char, 4> MeshMetadataMagic = {'C', 'E', 'M', 'H'};
 constexpr std::uint16_t MeshMetadataVersion = 1;
+constexpr std::uint32_t MeshFlagSkinned = 1u << 0u;
+constexpr std::array<char, 4> MaterialPayloadMagic = {'C', 'E', 'M', 'A'};
+constexpr std::uint16_t MaterialPayloadVersion = 1;
+constexpr std::string_view DefaultTexturePath = "assets/missing/missing.DDS";
 
 #pragma pack(push, 1)
+struct DiskMaterialHeader {
+    std::array<char, 4> magic = MaterialPayloadMagic;
+    std::uint16_t version = MaterialPayloadVersion;
+    std::uint16_t header_size = 0;
+    std::uint32_t shader = 0;
+    std::uint32_t texture_count = 0;
+    std::uint32_t texture_table_offset = 0;
+    std::uint32_t string_table_offset = 0;
+    std::uint32_t string_table_size = 0;
+    std::uint32_t name_offset = 0;
+    std::uint32_t name_size = 0;
+};
+
+struct DiskMaterialTexture {
+    std::uint32_t slot = 0;
+    std::uint32_t path_offset = 0;
+    std::uint32_t path_size = 0;
+};
+
 struct DiskMeshMetadata {
     std::array<char, 4> magic = MeshMetadataMagic;
     std::uint16_t version = MeshMetadataVersion;
@@ -99,6 +123,17 @@ void AppendStaticVertex(std::vector<std::uint8_t>& bytes,
     AppendF32(bytes, v);
 }
 
+void AppendSkinnedStaticVertex(std::vector<std::uint8_t>& bytes,
+    float x, float y, float z, float nx, float ny, float nz, float u, float v)
+{
+    AppendStaticVertex(bytes, x, y, z, nx, ny, nz, u, v);
+    for (int index = 0; index < 8; ++index)
+    {
+        const std::uint16_t value = 0;
+        AppendStruct(bytes, value);
+    }
+}
+
 std::vector<std::uint8_t> StaticTriangleGeometry()
 {
     std::vector<std::uint8_t> geometry;
@@ -112,13 +147,27 @@ std::vector<std::uint8_t> StaticTriangleGeometry()
     return geometry;
 }
 
-std::vector<std::uint8_t> StaticMeshPayload()
+std::vector<std::uint8_t> SkinnedTriangleGeometry()
+{
+    std::vector<std::uint8_t> geometry;
+    geometry.reserve(3 * 48 + 3 * 4);
+    AppendSkinnedStaticVertex(geometry, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
+    AppendSkinnedStaticVertex(geometry, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f);
+    AppendSkinnedStaticVertex(geometry, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f);
+    AppendU32(geometry, 0);
+    AppendU32(geometry, 1);
+    AppendU32(geometry, 2);
+    return geometry;
+}
+
+std::vector<std::uint8_t> StaticMeshPayload(std::uint32_t flags = 0, std::uint32_t vertex_stride = 32)
 {
     DiskMeshMetadata mesh_metadata;
     mesh_metadata.header_size = sizeof(DiskMeshMetadata);
+    mesh_metadata.flags = flags;
     mesh_metadata.vertex_count = 3;
     mesh_metadata.index_count = 3;
-    mesh_metadata.vertex_stride = 32;
+    mesh_metadata.vertex_stride = vertex_stride;
     mesh_metadata.index_size = 4;
     mesh_metadata.bounds_max[0] = 1.0f;
     mesh_metadata.bounds_max[1] = 2.0f;
@@ -127,7 +176,8 @@ std::vector<std::uint8_t> StaticMeshPayload()
 
     std::vector<std::uint8_t> payload;
     AppendStruct(payload, mesh_metadata);
-    const std::vector<std::uint8_t> geometry = StaticTriangleGeometry();
+    const std::vector<std::uint8_t> geometry =
+        vertex_stride == 48 ? SkinnedTriangleGeometry() : StaticTriangleGeometry();
     payload.insert(payload.end(), geometry.begin(), geometry.end());
     return payload;
 }
@@ -209,6 +259,169 @@ bool MeshLoaderBuildsRendererMeshFromTargetAsset()
         return false;
     }
     if (!Expect(data.local_bounds.valid, "loaded render mesh should preserve metadata bounds"))
+    {
+        return false;
+    }
+
+    std::filesystem::remove_all(root);
+    return true;
+}
+
+bool MeshLoaderTreatsSkinnedMeshesAsStaticGeometry()
+{
+    const std::filesystem::path root = TestRoot();
+    const std::filesystem::path mesh_path = root / "assets" / "compiled" / "hero" / "meshes" / "SK_Body.cmesh";
+    const std::string mesh_key = "assets/compiled/hero/meshes/SK_Body.cmesh";
+    AssetWriteDesc mesh_asset;
+    mesh_asset.type = AssetType::Mesh;
+    mesh_asset.guid = GuidFromStableName(mesh_key);
+    mesh_asset.source_hash = 13;
+    mesh_asset.payload = StaticMeshPayload(MeshFlagSkinned, 48);
+
+    std::string error;
+    if (!Expect(WriteBinaryAsset(mesh_path, mesh_asset, &error), error.c_str()))
+    {
+        return false;
+    }
+
+    auto* material = reinterpret_cast<Renderer::Material*>(static_cast<std::uintptr_t>(1));
+    Renderer::Mesh mesh;
+    if (!Expect(LoadMeshAsset(mesh_path, { material }, mesh, &error), error.c_str()))
+    {
+        return false;
+    }
+    if (!Expect(mesh.GetMaterialMeshData().size() == 1,
+            "skinned mesh payloads should load as static render geometry when skinning is ignored"))
+    {
+        return false;
+    }
+
+    std::filesystem::remove_all(root);
+    return true;
+}
+
+bool MaterialLoaderFillsMissingTextureSlots()
+{
+    const std::filesystem::path root = TestRoot();
+    const std::filesystem::path material_path = root / "assets" / "compiled" / "hero" / "materials" / "Empty.cmat";
+    const std::string material_key = "assets/compiled/hero/materials/Empty.cmat";
+    const std::string material_name = "Empty";
+
+    std::vector<std::uint8_t> strings;
+    const std::uint32_t name_offset = AppendString(strings, material_name);
+
+    DiskMaterialHeader material_header;
+    material_header.header_size = sizeof(DiskMaterialHeader);
+    material_header.shader = static_cast<std::uint32_t>(Renderer::MaterialShaderType::PBRStandard);
+    material_header.texture_count = 0;
+    material_header.texture_table_offset = sizeof(DiskMaterialHeader);
+    material_header.string_table_offset = sizeof(DiskMaterialHeader);
+    material_header.string_table_size = static_cast<std::uint32_t>(strings.size());
+    material_header.name_offset = name_offset;
+    material_header.name_size = static_cast<std::uint32_t>(material_name.size());
+
+    std::vector<std::uint8_t> payload;
+    AppendStruct(payload, material_header);
+    payload.insert(payload.end(), strings.begin(), strings.end());
+
+    AssetWriteDesc material_asset;
+    material_asset.type = AssetType::Material;
+    material_asset.guid = GuidFromStableName(material_key);
+    material_asset.source_hash = 11;
+    material_asset.payload = std::move(payload);
+
+    std::string error;
+    if (!Expect(WriteBinaryAsset(material_path, material_asset, &error), error.c_str()))
+    {
+        return false;
+    }
+
+    Renderer::Material material;
+    if (!Expect(LoadMaterialAsset(material_path, material, &error), error.c_str()))
+    {
+        return false;
+    }
+    if (!Expect(material.GetAlbedoPath() == DefaultTexturePath,
+            "material loader should fallback empty albedo texture paths"))
+    {
+        return false;
+    }
+    if (!Expect(material.GetNormalPath() == DefaultTexturePath,
+            "material loader should fallback empty normal texture paths"))
+    {
+        return false;
+    }
+    if (!Expect(material.GetMetallicRoughnessAoPath() == DefaultTexturePath,
+            "material loader should fallback empty metallic roughness ao texture paths"))
+    {
+        return false;
+    }
+
+    std::filesystem::remove_all(root);
+    return true;
+}
+
+bool MaterialLoaderResolvesLegacyCompiledTexturePaths()
+{
+    const std::filesystem::path root = TestRoot();
+    const std::filesystem::path material_path = root / "assets" / "barrel" / "materials" / "Barrel.cmat";
+    const std::filesystem::path texture_path = root / "assets" / "barrel" / "textures" / "Albedo.dds";
+    const std::string material_key = "assets/barrel/materials/Barrel.cmat";
+    const std::string material_name = "Barrel";
+    const std::string old_texture_path = "assets/compiled/barrel/textures/Albedo.dds";
+    const std::string expected_texture_path = "assets/barrel/textures/Albedo.dds";
+
+    std::filesystem::create_directories(texture_path.parent_path());
+    std::ofstream(texture_path, std::ios::binary).put('\0');
+
+    std::vector<std::uint8_t> strings;
+    const std::uint32_t name_offset = AppendString(strings, material_name);
+    const std::uint32_t texture_offset = AppendString(strings, old_texture_path);
+
+    DiskMaterialHeader material_header;
+    material_header.header_size = sizeof(DiskMaterialHeader);
+    material_header.shader = static_cast<std::uint32_t>(Renderer::MaterialShaderType::PBRStandard);
+    material_header.texture_count = 1;
+    material_header.texture_table_offset = sizeof(DiskMaterialHeader);
+    material_header.string_table_offset = sizeof(DiskMaterialHeader) + sizeof(DiskMaterialTexture);
+    material_header.string_table_size = static_cast<std::uint32_t>(strings.size());
+    material_header.name_offset = name_offset;
+    material_header.name_size = static_cast<std::uint32_t>(material_name.size());
+
+    DiskMaterialTexture texture;
+    texture.slot = 1;
+    texture.path_offset = texture_offset;
+    texture.path_size = static_cast<std::uint32_t>(old_texture_path.size());
+
+    std::vector<std::uint8_t> payload;
+    AppendStruct(payload, material_header);
+    AppendStruct(payload, texture);
+    payload.insert(payload.end(), strings.begin(), strings.end());
+
+    AssetWriteDesc material_asset;
+    material_asset.type = AssetType::Material;
+    material_asset.guid = GuidFromStableName(material_key);
+    material_asset.source_hash = 19;
+    material_asset.payload = std::move(payload);
+
+    std::string error;
+    if (!Expect(WriteBinaryAsset(material_path, material_asset, &error), error.c_str()))
+    {
+        return false;
+    }
+
+    const std::filesystem::path previous_path = std::filesystem::current_path();
+    std::filesystem::current_path(root);
+    Renderer::Material material;
+    const bool loaded = LoadMaterialAsset("assets/barrel/materials/Barrel.cmat", material, &error);
+    std::filesystem::current_path(previous_path);
+
+    if (!Expect(loaded, error.c_str()))
+    {
+        return false;
+    }
+    if (!Expect(material.GetAlbedoPath() == expected_texture_path,
+            "material loader should remap assets/compiled texture paths into the flat assets folder"))
     {
         return false;
     }
@@ -428,6 +641,9 @@ int main()
 {
     if (!CommonAssetPayloadRemainsDirectlyAddressable() ||
         !MeshLoaderBuildsRendererMeshFromTargetAsset() ||
+        !MeshLoaderTreatsSkinnedMeshesAsStaticGeometry() ||
+        !MaterialLoaderFillsMissingTextureSlots() ||
+        !MaterialLoaderResolvesLegacyCompiledTexturePaths() ||
         !CAssetLoaderReadsBinaryComposition() ||
         !SkeletonViewReadsBinaryBonesAndNames())
     {

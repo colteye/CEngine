@@ -117,6 +117,22 @@ class BlenderMaterialsTests(unittest.TestCase):
         self.assertEqual(texture[0], 1)
         self.assertEqual(strings[texture[1] : texture[1] + texture[2]], b"compiled/hero/textures/albedo.dds")
 
+    def test_material_payload_uses_missing_texture_fallback_when_untextured(self) -> None:
+        material = FakeMaterial("Untextured", [])
+        payload = material_payload(
+            Path("hero.blend"),
+            material,
+            [],
+            fallback_texture=Path("assets/demo/missing/missing.DDS"),
+        )
+
+        header = MATERIAL_HEADER.unpack_from(payload)
+        self.assertEqual(header[4], 1)
+        texture = MATERIAL_TEXTURE.unpack_from(payload, header[5])
+        strings = payload[header[6] : header[6] + header[7]]
+        self.assertEqual(texture[0], 1)
+        self.assertEqual(strings[texture[1] : texture[1] + texture[2]], b"assets/demo/missing/missing.DDS")
+
     def test_write_material_asset_writes_common_cmat(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

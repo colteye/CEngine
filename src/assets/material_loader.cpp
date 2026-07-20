@@ -19,6 +19,7 @@ constexpr std::uint32_t TextureSlotNormal = 2;
 constexpr std::uint32_t TextureSlotMetallicRoughnessAo = 3;
 constexpr std::uint32_t TextureSlotRoughness = 4;
 constexpr std::uint32_t TextureSlotMetallic = 5;
+constexpr std::string_view DefaultTexturePath = "assets/missing/missing.DDS";
 
 #pragma pack(push, 1)
 struct DiskMaterialHeader {
@@ -73,6 +74,65 @@ Renderer::MaterialShaderType MaterialShaderFromDisk(std::uint32_t shader)
     default:
         return Renderer::MaterialShaderType::Unknown;
     }
+}
+
+bool StartsWith(std::string_view text, std::string_view prefix)
+{
+    return text.size() >= prefix.size() && text.substr(0, prefix.size()) == prefix;
+}
+
+std::string ExistingGenericPath(const std::filesystem::path& path)
+{
+    return path.lexically_normal().generic_string();
+}
+
+std::string ResolveTexturePath(const std::filesystem::path& material_path, std::string_view stored_path)
+{
+    if (stored_path.empty())
+    {
+        return std::string(DefaultTexturePath);
+    }
+
+    const std::filesystem::path raw_path(stored_path);
+    if (raw_path.is_absolute())
+    {
+        return ExistingGenericPath(raw_path);
+    }
+
+    if (std::filesystem::exists(raw_path))
+    {
+        return ExistingGenericPath(raw_path);
+    }
+
+    const std::filesystem::path bundle_relative = material_path.parent_path().parent_path() / raw_path;
+    if (std::filesystem::exists(bundle_relative))
+    {
+        return ExistingGenericPath(bundle_relative);
+    }
+
+    constexpr std::string_view compiled_prefix = "assets/compiled/";
+    if (StartsWith(stored_path, compiled_prefix))
+    {
+        const std::filesystem::path flat_assets_path =
+            std::filesystem::path("assets") / std::string(stored_path.substr(compiled_prefix.size()));
+        if (std::filesystem::exists(flat_assets_path))
+        {
+            return ExistingGenericPath(flat_assets_path);
+        }
+    }
+
+    constexpr std::string_view old_missing_prefix = "assets/demo/missing/";
+    if (StartsWith(stored_path, old_missing_prefix))
+    {
+        const std::filesystem::path flat_missing_path =
+            std::filesystem::path("assets/missing") / std::string(stored_path.substr(old_missing_prefix.size()));
+        if (std::filesystem::exists(flat_missing_path))
+        {
+            return ExistingGenericPath(flat_missing_path);
+        }
+    }
+
+    return ExistingGenericPath(raw_path);
 }
 
 } // namespace
@@ -177,6 +237,9 @@ bool LoadMaterialAsset(const std::filesystem::path& path, Renderer::Material& ma
     {
         metallic_roughness_ao_path = !roughness_path.empty() ? roughness_path : metallic_path;
     }
+    albedo_path = ResolveTexturePath(path, albedo_path);
+    normal_path = ResolveTexturePath(path, normal_path);
+    metallic_roughness_ao_path = ResolveTexturePath(path, metallic_roughness_ao_path);
     Renderer::Material loaded(
         shader_type,
         albedo_path,

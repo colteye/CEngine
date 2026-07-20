@@ -15,7 +15,6 @@ namespace {
 constexpr std::uint32_t StaticVertexStride = 32;
 constexpr std::array<char, 4> MeshMetadataMagic = {'C', 'E', 'M', 'H'};
 constexpr std::uint16_t MeshMetadataVersion = 1;
-constexpr std::uint32_t MeshFlagSkinned = 1u << 0u;
 
 #pragma pack(push, 1)
 struct DiskMeshMetadata {
@@ -148,17 +147,12 @@ bool LoadMeshAsset(const std::filesystem::path& path,
         return false;
     }
 
-    if ((metadata.flags & MeshFlagSkinned) != 0)
-    {
-        SetError(error, "mesh loader does not support skinned meshes yet");
-        return false;
-    }
     if (metadata.material_slot_count != 1)
     {
         SetError(error, "mesh loader expects exactly one material slot in this phase");
         return false;
     }
-    if (metadata.vertex_stride != StaticVertexStride || metadata.index_size != sizeof(std::uint32_t))
+    if (metadata.vertex_stride < StaticVertexStride || metadata.index_size != sizeof(std::uint32_t))
     {
         SetError(error, "mesh loader does not support this vertex/index layout");
         return false;

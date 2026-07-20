@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ADDON_DIR = ROOT / "tools" / "blender_addon" / "cengine_asset_exporter"
 CEASSETLIB_DIR = ROOT / "tools" / "ceasset" / "ceassetlib"
-DEFAULT_OUTPUT = ROOT / "build" / "blender_addon" / "cengine_asset_exporter-0.1.1.zip"
+DEFAULT_OUTPUT = ROOT / "build" / "blender_addon" / "cengine_asset_exporter-0.1.6.zip"
 PILLOW_WHEEL = ADDON_DIR / "wheels" / "pillow-12.3.0-cp311-cp311-win_amd64.whl"
 
 

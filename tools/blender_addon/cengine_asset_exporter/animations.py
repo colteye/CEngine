@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import struct
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
@@ -29,6 +30,10 @@ class AnimationExport:
     source: object
     armature: object
     output: Path
+
+
+def elapsed(start: float) -> str:
+    return f"{time.perf_counter() - start:.2f}s"
 
 
 def animation_output_path(blend_source: Path, output_root: Path, armature_name: str, action_name: str) -> Path:
@@ -150,17 +155,27 @@ def write_animation_asset(
     fps: float,
     skeleton_output_path_for_name: Callable[[str], Path | None],
     asset_path: Callable[[Path], str] = generic_path,
+    logger: Callable[[str], None] | None = None,
+    source_hash: int | None = None,
 ) -> AnimationExport:
+    start = time.perf_counter()
     output = animation_output_path(blend_source, output_root, armature.name, action.name)
     del skeleton_output_path_for_name
+    if logger is not None:
+        logger(
+            f"Animation {armature.name}/{action.name}: "
+            f"{len(getattr(action, 'fcurves', ()))} f-curve(s) -> {output}"
+        )
 
     desc = make_asset_desc(
         AssetType.ANIMATION,
         asset_path(output),
-        hash_file(blend_source),
+        source_hash if source_hash is not None else hash_file(blend_source),
         animation_payload(blend_source, armature, action, fps),
     )
     write_binary_asset(output, desc)
+    if logger is not None:
+        logger(f"Animation {armature.name}/{action.name}: wrote {output.name} in {elapsed(start)}")
     return AnimationExport(action, armature, output)
 
 
@@ -171,9 +186,17 @@ def write_animation_assets(
     fps: float,
     skeleton_output_path_for_name: Callable[[str], Path | None],
     asset_path: Callable[[Path], str] = generic_path,
+    logger: Callable[[str], None] | None = None,
+    source_hash: int | None = None,
 ) -> list[AnimationExport]:
-    return [
-        write_animation_asset(
+    targets = action_targets(objects)
+    if logger is not None:
+        logger(f"Animation export queue: {len(targets)} armature/action target(s)")
+    outputs: list[AnimationExport] = []
+    for index, (armature, action) in enumerate(targets, start=1):
+        if logger is not None:
+            logger(f"Animation {index}/{len(targets)}: {armature.name}/{action.name}")
+        outputs.append(write_animation_asset(
             blend_source,
             output_root,
             armature,
@@ -181,6 +204,7 @@ def write_animation_assets(
             fps,
             skeleton_output_path_for_name,
             asset_path,
-        )
-        for armature, action in action_targets(objects)
-    ]
+            logger,
+            source_hash,
+        ))
+    return outputs

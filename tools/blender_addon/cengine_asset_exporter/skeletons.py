@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import struct
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
@@ -22,6 +23,10 @@ SKELETON_VERSION = 1
 class SkeletonExport:
     source: object
     output: Path
+
+
+def elapsed(start: float) -> str:
+    return f"{time.perf_counter() - start:.2f}s"
 
 
 def skeleton_output_path(blend_source: Path, output_root: Path, armature_name: str) -> Path:
@@ -103,16 +108,24 @@ def write_skeleton_asset(
     output_root: Path,
     armature: object,
     asset_path: Callable[[Path], str] = generic_path,
+    logger: Callable[[str], None] | None = None,
+    source_hash: int | None = None,
 ) -> SkeletonExport:
+    start = time.perf_counter()
     output = skeleton_output_path(blend_source, output_root, armature.name)
+    bone_count = len(getattr(getattr(armature, "data", None), "bones", ()))
+    if logger is not None:
+        logger(f"Skeleton {armature.name}: {bone_count} bone(s) -> {output}")
     desc = AssetWriteDesc(
         asset_type=AssetType.SKELETON,
         guid=guid_from_stable_name(asset_path(output)),
-        source_hash=hash_file(blend_source),
+        source_hash=source_hash if source_hash is not None else hash_file(blend_source),
         platform_target="generic",
         payload=skeleton_payload(blend_source, armature),
     )
     write_binary_asset(output, desc)
+    if logger is not None:
+        logger(f"Skeleton {armature.name}: wrote {output.name} in {elapsed(start)}")
     return SkeletonExport(armature, output)
 
 
@@ -121,8 +134,15 @@ def write_skeleton_assets(
     output_root: Path,
     objects: Iterable[object],
     asset_path: Callable[[Path], str] = generic_path,
+    logger: Callable[[str], None] | None = None,
+    source_hash: int | None = None,
 ) -> list[SkeletonExport]:
-    return [
-        write_skeleton_asset(blend_source, output_root, armature, asset_path)
-        for armature in armature_objects(objects)
-    ]
+    armatures = armature_objects(objects)
+    if logger is not None:
+        logger(f"Skeleton export queue: {len(armatures)} armature object(s)")
+    outputs: list[SkeletonExport] = []
+    for index, armature in enumerate(armatures, start=1):
+        if logger is not None:
+            logger(f"Skeleton {index}/{len(armatures)}: {armature.name}")
+        outputs.append(write_skeleton_asset(blend_source, output_root, armature, asset_path, logger, source_hash))
+    return outputs

@@ -1,4 +1,6 @@
 #include <iostream>
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <cstdint>
@@ -74,11 +76,81 @@ struct DemoModel
 	}
 };
 
+struct DemoAssetPart
+{
+	Renderer::Material material;
+	Renderer::Mesh mesh;
+	glm::mat4 local_to_asset = glm::mat4(1.0f);
+};
+
+struct DemoAsset
+{
+	std::vector<DemoAssetPart> parts;
+	Renderer::Bounds local_bounds;
+
+	std::vector<Renderer::RenderableHandle> RegisterRenderables(const glm::mat4& transform,
+		uint32_t flags = Renderer::RenderableFlagStatic | Renderer::RenderableFlagCastsShadow | Renderer::RenderableFlagReceivesShadow) const
+	{
+		std::vector<Renderer::RenderableHandle> handles;
+		for (const DemoAssetPart& part : parts)
+		{
+			const glm::mat4 part_transform = transform * part.local_to_asset;
+			for (const auto& material_mesh_data : part.mesh.GetMaterialMeshData())
+			{
+				Renderer::Renderable renderable;
+				renderable.mesh = &part.mesh;
+				renderable.material = material_mesh_data.first != nullptr ? material_mesh_data.first :
+					const_cast<Renderer::Material*>(&part.material);
+				renderable.transform = part_transform;
+				renderable.flags = flags;
+				renderable.local_bounds = material_mesh_data.second.local_bounds.valid ?
+					material_mesh_data.second.local_bounds : Renderer::CalculateBounds(material_mesh_data.second.vertices);
+				renderable.world_bounds = Renderer::TransformBounds(renderable.local_bounds, part_transform);
+				handles.push_back(Renderer::RenderSystem::RegisterRenderable(renderable));
+			}
+		}
+		return handles;
+	}
+};
+
 glm::mat4 MakeTransform(const glm::vec3& position, float yaw_degrees, float scale)
 {
 	glm::mat4 transform = glm::translate(glm::mat4(1.0f), position);
 	transform = glm::rotate(transform, glm::radians(yaw_degrees), glm::vec3(0.0f, 1.0f, 0.0f));
 	return glm::scale(transform, glm::vec3(scale));
+}
+
+glm::mat4 MatrixFromCAssetRows(const std::array<float, 16>& rows)
+{
+	glm::mat4 matrix(1.0f);
+	for (int row = 0; row < 4; ++row)
+	{
+		for (int column = 0; column < 4; ++column)
+		{
+			matrix[column][row] = rows[static_cast<std::size_t>(row * 4 + column)];
+		}
+	}
+	return matrix;
+}
+
+glm::mat4 MakeFitTransform(const Renderer::Bounds& bounds, const glm::vec3& floor_position,
+	float yaw_degrees, float target_height)
+{
+	if (!bounds.valid)
+	{
+		return MakeTransform(floor_position, yaw_degrees, 1.0f);
+	}
+
+	const glm::vec3 size = bounds.max - bounds.min;
+	const float height = std::max(size.y, 0.0001f);
+	const float scale = target_height / height;
+	const glm::vec3 center = (bounds.min + bounds.max) * 0.5f;
+	const glm::vec3 foot_center(center.x, bounds.min.y, center.z);
+
+	glm::mat4 transform = glm::translate(glm::mat4(1.0f), floor_position);
+	transform = glm::rotate(transform, glm::radians(yaw_degrees), glm::vec3(0.0f, 1.0f, 0.0f));
+	transform = glm::scale(transform, glm::vec3(scale));
+	return transform * glm::translate(glm::mat4(1.0f), -foot_center);
 }
 
 glm::quat MakeYawRotation(float yaw_degrees)
@@ -187,6 +259,126 @@ bool LoadDemoAsset(const std::filesystem::path& casset_path, Renderer::Material&
 		return false;
 	}
 	return true;
+}
+
+struct DemoAssetComponentPair
+{
+	std::string mesh_path;
+	std::string material_path;
+	glm::mat4 local_to_asset = glm::mat4(1.0f);
+};
+
+bool LoadDemoAssetBundle(const std::filesystem::path& casset_path, DemoAsset& bundle)
+{
+	std::string error;
+	CEngine::Assets::CAsset asset;
+	if (!asset.Load(casset_path, &error))
+	{
+		std::cerr << "Failed to load root asset " << casset_path << ": " << error << '\n';
+		return false;
+	}
+
+	std::vector<DemoAssetComponentPair> pairs;
+	for (std::uint32_t object_index = 0; object_index < asset.ObjectCount(); ++object_index)
+	{
+		CEngine::Assets::CAssetObject object;
+		if (!asset.Object(object_index, object))
+		{
+			continue;
+		}
+
+		std::vector<std::string> mesh_paths;
+		std::vector<std::string> material_paths;
+		for (std::uint32_t component_index = 0; component_index < object.component_count; ++component_index)
+		{
+			CEngine::Assets::CAssetComponent component;
+			if (!asset.Component(object, component_index, component))
+			{
+				continue;
+			}
+
+			if (component.kind == CEngine::Assets::CAssetComponentKind::Mesh)
+			{
+				mesh_paths.push_back(ResolveBundlePath(casset_path, component.path));
+			}
+			else if (component.kind == CEngine::Assets::CAssetComponentKind::Material)
+			{
+				material_paths.push_back(ResolveBundlePath(casset_path, component.path));
+			}
+		}
+
+		if (mesh_paths.empty() || material_paths.empty())
+		{
+			continue;
+		}
+
+		const glm::mat4 local_to_asset = MatrixFromCAssetRows(object.world_from_local);
+		for (std::size_t mesh_index = 0; mesh_index < mesh_paths.size(); ++mesh_index)
+		{
+			const std::size_t material_index = std::min(mesh_index, material_paths.size() - 1);
+			pairs.push_back({ mesh_paths[mesh_index], material_paths[material_index], local_to_asset });
+		}
+	}
+
+	if (pairs.empty())
+	{
+		std::cerr << "Root asset " << casset_path << " does not contain loadable mesh/material pairs.\n";
+		return false;
+	}
+
+	bundle.parts.clear();
+	bundle.local_bounds = Renderer::Bounds();
+	bundle.parts.reserve(pairs.size());
+	for (const DemoAssetComponentPair& pair : pairs)
+	{
+		DemoAssetPart& part = bundle.parts.emplace_back();
+		part.local_to_asset = pair.local_to_asset;
+		if (!CEngine::Assets::LoadMaterialAsset(pair.material_path, part.material, &error))
+		{
+			std::cerr << "Failed to load bundled material asset " << pair.material_path << ": " << error << '\n';
+			return false;
+		}
+		part.material.material_name = std::filesystem::path(pair.material_path).stem().string();
+		Renderer::RenderSystem::RegisterMaterial(&part.material);
+
+		if (!CEngine::Assets::LoadMeshAsset(pair.mesh_path, { &part.material }, part.mesh, &error))
+		{
+			std::cerr << "Failed to load bundled mesh asset " << pair.mesh_path << ": " << error << '\n';
+			return false;
+		}
+		bundle.local_bounds = Renderer::MergeBounds(
+			bundle.local_bounds,
+			Renderer::TransformBounds(part.mesh.GetLocalBounds(), part.local_to_asset));
+	}
+
+	std::cout << "Loaded demo asset bundle " << casset_path << " with " << bundle.parts.size() << " mesh/material part(s).\n";
+	return true;
+}
+
+std::vector<std::filesystem::path> FindExtraDemoAssetPaths(const std::filesystem::path& assets_root,
+	const std::filesystem::path& primary_asset_path)
+{
+	std::vector<std::filesystem::path> paths;
+	if (!std::filesystem::exists(assets_root))
+	{
+		return paths;
+	}
+
+	const std::string primary = primary_asset_path.lexically_normal().generic_string();
+	for (const std::filesystem::directory_entry& entry : std::filesystem::recursive_directory_iterator(assets_root))
+	{
+		if (!entry.is_regular_file() || entry.path().extension() != ".casset")
+		{
+			continue;
+		}
+		if (entry.path().lexically_normal().generic_string() == primary)
+		{
+			continue;
+		}
+		paths.push_back(entry.path());
+	}
+	std::sort(paths.begin(), paths.end());
+	return paths;
 }
 
 Renderer::RenderBackendType ParseBackend(int argc, char** argv)
@@ -378,9 +570,10 @@ int main(int argc, char** argv)
 		Renderer::RenderSystem::SetAmbientLighting(ambient);
 
 		// Init demo asset after the render backend. Runtime import is target assets only.
+		const std::filesystem::path barrelAssetPath = "assets/barrel/barrel.casset";
 		Renderer::Material barrelMaterial;
 		Renderer::Mesh barrelMesh;
-		if (!LoadDemoAsset("assets/compiled/barrel/barrel.casset", barrelMaterial, barrelMesh))
+		if (!LoadDemoAsset(barrelAssetPath, barrelMaterial, barrelMesh))
 		{
 			Renderer::RenderSystem::Shutdown();
 			glfwDestroyWindow(window);
@@ -393,7 +586,7 @@ int main(int argc, char** argv)
 
 		Renderer::Material transparentBarrelMaterial;
 		Renderer::Mesh transparentBarrelMesh;
-		if (!LoadDemoAsset("assets/compiled/barrel/barrel.casset", transparentBarrelMaterial, transparentBarrelMesh))
+		if (!LoadDemoAsset(barrelAssetPath, transparentBarrelMaterial, transparentBarrelMesh))
 		{
 			Renderer::RenderSystem::Shutdown();
 			glfwDestroyWindow(window);
@@ -406,10 +599,20 @@ int main(int argc, char** argv)
 		transparentBarrelMaterial.SetCastsShadows(false);
 		Renderer::RenderSystem::RegisterMaterial(&transparentBarrelMaterial);
 
+		std::vector<DemoAsset> extraAssets;
+		for (const std::filesystem::path& asset_path : FindExtraDemoAssetPaths("assets", barrelAssetPath))
+		{
+			DemoAsset asset;
+			if (LoadDemoAssetBundle(asset_path, asset))
+			{
+				extraAssets.push_back(std::move(asset));
+			}
+		}
+
 		Renderer::Material floorMaterial(Renderer::MaterialShaderType::PBRStandard,
-			"assets/demo/barrel/results/barrel_albedo.DDS",
-			"assets/demo/barrel/results/barrel_normal.DDS",
-			"assets/demo/barrel/results/barrel_metallic_roughness_ao.DDS");
+			"assets/barrel/textures/barrel_low_barrel_BaseColor.dds",
+			"assets/barrel/textures/barrel_low_barrel_Normal.dds",
+			"assets/barrel/textures/barrel_low_barrel_Roughness.dds");
 		floorMaterial.material_name = "Shadow receiver floor";
 		floorMaterial.SetBaseColorFactor(glm::vec4(0.48f, 0.50f, 0.48f, 1.0f));
 		floorMaterial.SetCastsShadows(false);
@@ -455,6 +658,12 @@ int main(int argc, char** argv)
 			transparent_flags);
 		transparentBarrel.RegisterRenderables(MakeTransform(glm::vec3(1.05f, 0.0f, 0.95f), -28.0f, 0.92f),
 			transparent_flags);
+		for (std::size_t asset_index = 0; asset_index < extraAssets.size(); ++asset_index)
+		{
+			const float x = (static_cast<float>(asset_index) - static_cast<float>(extraAssets.size() - 1) * 0.5f) * 2.75f;
+			extraAssets[asset_index].RegisterRenderables(
+				MakeFitTransform(extraAssets[asset_index].local_bounds, glm::vec3(x, 0.0f, 2.2f), 180.0f, 2.2f));
+		}
 
 		double lastTime = glfwGetTime();
 		do {

@@ -34,8 +34,11 @@ PACKAGE_SPEC.loader.exec_module(package_addon)
 
 
 class FakeImage:
-    def __init__(self, filepath: Path | str) -> None:
+    def __init__(self, filepath: Path | str, packed_data: bytes | None = None, name: str = "image.png") -> None:
         self.filepath = str(filepath)
+        self.name = name
+        self.file_format = "PNG"
+        self.packed_file = types.SimpleNamespace(data=packed_data) if packed_data is not None else None
 
 
 class FakeNode:
@@ -81,23 +84,48 @@ class FakeObject:
         name: str,
         material_names: list[str] | None = None,
         materials: list[FakeMaterial] | None = None,
+        obj_type: str = "MESH",
+        hide_render: bool = False,
+        hide_viewport: bool = False,
+        visible: bool = True,
+        children: list["FakeObject"] | None = None,
+        instance_collection: "FakeCollection | None" = None,
     ) -> None:
         self.name = name
-        self.type = "MESH"
+        self.type = obj_type
         if materials is None:
             materials = [FakeMaterial(name) for name in material_names or []]
         self.material_slots = [FakeMaterialSlot(material) for material in materials]
         self.users_collection: list[FakeCollection] = []
+        self.hide_render = hide_render
+        self.hide_viewport = hide_viewport
+        self.visible = visible
+        self.children = children or []
+        self.instance_collection = instance_collection
+        self.instance_type = "COLLECTION" if instance_collection is not None else "NONE"
 
     def get(self, _key: str, default: object = None) -> object:
         return default
 
+    def visible_get(self) -> bool:
+        return self.visible
+
 
 class FakeCollection:
-    def __init__(self, name: str, objects: list[FakeObject] | None = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        objects: list[FakeObject] | None = None,
+        children: list["FakeCollection"] | None = None,
+        hide_render: bool = False,
+        hide_viewport: bool = False,
+    ) -> None:
         self.name = name
         self.objects = objects or []
-        self.all_objects = self.objects
+        self.children = children or []
+        self.hide_render = hide_render
+        self.hide_viewport = hide_viewport
+        self.all_objects = self.objects + [obj for child in self.children for obj in child.all_objects]
         for obj in self.objects:
             obj.users_collection.append(self)
 
@@ -198,6 +226,41 @@ class BlenderAddonTests(unittest.TestCase):
             self.assertEqual(result.collections, 1)
             self.assertTrue((Path(tmp) / "Collection.casset").exists())
 
+    def test_exported_collection_objects_skips_hidden_and_unrendered_data(self) -> None:
+        visible = FakeObject("SM_Visible")
+        hidden_render = FakeObject("SM_HiddenRender", hide_render=True)
+        hidden_viewport = FakeObject("SM_HiddenViewport", hide_viewport=True)
+        hidden_child = FakeCollection("Hidden Child", [FakeObject("SM_HiddenChild")], hide_render=True)
+        visible_child = FakeCollection("Visible Child", [FakeObject("SM_VisibleChild")])
+        root = FakeCollection(
+            "PREFAB_Root",
+            [visible, hidden_render, hidden_viewport],
+            [hidden_child, visible_child],
+        )
+
+        objects = addon.exported_collection_objects([root])
+
+        self.assertEqual([obj.name for obj in objects], ["SM_Visible", "SM_VisibleChild"])
+
+    def test_exported_collection_objects_walks_nested_child_collections(self) -> None:
+        deep_mesh = FakeObject("SM_Deep")
+        mid = FakeCollection("Mid", children=[FakeCollection("Deep", [deep_mesh])])
+        root = FakeCollection("PREFAB_Root", children=[mid])
+
+        objects = addon.exported_collection_objects([root])
+
+        self.assertEqual([obj.name for obj in objects], ["SM_Deep"])
+
+    def test_exported_collection_objects_expands_collection_instance_containers(self) -> None:
+        instanced_mesh = FakeObject("SM_Instanced")
+        instanced_collection = FakeCollection("ContainerContents", [instanced_mesh])
+        container = FakeObject("EMPTY_Container", obj_type="EMPTY", instance_collection=instanced_collection)
+        root = FakeCollection("PREFAB_Root", [container])
+
+        objects = addon.exported_collection_objects([root])
+
+        self.assertEqual([obj.name for obj in objects], ["EMPTY_Container", "SM_Instanced"])
+
     def test_collection_only_export_needs_output_root_for_unsaved_files(self) -> None:
         collection = FakeCollection("PREFAB_Barrel", [FakeObject("SM_Body")])
         addon.bpy = types.SimpleNamespace(
@@ -273,6 +336,26 @@ class BlenderAddonTests(unittest.TestCase):
                 ],
             )
             convert.assert_called_once_with(image, outputs[0].output, "DXT5")
+
+    def test_packed_blender_image_is_written_as_texture_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "assets" / "source" / "hero" / "Hero.blend"
+            output_root = root / "assets" / "compiled"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"blend")
+            image = FakeImage("", b"packed-png", "Packed Albedo")
+            addon.bpy = types.SimpleNamespace(
+                data=types.SimpleNamespace(filepath=str(source)),
+                path=types.SimpleNamespace(abspath=lambda value: value),
+            )
+
+            packed_source = addon.image_source_path_for_export(image, source, output_root, {})
+
+            self.assertIsNotNone(packed_source)
+            assert packed_source is not None
+            self.assertEqual(packed_source.read_bytes(), b"packed-png")
+            self.assertEqual(packed_source.suffix, ".png")
 
     def test_material_images_only_uses_selected_collection_material_graphs(self) -> None:
         used_image = FakeImage("used.png")
@@ -350,7 +433,7 @@ class BlenderAddonTests(unittest.TestCase):
 
         assets = addon.object_component_assets(
             obj,
-            {"SM_Body": mesh},
+            {"SM_Body": [mesh]},
             {"HeroSkin": material},
             {},
             {},
@@ -360,7 +443,7 @@ class BlenderAddonTests(unittest.TestCase):
         self.assertEqual(
             assets,
             {
-                "mesh": "assets/compiled/hero/meshes/SM_Body.cmesh",
+                "mesh": ["assets/compiled/hero/meshes/SM_Body.cmesh"],
                 "materials": ["assets/compiled/hero/materials/HeroSkin.cmat"],
             },
         )

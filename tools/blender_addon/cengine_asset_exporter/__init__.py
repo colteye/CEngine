@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -9,7 +10,7 @@ from typing import Callable
 bl_info = {
     "name": "CEngine Asset Exporter",
     "author": "CEngine",
-    "version": (0, 1, 1),
+    "version": (0, 1, 5),
     "blender": (4, 5, 0),
     "location": "File > Export > CEngine Assets",
     "description": "Export selected Blender collections and textures to CEngine target assets.",
@@ -51,20 +52,26 @@ from ceassetlib.collection_export import (
     write_collection_asset,
 )
 from ceassetlib.formats import AssetType, asset_type_for_extension
-from ceassetlib.ids import fnv1a
+from ceassetlib.ids import fnv1a, guid_from_stable_name, guid_to_string
 from ceassetlib.paths import generic_path, make_project_paths, output_dir_for_source, stored_path
-from ceassetlib.pipeline import register_conversion
-from ceassetlib.state import load_registry, save_cache
+from ceassetlib.state import AssetRecord, load_registry, save_cache, save_registry
 from ceassetlib.texture import convert_texture_to_dds
 
 from .animations import write_animation_assets
-from .materials import write_material_assets
+from .materials import effective_material_names, write_material_assets
 from .meshes import write_mesh_assets
 from .skeletons import write_skeleton_assets
 
 
 SOURCE_TEXTURE_EXTENSIONS = {".png", ".tga"}
 DEFAULT_DDS_FORMAT = "DXT5"
+PACKED_IMAGE_EXTENSIONS = {
+    "PNG": ".png",
+    "TARGA": ".tga",
+    "TGA": ".tga",
+    "JPEG": ".jpg",
+    "JPG": ".jpg",
+}
 
 
 @dataclass(frozen=True)
@@ -81,6 +88,23 @@ class ExportResult:
 class TextureExport:
     source: Path
     output: Path
+
+
+def log(message: str) -> None:
+    print(f"[CEngine Asset Exporter] {message}", flush=True)
+
+
+def elapsed(start: float) -> str:
+    return f"{time.perf_counter() - start:.2f}s"
+
+
+def source_fingerprint(path: Path) -> int:
+    try:
+        stat = path.stat()
+        text = f"{generic_path(path.resolve())}|{stat.st_size}|{stat.st_mtime_ns}"
+    except OSError:
+        text = generic_path(path)
+    return fnv1a(text.encode("utf-8"))
 
 
 def require_bpy():
@@ -152,6 +176,57 @@ def image_source_path(image) -> Path | None:
     return path
 
 
+def packed_image_extension(image: object) -> str:
+    filepath = str(getattr(image, "filepath", "") or "")
+    suffix = Path(filepath).suffix.lower()
+    if suffix in SOURCE_TEXTURE_EXTENSIONS:
+        return suffix
+    name_suffix = Path(str(getattr(image, "name", "") or "")).suffix.lower()
+    if name_suffix in SOURCE_TEXTURE_EXTENSIONS:
+        return name_suffix
+    file_format = str(getattr(image, "file_format", "") or "").upper()
+    return PACKED_IMAGE_EXTENSIONS.get(file_format, ".png")
+
+
+def image_source_path_for_export(
+    image: object,
+    blend_source: Path,
+    output_root: Path,
+    packed_sources: dict[int, Path],
+    logger: Callable[[str], None] | None = None,
+) -> Path | None:
+    source = image_source_path(image)
+    if source is not None:
+        return source
+
+    packed_file = getattr(image, "packed_file", None)
+    data = getattr(packed_file, "data", None)
+    if data is None:
+        return None
+
+    key = id(image)
+    if key in packed_sources:
+        return packed_sources[key]
+
+    image_name = clean_asset_filename(str(getattr(image, "name", "") or "packed_image"))
+    source_dir = output_dir_for_source(blend_source, output_root) / "_packed_texture_sources"
+    packed_source = source_dir / f"{image_name}{packed_image_extension(image)}"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    payload = bytes(data)
+    if not packed_source.exists() or packed_source.read_bytes() != payload:
+        packed_source.write_bytes(payload)
+    packed_sources[key] = packed_source
+    if logger is not None:
+        logger(f"Texture source: unpacked bundled Blender image {getattr(image, 'name', '<unnamed>')} -> {packed_source}")
+    return packed_source
+
+
+def clean_asset_filename(name: str) -> str:
+    cleaned = "".join(character if character.isalnum() or character in "._-" else "_" for character in name)
+    cleaned = cleaned.strip("._-")
+    return cleaned or "asset"
+
+
 def texture_output_path(blend_source: Path, output_root: Path, image_source: Path) -> Path:
     return output_dir_for_source(blend_source, output_root) / "textures" / image_source.with_suffix(".dds").name
 
@@ -164,14 +239,25 @@ def asset_path_relative_to(root: Path, output: Path) -> str:
     return generic_path(stored_path(root, output))
 
 
-def material_images(objects: list[object]) -> list[object]:
+def fallback_texture_path(project_root: Path) -> Path | None:
+    fallback = project_root / "assets" / "demo" / "missing" / "missing.DDS"
+    return fallback if fallback.exists() else None
+
+
+def material_images(objects: list[object], logger: Callable[[str], None] | None = None) -> list[object]:
+    start = time.perf_counter()
     images: list[object] = []
     seen: set[int] = set()
+    material_count = 0
+    link_count = 0
     for obj in objects:
         for slot in getattr(obj, "material_slots", ()):
             material = getattr(slot, "material", None)
+            if material is not None:
+                material_count += 1
             node_tree = getattr(material, "node_tree", None) if material is not None else None
             for link in getattr(node_tree, "links", ()) if node_tree is not None else ():
+                link_count += 1
                 from_node = getattr(link, "from_node", None)
                 if getattr(from_node, "type", "") != "TEX_IMAGE":
                     continue
@@ -183,6 +269,11 @@ def material_images(objects: list[object]) -> list[object]:
                     continue
                 seen.add(key)
                 images.append(image)
+    if logger is not None:
+        logger(
+            f"Material image scan: {len(images)} image(s) from {material_count} material slot(s) "
+            f"and {link_count} link(s) in {elapsed(start)}"
+        )
     return images
 
 
@@ -191,36 +282,195 @@ def export_textures(
     output_root: Path,
     dds_format: str,
     images: list[object] | None = None,
+    logger: Callable[[str], None] | None = None,
+    image_source_resolver: Callable[[object], Path | None] | None = None,
 ) -> list[TextureExport]:
     blender = require_bpy()
+    start = time.perf_counter()
     outputs: list[TextureExport] = []
     seen: set[Path] = set()
     texture_images = images if images is not None else list(getattr(blender.data, "images", ()))
+    if logger is not None:
+        logger(f"Texture export: checking {len(texture_images)} candidate image datablock(s)")
+    resolver = image_source_resolver or image_source_path
     for image in texture_images:
-        source = image_source_path(image)
-        if source is None or source in seen:
+        image_name = str(getattr(image, "name", "") or getattr(image, "filepath", "") or "<unnamed image>")
+        source = resolver(image)
+        if source is None:
+            if logger is not None:
+                logger(f"Texture skipped: {image_name} has no supported source file")
+            continue
+        if source in seen:
+            if logger is not None:
+                logger(f"Texture skipped: {source.name} already converted")
             continue
         seen.add(source)
         output = texture_output_path(blend_source, output_root, source)
+        texture_start = time.perf_counter()
+        if logger is not None:
+            logger(f"Texture {len(outputs) + 1}: converting {source} -> {output}")
         convert_texture_to_dds(source, output, dds_format)
+        if logger is not None:
+            logger(f"Texture {len(outputs) + 1}: wrote {output.name} in {elapsed(texture_start)}")
         outputs.append(TextureExport(source, output))
+    if logger is not None:
+        logger(f"Texture export complete: {len(outputs)} texture(s) in {elapsed(start)}")
     return outputs
 
 
-def exported_collection_objects(collections) -> list[object]:
+def bool_attr(value: object, name: str) -> bool:
+    return bool(getattr(value, name, False))
+
+
+def call_bool_method(value: object, name: str, default: bool = False) -> bool:
+    method = getattr(value, name, None)
+    if method is None:
+        return default
+    try:
+        return bool(method())
+    except TypeError:
+        return default
+    except RuntimeError:
+        return default
+
+
+def collection_is_exportable(collection: object) -> bool:
+    return not (
+        bool_attr(collection, "hide_render")
+        or bool_attr(collection, "hide_viewport")
+        or call_bool_method(collection, "hide_get")
+    )
+
+
+def object_is_exportable(obj: object) -> bool:
+    return not (
+        bool_attr(obj, "hide_render")
+        or bool_attr(obj, "hide_viewport")
+        or call_bool_method(obj, "hide_get")
+    )
+
+
+def object_instance_collection(obj: object) -> object | None:
+    if str(getattr(obj, "instance_type", "") or "") == "COLLECTION":
+        collection = getattr(obj, "instance_collection", None)
+        if collection is not None:
+            return collection
+    return getattr(obj, "dupli_group", None)
+
+
+def collect_object_tree(
+    obj: object,
+    objects: list[object],
+    seen_objects: set[int],
+    seen_collections: set[int],
+    logger: Callable[[str], None] | None,
+) -> None:
+    key = id(obj)
+    if key not in seen_objects:
+        seen_objects.add(key)
+        objects.append(obj)
+
+    instance_collection = object_instance_collection(obj)
+    if instance_collection is not None:
+        if logger is not None:
+            logger(
+                f"Collection walk: expanding collection instance {getattr(obj, 'name', '<unnamed>')} "
+                f"-> {getattr(instance_collection, 'name', '<unnamed collection>')}"
+            )
+        collect_collection_tree(instance_collection, objects, seen_objects, seen_collections, logger)
+
+    for child in getattr(obj, "children", ()):
+        if not object_is_exportable(child):
+            continue
+        collect_object_tree(child, objects, seen_objects, seen_collections, logger)
+
+
+def collect_collection_tree(
+    collection: object,
+    objects: list[object],
+    seen_objects: set[int],
+    seen_collections: set[int],
+    logger: Callable[[str], None] | None,
+) -> None:
+    key = id(collection)
+    if key in seen_collections:
+        return
+    seen_collections.add(key)
+
+    if not collection_is_exportable(collection):
+        if logger is not None:
+            logger(f"Collection walk: skipped hidden/unrendered collection {getattr(collection, 'name', '<unnamed>')}")
+        return
+
+    direct_objects = list(getattr(collection, "objects", ()))
+    child_collections = list(getattr(collection, "children", ()))
+    if logger is not None:
+        logger(
+            f"Collection walk: visiting {getattr(collection, 'name', '<unnamed>')} "
+            f"with {len(direct_objects)} direct object(s), {len(child_collections)} child collection(s)"
+        )
+
+    for obj in direct_objects:
+        if not object_is_exportable(obj):
+            continue
+        collect_object_tree(obj, objects, seen_objects, seen_collections, logger)
+
+    for child in child_collections:
+        collect_collection_tree(child, objects, seen_objects, seen_collections, logger)
+
+
+def collection_export_objects(
+    collection: object,
+    seen_collections: set[int] | None = None,
+    logger: Callable[[str], None] | None = None,
+) -> list[object]:
+    objects: list[object] = []
+    collect_collection_tree(collection, objects, set(), seen_collections or set(), logger)
+    return objects
+
+
+def exported_collection_objects(collections, logger: Callable[[str], None] | None = None) -> list[object]:
+    start = time.perf_counter()
     objects: list[object] = []
     seen: set[int] = set()
+    collection_names: list[str] = []
+    skipped_collections = 0
+    skipped_objects = 0
     for collection in collections:
-        collection_objects = getattr(collection, "all_objects", None)
-        if collection_objects is None:
-            collection_objects = getattr(collection, "objects", ())
+        collection_names.append(str(getattr(collection, "name", "<unnamed collection>")))
+        if not collection_is_exportable(collection):
+            skipped_collections += 1
+            continue
+        collection_objects = collection_export_objects(collection, logger=logger)
         for obj in collection_objects:
+            if not object_is_exportable(obj):
+                skipped_objects += 1
+                continue
             key = id(obj)
             if key in seen:
                 continue
             seen.add(key)
             objects.append(obj)
-    return sorted(objects, key=lambda obj: obj.name)
+    result = sorted(objects, key=lambda obj: obj.name)
+    if logger is not None:
+        counts: dict[str, int] = {}
+        for obj in result:
+            obj_type = str(getattr(obj, "type", "UNKNOWN") or "UNKNOWN")
+            counts[obj_type] = counts.get(obj_type, 0) + 1
+        count_text = ", ".join(f"{key}={value}" for key, value in sorted(counts.items())) or "none"
+        preview = ", ".join(
+            f"{getattr(obj, 'name', '<unnamed>')}:{getattr(obj, 'type', 'UNKNOWN')}"
+            for obj in result[:40]
+        )
+        logger(
+            f"Collection walk: {collection_names} -> {len(result)} object(s) "
+            f"({count_text}), skipped hidden/unrendered collections={skipped_collections}, "
+            f"objects={skipped_objects} in {elapsed(start)}"
+        )
+        logger(f"Collection walk objects: {preview if preview else '<none>'}")
+        if len(result) > 40:
+            logger(f"Collection walk objects: ... {len(result) - 40} more object(s)")
+    return result
 
 
 def selected_export_collection(include_plain: bool = False) -> object | None:
@@ -247,26 +497,21 @@ def animation_fps() -> float:
 
 
 def object_material_names(obj: object) -> list[str]:
-    names: list[str] = []
-    for slot in getattr(obj, "material_slots", ()):
-        material = getattr(slot, "material", None)
-        if material is not None:
-            names.append(material.name)
-    return names
+    return effective_material_names(obj)
 
 
 def object_component_assets(
     obj: object,
-    mesh_outputs: dict[str, Path],
+    mesh_outputs: dict[str, list[Path]],
     material_outputs: dict[str, Path],
     skeleton_outputs: dict[str, Path],
     animation_outputs: dict[str, list[Path]],
     asset_path: Callable[[Path], str],
 ) -> dict[str, object]:
     assets: dict[str, object] = {}
-    mesh = mesh_outputs.get(obj.name)
-    if mesh is not None:
-        assets["mesh"] = asset_path(mesh)
+    meshes = mesh_outputs.get(obj.name, [])
+    if meshes:
+        assets["mesh"] = [asset_path(mesh) for mesh in meshes]
 
     materials = [
         asset_path(material_outputs[name])
@@ -286,17 +531,44 @@ def object_component_assets(
     return assets
 
 
-def register_outputs(project_root: Path, source: Path, outputs: list[Path]) -> None:
+def register_outputs(
+    project_root: Path,
+    source: Path,
+    outputs: list[Path],
+    logger: Callable[[str], None] | None = None,
+    source_hash: int | None = None,
+) -> None:
+    if not outputs:
+        return
+    start = time.perf_counter()
     paths = make_project_paths(project_root)
+    records = load_registry(paths)
+    record_source_hash = source_hash if source_hash is not None else source_fingerprint(source)
     for output in outputs:
         asset_type = asset_type_for_extension(output.suffix)
         if asset_type == AssetType.UNKNOWN:
             raise RuntimeError(f"unsupported CEngine output extension: {output.suffix}")
-        register_conversion(paths, source, asset_type, output)
-    save_cache(paths, load_registry(paths))
+        stored_source = stored_path(paths.root, source)
+        stored_output = stored_path(paths.root, output)
+        guid = guid_from_stable_name(generic_path(stored_output))
+        record = AssetRecord(guid, stored_source, stored_output, asset_type, record_source_hash)
+        for index, existing in enumerate(records):
+            if existing.guid == guid or existing.output == stored_output:
+                records[index] = record
+                break
+        else:
+            records.append(record)
+        if logger is not None:
+            logger(f"Registry queued: {generic_path(stored_output)} ({asset_type.name.lower()}) {guid_to_string(guid)}")
+    save_registry(paths, records)
+    save_cache(paths, records)
+    if logger is not None:
+        logger(f"Registry/cache updated for {len(outputs)} output(s) in {elapsed(start)}")
 
 
 def export_selected_collection_assets(output_root: Path, source: Path | None = None) -> ExportResult:
+    export_start = time.perf_counter()
+    log("Collection-only export started")
     collection = selected_export_collection(include_plain=True)
     if collection is None:
         raise RuntimeError("select a collection before exporting CEngine collection assets")
@@ -309,7 +581,11 @@ def export_selected_collection_assets(output_root: Path, source: Path | None = N
     output_dir = output_dir_for_source(source, root) if source is not None else root
     output = output_dir / f"{spec.asset_name}{RUNTIME_EXTENSIONS[spec.asset_type]}"
     payload_source = Path(source.name) if source is not None else Path(f"unsaved:{spec.collection_name}")
-    payload = collection_payload(payload_source, spec, exported_collection_objects([collection]), bundle_dir=output.parent)
+    log(f"Collection-only root: {collection.name} -> {output}")
+    objects = exported_collection_objects([collection], log)
+    payload_start = time.perf_counter()
+    payload = collection_payload(payload_source, spec, objects, bundle_dir=output.parent)
+    log(f"Collection-only payload built: {len(payload)} byte(s) in {elapsed(payload_start)}")
     stable_name = generic_path(output)
     desc = make_asset_desc(
         AssetType.ASSET,
@@ -320,10 +596,13 @@ def export_selected_collection_assets(output_root: Path, source: Path | None = N
     write_binary_asset(output, desc)
     outputs.append(output)
 
+    log(f"Collection-only export complete: {len(outputs)} .casset in {elapsed(export_start)}")
     return ExportResult(len(outputs), 0, 0, 0, 0, 0)
 
 
 def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5") -> ExportResult:
+    export_start = time.perf_counter()
+    log("Export started")
     blender = require_bpy()
     source = maybe_blend_source_path()
     if source is None:
@@ -336,24 +615,44 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         raise RuntimeError("choose an Output Root or save the Blender file before exporting CEngine assets")
     project_root = project_root_for_output_root(root) or project_root_for(source)
     asset_path = lambda output: asset_path_for_project(project_root, output)
+    log(f"Source blend: {source}")
+    log(f"Output root: {root}")
+    log(f"Project root: {project_root}")
+    source_hash = source_fingerprint(source)
+    log(f"Source fingerprint: {source_hash:016x} (path/size/mtime, no full .blend hash)")
     collection = selected_export_collection(include_plain=True)
     if collection is None:
         raise RuntimeError("select the top-level collection to export as a CEngine asset")
-    objects = exported_collection_objects([collection])
+    log(f"Selected asset root collection: {collection.name}")
+    objects = exported_collection_objects([collection], log)
 
-    texture_outputs = export_textures(source, root, dds_format, material_images(objects))
+    packed_sources: dict[int, Path] = {}
+    image_resolver = lambda image: image_source_path_for_export(image, source, root, packed_sources, log)
+
+    texture_outputs = export_textures(source, root, dds_format, material_images(objects, log), log, image_resolver)
     texture_outputs_by_source = {texture.source: texture.output for texture in texture_outputs}
+    phase_start = time.perf_counter()
+    log("Material export started")
     material_outputs = write_material_assets(
         source,
         root,
         objects,
-        image_source_path,
+        image_resolver,
         texture_outputs_by_source.get,
         asset_path,
+        log,
+        source_hash,
+        fallback_texture_path(project_root),
     )
+    log(f"Material export complete: {len(material_outputs)} .cmat in {elapsed(phase_start)}")
     material_outputs_by_name = {material.source.name: material.output for material in material_outputs}
-    skeleton_outputs = write_skeleton_assets(source, root, objects, asset_path)
+    phase_start = time.perf_counter()
+    log("Skeleton export started")
+    skeleton_outputs = write_skeleton_assets(source, root, objects, asset_path, log, source_hash)
+    log(f"Skeleton export complete: {len(skeleton_outputs)} .cskel in {elapsed(phase_start)}")
     skeleton_outputs_by_name = {skeleton.source.name: skeleton.output for skeleton in skeleton_outputs}
+    phase_start = time.perf_counter()
+    log("Animation export started")
     animation_outputs = write_animation_assets(
         source,
         root,
@@ -361,7 +660,12 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         animation_fps(),
         skeleton_outputs_by_name.get,
         asset_path,
+        log,
+        source_hash,
     )
+    log(f"Animation export complete: {len(animation_outputs)} .canim in {elapsed(phase_start)}")
+    phase_start = time.perf_counter()
+    log("Mesh export started")
     mesh_outputs = write_mesh_assets(
         source,
         root,
@@ -369,8 +673,13 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         material_outputs_by_name.get,
         skeleton_outputs_by_name.get,
         asset_path,
+        log,
+        source_hash,
     )
-    mesh_outputs_by_name = {mesh.source.name: mesh.output for mesh in mesh_outputs}
+    log(f"Mesh export complete: {len(mesh_outputs)} .cmesh in {elapsed(phase_start)}")
+    mesh_outputs_by_name: dict[str, list[Path]] = {}
+    for mesh in mesh_outputs:
+        mesh_outputs_by_name.setdefault(mesh.source.name, []).append(mesh.output)
     animation_outputs_by_armature: dict[str, list[Path]] = {}
     for animation in animation_outputs:
         animation_outputs_by_armature.setdefault(animation.armature.name, []).append(animation.output)
@@ -378,6 +687,8 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
     collection_outputs: list[Path] = []
     collection_output_dir = output_dir_for_source(source, root)
     casset_asset_path = lambda output: asset_path_relative_to(collection_output_dir, output)
+    phase_start = time.perf_counter()
+    log("Root .casset export started")
     output = write_collection_asset(
         source,
         root,
@@ -394,19 +705,35 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         AssetType.PREFAB,
         source.stem,
         Path(source.name),
+        log,
+        objects,
+        source_hash,
     )
     if output is not None:
         collection_outputs.append(output)
+    log(f"Root .casset export complete: {len(collection_outputs)} file(s) in {elapsed(phase_start)}")
 
-    register_outputs(project_root, source, collection_outputs)
-    register_outputs(project_root, source, [material.output for material in material_outputs])
-    register_outputs(project_root, source, [mesh.output for mesh in mesh_outputs])
-    register_outputs(project_root, source, [skeleton.output for skeleton in skeleton_outputs])
-    register_outputs(project_root, source, [animation.output for animation in animation_outputs])
+    register_outputs(
+        project_root,
+        source,
+        collection_outputs
+        + [material.output for material in material_outputs]
+        + [mesh.output for mesh in mesh_outputs]
+        + [skeleton.output for skeleton in skeleton_outputs]
+        + [animation.output for animation in animation_outputs],
+        log,
+        source_hash,
+    )
     for texture_output in texture_outputs:
-        register_outputs(project_root, texture_output.source, [texture_output.output])
+        register_outputs(
+            project_root,
+            texture_output.source,
+            [texture_output.output],
+            log,
+            source_fingerprint(texture_output.source),
+        )
 
-    return ExportResult(
+    result = ExportResult(
         len(collection_outputs),
         len(texture_outputs),
         len(material_outputs),
@@ -414,6 +741,8 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         len(mesh_outputs),
         len(animation_outputs),
     )
+    log(f"Export finished: {export_summary(result, root)} in {elapsed(export_start)}")
+    return result
 
 
 def run_export(output_root: Path | None, dds_format: str = "DXT5", collection_only: bool = False) -> ExportResult:
@@ -468,6 +797,7 @@ if bpy is not None:
 
         def invoke(self, context, event):
             del event
+            self.collection_only = False
             if not self.output_root:
                 default_root = default_output_root_for_source(maybe_blend_source_path())
                 if default_root is not None:

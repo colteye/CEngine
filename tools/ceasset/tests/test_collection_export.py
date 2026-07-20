@@ -14,6 +14,7 @@ from ceassetlib.collection_export import (
     CASSET_HEADER,
     CASSET_MAGIC,
     CASSET_OBJECT,
+    blender_to_engine_matrix_rows,
     bundle_relative_path,
     collection_export_spec,
     collection_payload,
@@ -112,9 +113,25 @@ class CollectionExportTests(unittest.TestCase):
         self.assertEqual(strings[first_object[0] : first_object[0] + first_object[1]], b"ARM_Hero")
         self.assertEqual(first_object[2], 3)
         self.assertEqual(first_object[11], 10.0)
+        self.assertEqual(first_object[15], 30.0)
+        self.assertEqual(first_object[19], -20.0)
         self.assertEqual(strings[third_object[4] : third_object[4] + third_object[5]], b"ARM_Hero")
         self.assertEqual(component[0], 1)
         self.assertEqual(strings[component[1] : component[1] + component[2]], b"compiled/hero/meshes/SM_Body.cmesh")
+
+    def test_blender_to_engine_matrix_rows_maps_z_up_to_y_up(self) -> None:
+        rows = blender_to_engine_matrix_rows(
+            [
+                [1.0, 0.0, 0.0, 10.0],
+                [0.0, 1.0, 0.0, 20.0],
+                [0.0, 0.0, 1.0, 30.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+
+        self.assertEqual(rows[3], 10.0)
+        self.assertEqual(rows[7], 30.0)
+        self.assertEqual(rows[11], -20.0)
 
     def test_bundle_relative_path_removes_casset_directory_prefix(self) -> None:
         bundle = Path("/repo/assets/compiled/barrel")
