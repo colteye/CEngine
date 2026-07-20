@@ -9,6 +9,7 @@ option(CENGINE_FETCH_GLFW_X11 "Build the X11 backend when GLFW is fetched on Lin
 option(CENGINE_FETCH_GLFW_WAYLAND "Build the Wayland backend when GLFW is fetched on Linux." OFF)
 option(CENGINE_ENABLE_VULKAN "Build the Vulkan render backend when the Vulkan SDK is available." OFF)
 option(CENGINE_ENABLE_JOLT_PHYSICS "Build the Jolt Physics backend." ON)
+option(CENGINE_BUILD_TESTS "Build lightweight CEngine test executables." ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -125,33 +126,77 @@ endif()
 
 if(CENGINE_ENABLE_OPENGL)
     set(CENGINE_OPENGL_SHADER_SOURCES
-        src/opengl/shaders/deferred_lighting.frag
-        src/opengl/shaders/depth_only.vert
-        src/opengl/shaders/depth_only.frag
-        src/opengl/shaders/fullscreen_blit.frag
-        src/opengl/shaders/pbr_geometry_pass.vert
-        src/opengl/shaders/pbr_geometry_pass.frag
-        src/opengl/shaders/point_shadow_depth.vert
-        src/opengl/shaders/point_shadow_depth.frag
-        src/opengl/shaders/pbr_standard.vert
-        src/opengl/shaders/pbr_standard.frag
-        src/opengl/shaders/ssao.vert
-        src/opengl/shaders/ssao.frag
+        src/renderer/opengl/glsl/deferred_lighting.frag
+        src/renderer/opengl/glsl/depth_only.vert
+        src/renderer/opengl/glsl/depth_only.frag
+        src/renderer/opengl/glsl/fullscreen_blit.frag
+        src/renderer/opengl/glsl/pbr_geometry_pass.vert
+        src/renderer/opengl/glsl/pbr_geometry_pass.frag
+        src/renderer/opengl/glsl/point_shadow_depth.vert
+        src/renderer/opengl/glsl/point_shadow_depth.frag
+        src/renderer/opengl/glsl/pbr_standard.vert
+        src/renderer/opengl/glsl/pbr_standard.frag
+        src/renderer/opengl/glsl/ssao.vert
+        src/renderer/opengl/glsl/ssao.frag
     )
+endif()
+
+set(CENGINE_ASSET_SOURCES
+    src/assets/asset_format.cpp
+    src/assets/asset_io.cpp
+    src/assets/casset_loader.cpp
+    src/assets/material_loader.cpp
+    src/assets/mesh_loader.cpp
+    src/assets/skeleton_loader.cpp
+)
+
+add_library(CEngineAssets STATIC ${CENGINE_ASSET_SOURCES})
+
+target_include_directories(CEngineAssets
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+
+target_include_directories(CEngineAssets
+    SYSTEM PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glm"
+)
+
+if(MSVC)
+    target_compile_options(CEngineAssets PRIVATE /W4 /permissive- /Zc:__cplusplus)
+else()
+    target_compile_options(CEngineAssets PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+if(CENGINE_BUILD_TESTS)
+    add_executable(CEngineAssetTests
+        src/renderer/material.cpp
+        src/renderer/mesh.cpp
+        src/renderer/renderable.cpp
+        tests/assets/asset_runtime_tests.cpp
+    )
+    target_link_libraries(CEngineAssetTests PRIVATE CEngineAssets)
+    target_include_directories(CEngineAssetTests
+        SYSTEM PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glm"
+    )
+    if(MSVC)
+        target_compile_options(CEngineAssetTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+    else()
+        target_compile_options(CEngineAssetTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
 endif()
 
 set(CENGINE_CORE_SOURCES
     third_party/nv_dds/src/nv_dds.cpp
     src/camera.cpp
     src/controls.cpp
-    src/light.cpp
-    src/material.cpp
-    src/mesh.cpp
-    src/model.cpp
-    src/model_importer.cpp
+    src/renderer/light.cpp
+    src/renderer/material.cpp
+    src/renderer/mesh.cpp
     src/physics/physics_system.cpp
-    src/renderable.cpp
-    src/render_system.cpp
+    src/renderer/renderable.cpp
+    src/renderer/render_system.cpp
 )
 
 if(CENGINE_ENABLE_JOLT_PHYSICS)
@@ -163,18 +208,18 @@ endif()
 if(CENGINE_ENABLE_OPENGL)
     list(APPEND CENGINE_CORE_SOURCES
         third_party/glad/src/glad.c
-        src/opengl/opengl_render_backend.cpp
-        src/opengl/opengl_shadow_system.cpp
-        src/opengl/opengl_texture.cpp
-        src/opengl/shaders/deferred_lighting.cpp
-        src/opengl/shaders/depth_only.cpp
-        src/opengl/shaders/fullscreen_blit.cpp
-        src/opengl/shaders/lighting_bindings.cpp
-        src/opengl/shaders/pbr_geometry_pass.cpp
-        src/opengl/shaders/point_shadow_depth.cpp
-        src/opengl/shaders/pbr_standard.cpp
-        src/opengl/shaders/shader.cpp
-        src/opengl/shaders/ssao.cpp
+        src/renderer/opengl/opengl_render_backend.cpp
+        src/renderer/opengl/opengl_shadow_system.cpp
+        src/renderer/opengl/opengl_texture.cpp
+        src/renderer/opengl/shaders/deferred_lighting.cpp
+        src/renderer/opengl/shaders/depth_only.cpp
+        src/renderer/opengl/shaders/fullscreen_blit.cpp
+        src/renderer/opengl/shaders/lighting_bindings.cpp
+        src/renderer/opengl/shaders/pbr_geometry_pass.cpp
+        src/renderer/opengl/shaders/point_shadow_depth.cpp
+        src/renderer/opengl/shaders/pbr_standard.cpp
+        src/renderer/opengl/shaders/shader.cpp
+        src/renderer/opengl/shaders/ssao.cpp
     )
 endif()
 
@@ -183,7 +228,7 @@ if(CENGINE_ENABLE_VULKAN)
 
     if(Vulkan_FOUND)
         list(APPEND CENGINE_CORE_SOURCES
-            src/vulkan/vulkan_render_backend.cpp
+            src/renderer/vulkan/vulkan_render_backend.cpp
         )
     else()
         message(WARNING "CENGINE_ENABLE_VULKAN is ON, but Vulkan was not found. Building without the Vulkan backend.")
@@ -195,7 +240,6 @@ add_library(CEngineCore STATIC ${CENGINE_CORE_SOURCES})
 target_include_directories(CEngineCore
     SYSTEM PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glm"
-        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlohmann/include"
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nv_dds/include"
 )
 
@@ -212,6 +256,7 @@ target_include_directories(CEngineCore
 )
 
 target_link_libraries(CEngineCore PUBLIC ${CEngine_GLFW_TARGET})
+target_link_libraries(CEngineCore PUBLIC CEngineAssets)
 target_link_libraries(CEngineCore PRIVATE ${CMAKE_DL_LIBS})
 
 if(CENGINE_ENABLE_JOLT_PHYSICS)
@@ -261,7 +306,6 @@ if(MSVC)
 else()
     target_compile_options(CEngineCore PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-
 
 if(CENGINE_BUILD_VIEWER)
     add_executable(CEngine

@@ -1,9 +1,12 @@
 #include <iostream>
 #include <cmath>
 #include <cstring>
+#include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -15,12 +18,13 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "model.h"
-#include "model_importer.h"
+#include "assets/casset_loader.h"
+#include "assets/material_loader.h"
+#include "assets/mesh_loader.h"
 #include "controls.h"
 #include "camera.h"
 #include "physics/physics_system.h"
-#include "render_system.h"
+#include "renderer/render_system.h"
 
 #if defined(CENGINE_ENABLE_JOLT_PHYSICS)
 #include "physics/jolt/jolt_physics_backend.h"
@@ -29,12 +33,45 @@
 #include "glm/gtx/string_cast.hpp"
 #include "main.h"
 
+namespace Renderer = CEngine::Renderer;
+
 namespace {
 struct SimulatedModel
 {
 	PhysicsBodyHandle body = kInvalidPhysicsBodyHandle;
-	std::vector<RenderableHandle> renderables;
+	std::vector<Renderer::RenderableHandle> renderables;
 	glm::mat4 body_to_render = glm::mat4(1.0f);
+};
+
+struct DemoModel
+{
+	const Renderer::Mesh* mesh = nullptr;
+	Renderer::Material* material = nullptr;
+
+	std::vector<Renderer::RenderableHandle> RegisterRenderables(const glm::mat4& transform,
+		uint32_t flags = Renderer::RenderableFlagStatic | Renderer::RenderableFlagCastsShadow | Renderer::RenderableFlagReceivesShadow) const
+	{
+		std::vector<Renderer::RenderableHandle> handles;
+		if (mesh == nullptr || material == nullptr)
+		{
+			return handles;
+		}
+
+		for (const auto& material_mesh_data : mesh->GetMaterialMeshData())
+		{
+			Renderer::Renderable renderable;
+			renderable.mesh = mesh;
+			renderable.material = material_mesh_data.first != nullptr ? material_mesh_data.first : material;
+			renderable.transform = transform;
+			renderable.flags = flags;
+			renderable.local_bounds = material_mesh_data.second.local_bounds.valid ?
+				material_mesh_data.second.local_bounds : Renderer::CalculateBounds(material_mesh_data.second.vertices);
+			renderable.world_bounds = Renderer::TransformBounds(renderable.local_bounds, transform);
+			handles.push_back(Renderer::RenderSystem::RegisterRenderable(renderable));
+		}
+
+		return handles;
+	}
 };
 
 glm::mat4 MakeTransform(const glm::vec3& position, float yaw_degrees, float scale)
@@ -49,9 +86,9 @@ glm::quat MakeYawRotation(float yaw_degrees)
 	return glm::angleAxis(glm::radians(yaw_degrees), glm::vec3(0.0f, 1.0f, 0.0f));
 }
 
-MeshData MakeFloorMeshData(float half_extent)
+Renderer::MeshData MakeFloorMeshData(float half_extent)
 {
-	MeshData data;
+	Renderer::MeshData data;
 	data.vertices = {
 		glm::vec3(-half_extent, 0.0f, -half_extent),
 		glm::vec3(half_extent, 0.0f, half_extent),
@@ -73,43 +110,122 @@ MeshData MakeFloorMeshData(float half_extent)
 	return data;
 }
 
-RenderBackendType ParseBackend(int argc, char** argv)
+std::string ResolveBundlePath(const std::filesystem::path& bundle_path, std::string_view component_path)
+{
+	const std::filesystem::path path(component_path);
+	if (path.is_absolute())
+	{
+		return path.generic_string();
+	}
+	return (bundle_path.parent_path() / path).lexically_normal().generic_string();
+}
+
+bool FindDemoAssetPaths(const std::filesystem::path& casset_path, std::string& mesh_path, std::string& material_path)
+{
+	std::string error;
+	CEngine::Assets::CAsset asset;
+	if (!asset.Load(casset_path, &error))
+	{
+		std::cerr << "Failed to load root asset " << casset_path << ": " << error << '\n';
+		return false;
+	}
+
+	for (std::uint32_t object_index = 0; object_index < asset.ObjectCount(); ++object_index)
+	{
+		CEngine::Assets::CAssetObject object;
+		if (!asset.Object(object_index, object))
+		{
+			continue;
+		}
+
+		for (std::uint32_t component_index = 0; component_index < object.component_count; ++component_index)
+		{
+			CEngine::Assets::CAssetComponent component;
+			if (!asset.Component(object, component_index, component))
+			{
+				continue;
+			}
+
+			if (component.kind == CEngine::Assets::CAssetComponentKind::Mesh && mesh_path.empty())
+			{
+				mesh_path = ResolveBundlePath(casset_path, component.path);
+			}
+			else if (component.kind == CEngine::Assets::CAssetComponentKind::Material && material_path.empty())
+			{
+				material_path = ResolveBundlePath(casset_path, component.path);
+			}
+		}
+
+		if (!mesh_path.empty() && !material_path.empty())
+		{
+			return true;
+		}
+	}
+
+	std::cerr << "Root asset " << casset_path << " does not contain both mesh and material components.\n";
+	return false;
+}
+
+bool LoadDemoAsset(const std::filesystem::path& casset_path, Renderer::Material& material, Renderer::Mesh& mesh)
+{
+	std::string mesh_path;
+	std::string material_path;
+	if (!FindDemoAssetPaths(casset_path, mesh_path, material_path))
+	{
+		return false;
+	}
+
+	std::string error;
+	if (!CEngine::Assets::LoadMaterialAsset(material_path, material, &error))
+	{
+		std::cerr << "Failed to load target material asset " << material_path << ": " << error << '\n';
+		return false;
+	}
+	if (!CEngine::Assets::LoadMeshAsset(mesh_path, { &material }, mesh, &error))
+	{
+		std::cerr << "Failed to load target mesh asset " << mesh_path << ": " << error << '\n';
+		return false;
+	}
+	return true;
+}
+
+Renderer::RenderBackendType ParseBackend(int argc, char** argv)
 {
 	for (int index = 1; index < argc; ++index)
 	{
 		if (std::strcmp(argv[index], "--vulkan") == 0)
 		{
-			return RenderBackendType::Vulkan;
+			return Renderer::RenderBackendType::Vulkan;
 		}
 		if (std::strcmp(argv[index], "--opengl") == 0)
 		{
-			return RenderBackendType::OpenGL;
+			return Renderer::RenderBackendType::OpenGL;
 		}
 		if (std::strcmp(argv[index], "--backend") == 0 && index + 1 < argc)
 		{
 			++index;
 			if (std::strcmp(argv[index], "vulkan") == 0)
 			{
-				return RenderBackendType::Vulkan;
+				return Renderer::RenderBackendType::Vulkan;
 			}
 			if (std::strcmp(argv[index], "opengl") == 0)
 			{
-				return RenderBackendType::OpenGL;
+				return Renderer::RenderBackendType::OpenGL;
 			}
 		}
 	}
 
 #if defined(CENGINE_ENABLE_OPENGL)
-	return RenderBackendType::OpenGL;
+	return Renderer::RenderBackendType::OpenGL;
 #elif defined(CENGINE_ENABLE_VULKAN)
-	return RenderBackendType::Vulkan;
+	return Renderer::RenderBackendType::Vulkan;
 #else
-	return RenderBackendType::OpenGL;
+	return Renderer::RenderBackendType::OpenGL;
 #endif
 }
 
 #if defined(CENGINE_ENABLE_JOLT_PHYSICS)
-SimulatedModel CreateDynamicBarrel(PhysicsSystem& physics, const Model& model,
+SimulatedModel CreateDynamicBarrel(PhysicsSystem& physics, const DemoModel& model,
 	const glm::vec3& floor_position, float yaw_degrees, const glm::vec3& initial_velocity)
 {
 	constexpr float kVisualScale = 1.0f;
@@ -132,7 +248,7 @@ SimulatedModel CreateDynamicBarrel(PhysicsSystem& physics, const Model& model,
 	simulated.body = physics.CreateBody(body_desc);
 	simulated.renderables = model.RegisterRenderables(
 		MakeTransform(floor_position, yaw_degrees, kVisualScale),
-		RenderableFlagDynamic | RenderableFlagCastsShadow | RenderableFlagReceivesShadow);
+		Renderer::RenderableFlagDynamic | Renderer::RenderableFlagCastsShadow | Renderer::RenderableFlagReceivesShadow);
 	simulated.body_to_render = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -kBodyHalfHeight, 0.0f)) *
 		glm::scale(glm::mat4(1.0f), glm::vec3(kVisualScale));
 	return simulated;
@@ -140,7 +256,7 @@ SimulatedModel CreateDynamicBarrel(PhysicsSystem& physics, const Model& model,
 #endif
 } // namespace
 
-GLFWwindow* Initialization(RenderBackendType backend_type)
+GLFWwindow* Initialization(Renderer::RenderBackendType backend_type)
 {
 	if (!glfwInit())
 	{
@@ -148,7 +264,7 @@ GLFWwindow* Initialization(RenderBackendType backend_type)
 		return nullptr;
 	}
 
-	if (backend_type == RenderBackendType::Vulkan)
+	if (backend_type == Renderer::RenderBackendType::Vulkan)
 	{
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 		GLFWwindow* window = glfwCreateWindow(1024, 768, "Colteh Engine - Vulkan", nullptr, nullptr);
@@ -209,7 +325,7 @@ GLFWwindow* Initialization(RenderBackendType backend_type)
 
 int main(int argc, char** argv)
 {
-	const RenderBackendType backend_type = ParseBackend(argc, argv);
+	const Renderer::RenderBackendType backend_type = ParseBackend(argc, argv);
 
 	// Init control related stuff.
 	GLFWwindow* window = Initialization(backend_type);
@@ -221,7 +337,7 @@ int main(int argc, char** argv)
 	// Time to initialize renderer!
 	int window_width, window_height;
 	glfwGetFramebufferSize(window, &window_width, &window_height);
-	if (!RenderSystem::Initialize(backend_type, window, window_width, window_height))
+	if (!Renderer::RenderSystem::Initialize(backend_type, window, window_width, window_height))
 	{
 		glfwDestroyWindow(window);
 		glfwTerminate();
@@ -237,7 +353,7 @@ int main(int argc, char** argv)
 		if (!physics.Initialize(physics_desc))
 		{
 			std::cerr << "Failed to initialize physics.\n";
-			RenderSystem::Shutdown();
+			Renderer::RenderSystem::Shutdown();
 			glfwDestroyWindow(window);
 			glfwTerminate();
 			return -1;
@@ -248,59 +364,69 @@ int main(int argc, char** argv)
 		Camera view_cam;
 
 		// Init lighting.
-		DirectionalLight sun_light =
-			DirectionalLight(glm::vec3(-0.75f, -0.35f, -0.35f), glm::vec3(1.0f, 0.96f, 0.9f), 0.9f);
+		Renderer::DirectionalLight sun_light =
+			Renderer::DirectionalLight(glm::vec3(-0.75f, -0.35f, -0.35f), glm::vec3(1.0f, 0.96f, 0.9f), 0.5f);
 		sun_light.SetCastsShadows(true);
 		sun_light.SetShadowResolution(2048);
 		sun_light.SetShadowBias(0.0015f, 0.025f);
 
-		AmbientLighting ambient;
+		Renderer::AmbientLighting ambient;
 		ambient.sky_color = glm::vec3(0.42f, 0.50f, 0.62f);
 		ambient.ground_color = glm::vec3(0.18f, 0.14f, 0.10f);
 		ambient.intensity = 0.08f;
 		ambient.enabled = true;
-		RenderSystem::SetAmbientLighting(ambient);
+		Renderer::RenderSystem::SetAmbientLighting(ambient);
 
-		// Init materials after the render backend.
-		Material barrelMaterial(MaterialShaderType::PBRStandard,
-			"assets/demo/barrel/results/barrel_albedo.DDS",
-			"assets/demo/barrel/results/barrel_normal.DDS",
-			"assets/demo/barrel/results/barrel_metallic_roughness_ao.DDS");
+		// Init demo asset after the render backend. Runtime import is target assets only.
+		Renderer::Material barrelMaterial;
+		Renderer::Mesh barrelMesh;
+		if (!LoadDemoAsset("assets/compiled/barrel/barrel.casset", barrelMaterial, barrelMesh))
+		{
+			Renderer::RenderSystem::Shutdown();
+			glfwDestroyWindow(window);
+			glfwTerminate();
+			return -1;
+		}
 		barrelMaterial.material_name = "Deferred barrel";
+		Renderer::RenderSystem::RegisterMaterial(&barrelMaterial);
+		DemoModel barrel = { &barrelMesh, &barrelMaterial };
 
-		Material transparentBarrelMaterial(MaterialShaderType::PBRStandard,
-			"assets/demo/barrel/results/barrel_albedo.DDS",
-			"assets/demo/barrel/results/barrel_normal.DDS",
-			"assets/demo/barrel/results/barrel_metallic_roughness_ao.DDS");
+		Renderer::Material transparentBarrelMaterial;
+		Renderer::Mesh transparentBarrelMesh;
+		if (!LoadDemoAsset("assets/compiled/barrel/barrel.casset", transparentBarrelMaterial, transparentBarrelMesh))
+		{
+			Renderer::RenderSystem::Shutdown();
+			glfwDestroyWindow(window);
+			glfwTerminate();
+			return -1;
+		}
 		transparentBarrelMaterial.material_name = "Transparent blend barrel";
-		transparentBarrelMaterial.SetRenderMode(MaterialRenderMode::TransparentBlend);
+		transparentBarrelMaterial.SetRenderMode(Renderer::MaterialRenderMode::TransparentBlend);
 		transparentBarrelMaterial.SetBaseColorFactor(glm::vec4(0.55f, 0.95f, 1.0f, 0.42f));
 		transparentBarrelMaterial.SetCastsShadows(false);
+		Renderer::RenderSystem::RegisterMaterial(&transparentBarrelMaterial);
 
-		Material floorMaterial(MaterialShaderType::PBRStandard,
+		Renderer::Material floorMaterial(Renderer::MaterialShaderType::PBRStandard,
 			"assets/demo/barrel/results/barrel_albedo.DDS",
 			"assets/demo/barrel/results/barrel_normal.DDS",
 			"assets/demo/barrel/results/barrel_metallic_roughness_ao.DDS");
 		floorMaterial.material_name = "Shadow receiver floor";
 		floorMaterial.SetBaseColorFactor(glm::vec4(0.48f, 0.50f, 0.48f, 1.0f));
 		floorMaterial.SetCastsShadows(false);
+		Renderer::RenderSystem::RegisterMaterial(&floorMaterial);
 
-		Mesh floorMesh;
+		Renderer::Mesh floorMesh;
 		floorMesh.mesh_name = "Shadow receiver floor";
 		floorMesh.AddMaterialMeshData(&floorMaterial, MakeFloorMeshData(8.0f));
-		Renderable floorRenderable;
+		Renderer::Renderable floorRenderable;
 		floorRenderable.mesh = &floorMesh;
 		floorRenderable.material = &floorMaterial;
 		floorRenderable.local_bounds = floorMesh.GetLocalBounds();
-		floorRenderable.world_bounds = TransformBounds(floorRenderable.local_bounds, floorRenderable.transform);
-		floorRenderable.flags = RenderableFlagStatic | RenderableFlagReceivesShadow;
-		RenderSystem::RegisterRenderable(floorRenderable);
+		floorRenderable.world_bounds = Renderer::TransformBounds(floorRenderable.local_bounds, floorRenderable.transform);
+		floorRenderable.flags = Renderer::RenderableFlagStatic | Renderer::RenderableFlagReceivesShadow;
+		Renderer::RenderSystem::RegisterRenderable(floorRenderable);
 
-		// Init models after materials.
-		Model barrel = ModelImporter::ImportOBJ("assets/demo/barrel/barrel_low.obj",
-			{ {"barrel", &barrelMaterial } }, false);
-		Model transparentBarrel = ModelImporter::ImportOBJ("assets/demo/barrel/barrel_low.obj",
-			{ {"barrel", &transparentBarrelMaterial } }, false);
+		DemoModel transparentBarrel = { &transparentBarrelMesh, &transparentBarrelMaterial };
 
 #if defined(CENGINE_ENABLE_JOLT_PHYSICS)
 		PhysicsBodyDesc floorBodyDesc;
@@ -324,7 +450,7 @@ int main(int argc, char** argv)
 		barrel.RegisterRenderables(MakeTransform(glm::vec3(0.0f, 0.0f, -2.15f), 0.0f, 1.0f));
 #endif
 
-		const uint32_t transparent_flags = RenderableFlagStatic | RenderableFlagReceivesShadow;
+		const uint32_t transparent_flags = Renderer::RenderableFlagStatic | Renderer::RenderableFlagReceivesShadow;
 		transparentBarrel.RegisterRenderables(MakeTransform(glm::vec3(-0.95f, 0.0f, 0.85f), 12.0f, 0.92f),
 			transparent_flags);
 		transparentBarrel.RegisterRenderables(MakeTransform(glm::vec3(1.05f, 0.0f, 0.95f), -28.0f, 0.92f),
@@ -344,9 +470,9 @@ int main(int argc, char** argv)
 			{
 				const glm::mat4 bodyTransform = physics.GetBodyTransform(simulated.body);
 				const glm::mat4 renderTransform = bodyTransform * simulated.body_to_render;
-				for (RenderableHandle renderable : simulated.renderables)
+				for (Renderer::RenderableHandle renderable : simulated.renderables)
 				{
-					RenderSystem::UpdateRenderableTransform(renderable, renderTransform);
+					Renderer::RenderSystem::UpdateRenderableTransform(renderable, renderTransform);
 				}
 			}
 #endif
@@ -356,10 +482,10 @@ int main(int argc, char** argv)
 				glm::normalize(glm::vec3(std::sin(sun_angle), -0.35f, std::cos(sun_angle)));
 			sun_light.SetDirection(sun_direction);
 
-			RenderSystem::Render();
+			Renderer::RenderSystem::Render();
 
 			// Swap buffers
-			if (backend_type == RenderBackendType::OpenGL)
+			if (backend_type == Renderer::RenderBackendType::OpenGL)
 			{
 				glfwSwapBuffers(window);
 			}
@@ -368,7 +494,7 @@ int main(int argc, char** argv)
 		while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS &&
 			glfwWindowShouldClose(window) == 0);
 
-		RenderSystem::Shutdown();
+		Renderer::RenderSystem::Shutdown();
 	}
 
 	glfwDestroyWindow(window);

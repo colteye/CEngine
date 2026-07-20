@@ -3,8 +3,10 @@
 #include <cmath>
 #include <stdio.h>
 
-#include "render_system.h"
+#include "renderer/render_system.h"
 #include "camera.h"
+
+namespace Renderer = CEngine::Renderer;
 
 Camera::Camera()
 {
@@ -50,10 +52,10 @@ void Camera::UpdateMatrices()
 
 	m_model = glm::mat4(1.0f);
 
-	RenderFrameConstants constants;
+	Renderer::RenderFrameConstants constants;
 	constants.model = m_model;
 	constants.view = m_view;
 	constants.proj = m_projection;
 	constants.camera_position = m_position;
-	RenderSystem::SetFrameConstants(constants);
+	Renderer::RenderSystem::SetFrameConstants(constants);
 }

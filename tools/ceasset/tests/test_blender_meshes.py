@@ -1,0 +1,305 @@
+from __future__ import annotations
+
+import struct
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "blender_addon"))
+
+from cengine_asset_exporter.meshes import (  # noqa: E402
+    MESH_FLAG_SKINNED,
+    MESH_METADATA,
+    MESH_METADATA_MAGIC,
+    SKINNED_VERTEX,
+    VERTEX,
+    mesh_buffers,
+    mesh_metadata_payload,
+    mesh_objects,
+    mesh_output_path,
+    polygon_triangles,
+    write_mesh_asset,
+)
+
+
+ASSET_HEADER = struct.Struct("<4sHHI16sQ16sQQQ")
+
+
+class FakeVertex:
+    def __init__(self, co: tuple[float, float, float], groups: list[object] | None = None) -> None:
+        self.co = co
+        self.groups = groups or []
+
+
+class FakeGroupWeight:
+    def __init__(self, group: int, weight: float) -> None:
+        self.group = group
+        self.weight = weight
+
+
+class FakeLoop:
+    def __init__(self, vertex_index: int, normal: tuple[float, float, float]) -> None:
+        self.vertex_index = vertex_index
+        self.normal = normal
+
+
+class FakePolygon:
+    def __init__(self, loop_indices: list[int]) -> None:
+        self.loop_indices = loop_indices
+
+
+class FakeUv:
+    def __init__(self, uv: tuple[float, float]) -> None:
+        self.uv = uv
+
+
+class FakeUvLayer:
+    def __init__(self, data: list[FakeUv]) -> None:
+        self.data = data
+
+
+class FakeUvLayers:
+    def __init__(self, data: list[FakeUv]) -> None:
+        self.active = FakeUvLayer(data)
+
+
+class FakeMesh:
+    def __init__(
+        self,
+        polygons: list[FakePolygon] | None = None,
+        skinned: bool = False,
+        include_quad_vertex: bool = False,
+    ) -> None:
+        self.vertices = [
+            FakeVertex((0.0, 0.0, 0.0), [FakeGroupWeight(0, 0.75), FakeGroupWeight(1, 0.25)] if skinned else []),
+            FakeVertex((1.0, 0.0, 0.0), [FakeGroupWeight(1, 1.0)] if skinned else []),
+            FakeVertex((0.0, 2.0, 0.0), [FakeGroupWeight(0, 1.0)] if skinned else []),
+        ]
+        if include_quad_vertex:
+            self.vertices.append(FakeVertex((1.0, 2.0, 0.0), [FakeGroupWeight(1, 1.0)] if skinned else []))
+        self.loops = [
+            FakeLoop(0, (0.0, 0.0, 1.0)),
+            FakeLoop(1, (0.0, 0.0, 1.0)),
+            FakeLoop(2, (0.0, 0.0, 1.0)),
+        ]
+        if include_quad_vertex:
+            self.loops.append(FakeLoop(3, (0.0, 0.0, 1.0)))
+        self.polygons = polygons if polygons is not None else [FakePolygon([0, 1, 2])]
+        uvs = [FakeUv((0.0, 0.0)), FakeUv((1.0, 0.0)), FakeUv((0.0, 1.0))]
+        if include_quad_vertex:
+            uvs.append(FakeUv((1.0, 1.0)))
+        self.uv_layers = FakeUvLayers(uvs)
+
+
+class FakeMaterial:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class FakeSlot:
+    def __init__(self, material: FakeMaterial) -> None:
+        self.material = material
+
+
+class FakeVertexGroup:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class FakeBone:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class FakeArmatureData:
+    def __init__(self) -> None:
+        self.bones = [FakeBone("root"), FakeBone("spine")]
+
+
+class FakeArmature:
+    def __init__(self, name: str = "ARM_Hero") -> None:
+        self.name = name
+        self.type = "ARMATURE"
+        self.data = FakeArmatureData()
+
+
+class FakeModifier:
+    def __init__(self, armature: FakeArmature) -> None:
+        self.type = "ARMATURE"
+        self.object = armature
+
+
+class FakeObject:
+    def __init__(
+        self,
+        name: str,
+        obj_type: str,
+        mesh: FakeMesh | None = None,
+        armature: FakeArmature | None = None,
+        material_names: list[str] | None = None,
+    ) -> None:
+        self.name = name
+        self.type = obj_type
+        self.data = mesh or FakeMesh()
+        if material_names is None:
+            material_names = ["HeroSkin"]
+        self.material_slots = [FakeSlot(FakeMaterial(name)) for name in material_names]
+        self.vertex_groups = [FakeVertexGroup("root"), FakeVertexGroup("spine")]
+        self.modifiers = [FakeModifier(armature)] if armature is not None else []
+        self.parent = None
+
+
+class BlenderMeshesTests(unittest.TestCase):
+    def test_mesh_output_path_is_sanitized_cmesh(self) -> None:
+        output = mesh_output_path(Path("hero.blend"), Path("compiled"), "SM Hero")
+
+        self.assertEqual(output, Path("compiled/hero/meshes/SM_Hero.cmesh"))
+
+    def test_mesh_objects_are_unique_and_sorted(self) -> None:
+        first = FakeObject("SM_B", "MESH")
+        second = FakeObject("SM_A", "MESH")
+        armature = FakeObject("ARM_Hero", "ARMATURE")
+
+        meshes = mesh_objects([first, armature, second, first])
+
+        self.assertEqual([obj.name for obj in meshes], ["SM_A", "SM_B"])
+
+    def test_mesh_buffers_pack_triangle_vertices_and_indices(self) -> None:
+        buffers = mesh_buffers(FakeMesh())
+
+        self.assertEqual(buffers.vertex_count, 3)
+        self.assertEqual(buffers.index_count, 3)
+        self.assertEqual(buffers.bounds_min, (0.0, 0.0, 0.0))
+        self.assertEqual(buffers.bounds_max, (1.0, 2.0, 0.0))
+        self.assertEqual(buffers.vertex_stride, VERTEX.size)
+        self.assertFalse(buffers.skinned)
+        self.assertEqual(len(buffers.data), 3 * VERTEX.size + 3 * 4)
+        self.assertEqual(VERTEX.unpack_from(buffers.data, 0), (0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0))
+
+    def test_mesh_buffers_pack_skin_indices_and_weights(self) -> None:
+        armature = FakeArmature()
+        obj = FakeObject("SK_Body", "MESH", FakeMesh(skinned=True), armature)
+
+        buffers = mesh_buffers(obj.data, obj, armature)
+
+        self.assertTrue(buffers.skinned)
+        self.assertEqual(buffers.skeleton, "ARM_Hero")
+        self.assertEqual(buffers.vertex_stride, SKINNED_VERTEX.size)
+        first = SKINNED_VERTEX.unpack_from(buffers.data, 0)
+        self.assertEqual(first[8:12], (0, 1, 0, 0))
+        self.assertEqual(sum(first[12:16]), 65535)
+
+    def test_polygon_triangles_fans_quads_and_ngons(self) -> None:
+        self.assertEqual(polygon_triangles(FakePolygon([0, 1, 2, 3])), [(0, 1, 2), (0, 2, 3)])
+        self.assertEqual(
+            polygon_triangles(FakePolygon([0, 1, 2, 3, 4])),
+            [(0, 1, 2), (0, 2, 3), (0, 3, 4)],
+        )
+
+    def test_mesh_buffers_triangulates_quads(self) -> None:
+        buffers = mesh_buffers(FakeMesh([FakePolygon([0, 1, 3, 2])], include_quad_vertex=True))
+
+        self.assertEqual(buffers.vertex_count, 6)
+        self.assertEqual(buffers.index_count, 6)
+        self.assertEqual(buffers.bounds_min, (0.0, 0.0, 0.0))
+        self.assertEqual(buffers.bounds_max, (1.0, 2.0, 0.0))
+
+    def test_mesh_metadata_payload_is_binary_and_dependency_indexed(self) -> None:
+        buffers = mesh_buffers(FakeMesh())
+
+        payload = mesh_metadata_payload(buffers, 2, MESH_METADATA.size)
+
+        header = MESH_METADATA.unpack_from(payload)
+        self.assertEqual(header[0], MESH_METADATA_MAGIC)
+        self.assertEqual(header[4], 3)
+        self.assertEqual(header[5], 3)
+        self.assertEqual(header[6], VERTEX.size)
+        self.assertEqual(header[14], 2)
+        self.assertEqual(header[15], MESH_METADATA.size)
+
+    def test_write_mesh_asset_writes_binary_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            blend = root / "hero.blend"
+            blend.write_bytes(b"blend")
+            obj = FakeObject("SM_Body", "MESH")
+
+            export = write_mesh_asset(
+                blend,
+                root / "compiled",
+                obj,
+                lambda name: root / "compiled" / "hero" / "materials" / f"{name}.cmat",
+                lambda name: root / "compiled" / "hero" / "skeletons" / f"{name}.cskel",
+            )
+
+            data = export.output.read_bytes()
+            header = ASSET_HEADER.unpack_from(data)
+            self.assertEqual(header[0], b"CEAF")
+            self.assertEqual(header[3], 3)
+            payload_offset = header[7]
+            payload_size = header[8]
+
+            metadata = MESH_METADATA.unpack_from(data, payload_offset)
+            self.assertEqual(metadata[0], MESH_METADATA_MAGIC)
+            self.assertEqual(metadata[3], 0)
+            self.assertEqual(metadata[6], VERTEX.size)
+            self.assertEqual(metadata[14], 1)
+            self.assertEqual(metadata[15], MESH_METADATA.size)
+            self.assertEqual(payload_size, MESH_METADATA.size + 3 * VERTEX.size + 3 * 4)
+            geometry_offset = payload_offset + metadata[15]
+            self.assertEqual(data[geometry_offset : geometry_offset + 4], struct.pack("<f", 0.0))
+
+    def test_write_mesh_asset_rejects_mesh_without_one_material_slot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            blend = root / "hero.blend"
+            blend.write_bytes(b"blend")
+
+            with self.assertRaisesRegex(RuntimeError, "exactly one material slot"):
+                write_mesh_asset(
+                    blend,
+                    root / "compiled",
+                    FakeObject("SM_Empty", "MESH", material_names=[]),
+                    lambda name: root / "compiled" / "hero" / "materials" / f"{name}.cmat",
+                    lambda name: root / "compiled" / "hero" / "skeletons" / f"{name}.cskel",
+                )
+
+            with self.assertRaisesRegex(RuntimeError, "exactly one material slot"):
+                write_mesh_asset(
+                    blend,
+                    root / "compiled",
+                    FakeObject("SM_Multi", "MESH", material_names=["A", "B"]),
+                    lambda name: root / "compiled" / "hero" / "materials" / f"{name}.cmat",
+                    lambda name: root / "compiled" / "hero" / "skeletons" / f"{name}.cskel",
+                )
+
+    def test_write_skinned_mesh_asset_depends_on_skeleton(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            blend = root / "hero.blend"
+            blend.write_bytes(b"blend")
+            armature = FakeArmature()
+            obj = FakeObject("SK_Body", "MESH", FakeMesh(skinned=True), armature)
+
+            export = write_mesh_asset(
+                blend,
+                root / "compiled",
+                obj,
+                lambda name: root / "compiled" / "hero" / "materials" / f"{name}.cmat",
+                lambda name: root / "compiled" / "hero" / "skeletons" / f"{name}.cskel",
+            )
+
+            data = export.output.read_bytes()
+            header = ASSET_HEADER.unpack_from(data)
+            metadata = MESH_METADATA.unpack_from(data, header[7])
+            self.assertEqual(metadata[3], MESH_FLAG_SKINNED)
+            self.assertEqual(metadata[6], SKINNED_VERTEX.size)
+            self.assertEqual(metadata[14], 1)
+            self.assertEqual(metadata[15], MESH_METADATA.size)
+            self.assertEqual(header[8], MESH_METADATA.size + 3 * SKINNED_VERTEX.size + 3 * 4)
+
+
+if __name__ == "__main__":
+    unittest.main()
