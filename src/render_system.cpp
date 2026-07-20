@@ -22,6 +22,7 @@ std::vector<Renderable> RenderSystem::renderables;
 std::vector<LightRecord> RenderSystem::direct_lights;
 std::vector<GpuLight> RenderSystem::gpu_lights;
 RenderFrameConstants RenderSystem::frame_constants;
+AmbientLighting RenderSystem::ambient_lighting;
 uint64_t RenderSystem::light_revision = 1;
 bool RenderSystem::lights_dirty = true;
 
@@ -90,6 +91,15 @@ void RenderSystem::Render()
 	if (backend != nullptr)
 	{
 		backend->Render();
+	}
+}
+
+void RenderSystem::RenderDepthOnly(const glm::mat4& view, const glm::mat4& projection,
+	uint32_t native_depth_texture, int texture_width, int texture_height)
+{
+	if (backend != nullptr)
+	{
+		backend->RenderDepthOnly(view, projection, native_depth_texture, texture_width, texture_height);
 	}
 }
 
@@ -216,6 +226,16 @@ void RenderSystem::SetFrameConstants(const RenderFrameConstants& constants)
 const RenderFrameConstants& RenderSystem::GetFrameConstants()
 {
 	return frame_constants;
+}
+
+void RenderSystem::SetAmbientLighting(const AmbientLighting& ambient)
+{
+	ambient_lighting = ambient;
+}
+
+const AmbientLighting& RenderSystem::GetAmbientLighting()
+{
+	return ambient_lighting;
 }
 
 void RenderSystem::RebuildGpuLights()

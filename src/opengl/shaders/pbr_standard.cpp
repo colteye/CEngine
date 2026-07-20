@@ -33,10 +33,11 @@ void PBRStandard::Use() const
     shader_program.Use();
 }
 
-void PBRStandard::Update()
+void PBRStandard::Update(const glm::mat4& model, const Material& material)
 {
     SetParametersStatic();
-    SetParametersDynamic();
+    SetMaterialParameters(material);
+    SetParametersDynamic(model);
 }
 
 void PBRStandard::InitializeParameters()
@@ -65,6 +66,13 @@ void PBRStandard::InitializeParameters()
     albedo_id = glGetUniformLocation(shader_id, "albedo");
     normal_id = glGetUniformLocation(shader_id, "normal");
     metallic_roughness_ao_id = glGetUniformLocation(shader_id, "metallic_roughness_ao");
+    base_color_factor_id = glGetUniformLocation(shader_id, "base_color_factor");
+    alpha_cutoff_id = glGetUniformLocation(shader_id, "alpha_cutoff");
+    render_mode_id = glGetUniformLocation(shader_id, "render_mode");
+    ambient_sky_color_id = glGetUniformLocation(shader_id, "ambient_sky_color");
+    ambient_ground_color_id = glGetUniformLocation(shader_id, "ambient_ground_color");
+    ambient_intensity_id = glGetUniformLocation(shader_id, "ambient_intensity");
+    ambient_enabled_id = glGetUniformLocation(shader_id, "ambient_enabled");
 }
 
 void PBRStandard::SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao)
@@ -89,16 +97,31 @@ void PBRStandard::SetParametersStatic()
     glUniform1i(metallic_roughness_ao_id, 2);
 }
 
-void PBRStandard::SetParametersDynamic()
+void PBRStandard::SetMaterialParameters(const Material& material)
+{
+    const glm::vec4& base_color = material.GetBaseColorFactor();
+    glUniform4fv(base_color_factor_id, 1, glm::value_ptr(base_color));
+    glUniform1f(alpha_cutoff_id, material.GetAlphaCutoff());
+    glUniform1i(render_mode_id, static_cast<int>(material.GetRenderMode()));
+}
+
+void PBRStandard::SetParametersDynamic(const glm::mat4& model)
 {
     const RenderFrameConstants& constants = RenderSystem::GetFrameConstants();
     glUniform3f(cam_pos_id, constants.camera_position[0],
                 constants.camera_position[1], constants.camera_position[2]);
-    glUniformMatrix4fv(m_id, 1, GL_FALSE, &constants.model[0][0]);
+    glUniformMatrix4fv(m_id, 1, GL_FALSE, glm::value_ptr(model));
     glUniformMatrix4fv(v_id, 1, GL_FALSE, &constants.view[0][0]);
     glUniformMatrix4fv(p_id, 1, GL_FALSE, &constants.proj[0][0]);
 
+    const AmbientLighting& ambient = RenderSystem::GetAmbientLighting();
+    glUniform3fv(ambient_sky_color_id, 1, glm::value_ptr(ambient.sky_color));
+    glUniform3fv(ambient_ground_color_id, 1, glm::value_ptr(ambient.ground_color));
+    glUniform1f(ambient_intensity_id, ambient.intensity);
+    glUniform1i(ambient_enabled_id, ambient.enabled ? 1 : 0);
+
     const uint64_t light_revision = RenderSystem::GetLightRevision();
+    glBindBufferBase(GL_UNIFORM_BUFFER, kDirectLightBindingPoint, light_ubo);
     if (uploaded_light_revision != light_revision)
     {
         const std::vector<GpuLight>& gpu_lights = RenderSystem::GetGpuLights();

@@ -14,11 +14,24 @@ uniform sampler2D normal;
 uniform sampler2D metallic_roughness_ao;
 
 uniform vec3 cam_pos_world;
+uniform vec4 base_color_factor;
+uniform float alpha_cutoff;
+uniform int render_mode;
+uniform vec3 ambient_sky_color;
+uniform vec3 ambient_ground_color;
+uniform float ambient_intensity;
+uniform bool ambient_enabled;
 
 const int MAX_DIRECT_LIGHTS = 64;
 const float LIGHT_TYPE_DIRECTIONAL = 0.0;
 const float LIGHT_TYPE_POINT = 1.0;
 const float LIGHT_TYPE_SPOT = 2.0;
+const int RENDER_MODE_OPAQUE_DEFERRED = 0;
+const int RENDER_MODE_OPAQUE_FORWARD = 1;
+const int RENDER_MODE_ALPHA_CLIP = 2;
+const int RENDER_MODE_ALPHA_HASH_DITHER = 3;
+const int RENDER_MODE_TRANSPARENT_BLEND = 4;
+const int RENDER_MODE_UNLIT = 5;
 
 struct GpuLight {
     vec4 position_range;
@@ -88,11 +101,28 @@ vec3 CalculateNormals()
 
 void main()
 {		
-    vec3 albedo = texture(albedo, uv).rgb;
+    vec4 albedo_sample = texture(albedo, uv) * base_color_factor;
+    if (render_mode == RENDER_MODE_ALPHA_CLIP && albedo_sample.a < alpha_cutoff) {
+        discard;
+    }
+    if (render_mode == RENDER_MODE_ALPHA_HASH_DITHER) {
+        float threshold = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+        if (albedo_sample.a < threshold) {
+            discard;
+        }
+    }
+
+    vec3 albedo = albedo_sample.rgb;
 	
     float metallic = texture(metallic_roughness_ao, uv).r;
     float roughness = texture(metallic_roughness_ao, uv).g;
     float ao = texture(metallic_roughness_ao, uv).b;
+
+    if (render_mode == RENDER_MODE_UNLIT) {
+        vec3 unlit_color = albedo / (albedo + vec3(1.0));
+        frag_color = vec4(pow(unlit_color, vec3(1.0 / 2.2)), albedo_sample.a);
+        return;
+    }
 
     vec3 N = CalculateNormals();
 
@@ -167,11 +197,13 @@ void main()
         Lo += (kD * albedo / PI + specular) * radiance * NdotL; 
     }   
   
-    vec3 ambient = vec3(0.03) * albedo * ao;
+    float sky_weight = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
+    vec3 ambient_color = mix(ambient_ground_color, ambient_sky_color, sky_weight);
+    vec3 ambient = ambient_enabled ? ambient_color * ambient_intensity * albedo * ao : vec3(0.0);
     vec3 color = ambient + Lo;
 	
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));  
    
-    frag_color = vec4(color, 1.0);
+    frag_color = vec4(color, albedo_sample.a);
 }  

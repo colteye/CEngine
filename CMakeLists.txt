@@ -103,6 +103,11 @@ ce_setup_glfw(CEngine_GLFW_TARGET)
 
 if(CENGINE_ENABLE_OPENGL)
     set(CENGINE_OPENGL_SHADER_SOURCES
+        src/opengl/shaders/deferred_lighting.frag
+        src/opengl/shaders/depth_only.vert
+        src/opengl/shaders/depth_only.frag
+        src/opengl/shaders/pbr_geometry_pass.vert
+        src/opengl/shaders/pbr_geometry_pass.frag
         src/opengl/shaders/pbr_standard.vert
         src/opengl/shaders/pbr_standard.frag
         src/opengl/shaders/ssao.vert
@@ -128,6 +133,9 @@ if(CENGINE_ENABLE_OPENGL)
         third_party/glad/src/glad.c
         src/opengl/opengl_render_backend.cpp
         src/opengl/opengl_texture.cpp
+        src/opengl/shaders/deferred_lighting.cpp
+        src/opengl/shaders/depth_only.cpp
+        src/opengl/shaders/pbr_geometry_pass.cpp
         src/opengl/shaders/pbr_standard.cpp
         src/opengl/shaders/shader.cpp
         src/opengl/shaders/ssao.cpp

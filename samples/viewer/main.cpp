@@ -23,6 +23,13 @@
 #include "main.h"
 
 namespace {
+glm::mat4 MakeTransform(const glm::vec3& position, float yaw_degrees, float scale)
+{
+	glm::mat4 transform = glm::translate(glm::mat4(1.0f), position);
+	transform = glm::rotate(transform, glm::radians(yaw_degrees), glm::vec3(0.0f, 1.0f, 0.0f));
+	return glm::scale(transform, glm::vec3(scale));
+}
+
 RenderBackendType ParseBackend(int argc, char** argv)
 {
 	for (int index = 1; index < argc; ++index)
@@ -162,14 +169,55 @@ int main(int argc, char** argv)
 			SpotLight(glm::vec3(0.0f, 7.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f),
 				glm::vec3(1.0f, 1.0f, 1.0f), 5.0f, 18.0f, 32.0f);
 
+		AmbientLighting ambient;
+		ambient.sky_color = glm::vec3(0.42f, 0.50f, 0.62f);
+		ambient.ground_color = glm::vec3(0.18f, 0.14f, 0.10f);
+		ambient.intensity = 0.22f;
+		ambient.enabled = true;
+		RenderSystem::SetAmbientLighting(ambient);
+
 		// Init materials after the render backend.
-		Material barrelMaterial = Material(MaterialShaderType::PBRStandard,
+		Material barrelMaterial(MaterialShaderType::PBRStandard,
 			"assets/demo/barrel/results/barrel_albedo.DDS",
 			"assets/demo/barrel/results/barrel_normal.DDS",
 			"assets/demo/barrel/results/barrel_metallic_roughness_ao.DDS");
+		barrelMaterial.material_name = "Deferred barrel";
+
+		Material forwardBarrelMaterial(MaterialShaderType::PBRStandard,
+			"assets/demo/barrel/results/barrel_albedo.DDS",
+			"assets/demo/barrel/results/barrel_normal.DDS",
+			"assets/demo/barrel/results/barrel_metallic_roughness_ao.DDS");
+		forwardBarrelMaterial.material_name = "Forward opaque barrel";
+		forwardBarrelMaterial.SetRenderMode(MaterialRenderMode::OpaqueForward);
+		forwardBarrelMaterial.SetBaseColorFactor(glm::vec4(0.65f, 0.86f, 1.0f, 1.0f));
+
+		Material transparentBarrelMaterial(MaterialShaderType::PBRStandard,
+			"assets/demo/barrel/results/barrel_albedo.DDS",
+			"assets/demo/barrel/results/barrel_normal.DDS",
+			"assets/demo/barrel/results/barrel_metallic_roughness_ao.DDS");
+		transparentBarrelMaterial.material_name = "Transparent blend barrel";
+		transparentBarrelMaterial.SetRenderMode(MaterialRenderMode::TransparentBlend);
+		transparentBarrelMaterial.SetBaseColorFactor(glm::vec4(0.55f, 0.95f, 1.0f, 0.42f));
+		transparentBarrelMaterial.SetCastsShadows(false);
 
 		// Init models after materials.
-		Model barrel = ModelImporter::ImportOBJ("assets/demo/barrel/barrel_low.obj", { {"barrel", &barrelMaterial } });
+		Model barrel = ModelImporter::ImportOBJ("assets/demo/barrel/barrel_low.obj",
+			{ {"barrel", &barrelMaterial } }, false);
+		Model forwardBarrel = ModelImporter::ImportOBJ("assets/demo/barrel/barrel_low.obj",
+			{ {"barrel", &forwardBarrelMaterial } }, false);
+		Model transparentBarrel = ModelImporter::ImportOBJ("assets/demo/barrel/barrel_low.obj",
+			{ {"barrel", &transparentBarrelMaterial } }, false);
+
+		barrel.RegisterRenderables(MakeTransform(glm::vec3(-1.8f, 0.0f, 0.0f), -18.0f, 1.0f));
+		barrel.RegisterRenderables(MakeTransform(glm::vec3(1.8f, 0.0f, -0.25f), 22.0f, 1.0f));
+		barrel.RegisterRenderables(MakeTransform(glm::vec3(0.0f, 0.0f, -2.15f), 0.0f, 1.0f));
+		forwardBarrel.RegisterRenderables(MakeTransform(glm::vec3(0.0f, 0.0f, 1.85f), 42.0f, 1.0f));
+
+		const uint32_t transparent_flags = RenderableFlagStatic | RenderableFlagReceivesShadow;
+		transparentBarrel.RegisterRenderables(MakeTransform(glm::vec3(-0.95f, 0.0f, 0.85f), 12.0f, 0.92f),
+			transparent_flags);
+		transparentBarrel.RegisterRenderables(MakeTransform(glm::vec3(1.05f, 0.0f, 0.95f), -28.0f, 0.92f),
+			transparent_flags);
 
 		// Testing
 		//glm::vec3 start_pos = glm::vec3(0.0f, 10.0f, 7.0f);

@@ -20,6 +20,14 @@ struct RenderFrameConstants
 	glm::mat4 proj = glm::mat4(1.0f);
 };
 
+struct AmbientLighting
+{
+	glm::vec3 sky_color = glm::vec3(0.36f, 0.42f, 0.52f);
+	glm::vec3 ground_color = glm::vec3(0.12f, 0.10f, 0.08f);
+	float intensity = 0.18f;
+	bool enabled = true;
+};
+
 class RenderSystem
 {
 public:
@@ -28,6 +36,8 @@ public:
 	static void Shutdown();
 	
 	static void Render();
+	static void RenderDepthOnly(const glm::mat4& view, const glm::mat4& projection,
+		uint32_t native_depth_texture, int texture_width, int texture_height);
 
 	static void RegisterMesh(const Mesh* mesh);
 	static RenderableHandle RegisterRenderable(const Renderable& renderable);
@@ -45,6 +55,8 @@ public:
 	static size_t GetMaxGpuLights();
 	static void SetFrameConstants(const RenderFrameConstants& constants);
 	static const RenderFrameConstants& GetFrameConstants();
+	static void SetAmbientLighting(const AmbientLighting& ambient);
+	static const AmbientLighting& GetAmbientLighting();
 
 private:
 	static void RebuildGpuLights();
@@ -55,6 +67,7 @@ private:
 	static std::vector<LightRecord> direct_lights;
 	static std::vector<GpuLight> gpu_lights;
 	static RenderFrameConstants frame_constants;
+	static AmbientLighting ambient_lighting;
 	static uint64_t light_revision;
 	static bool lights_dirty;
 };

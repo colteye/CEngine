@@ -67,7 +67,7 @@ glm::vec3 CalculateTangent(const glm::vec3& v0, const glm::vec3& v1, const glm::
 } // namespace
 
 Model ModelImporter::ImportOBJ(const std::string& model_p,
-	const std::unordered_map<std::string, Material*>& in_mats)
+	const std::unordered_map<std::string, Material*>& in_mats, bool auto_register)
 {
 	std::vector<glm::vec3> temp_vertices;
 	std::vector<glm::vec2> temp_uvs;
@@ -97,7 +97,7 @@ Model ModelImporter::ImportOBJ(const std::string& model_p,
 	if (!model_file.is_open())
 	{
 		std::cout << "Impossible to open model file: " << model_p << "\n";
-		return Model(out_meshes, out_mats);
+		return Model(out_meshes, out_mats, auto_register);
 	}
 
 	std::string line;
@@ -249,5 +249,5 @@ Model ModelImporter::ImportOBJ(const std::string& model_p,
 	flush_mesh_data();
 
 	model_file.close();
-	return Model(std::move(out_meshes), std::move(out_mats));
+	return Model(std::move(out_meshes), std::move(out_mats), auto_register);
 }

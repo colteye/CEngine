@@ -16,6 +16,8 @@ public:
 	bool Initialize(GLFWwindow* window, int window_width, int window_height) override;
 	void Shutdown() override;
 	void Render() override;
+	void RenderDepthOnly(const glm::mat4& view, const glm::mat4& projection,
+		uint32_t native_depth_texture, int texture_width, int texture_height) override;
 	void RegisterRenderable(const Renderable& renderable) override;
 	void RegisterMaterial(Material* material) override;
 

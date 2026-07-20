@@ -3,6 +3,10 @@
 
 #include "material.h"
 #include "render_backend.h"
+#include "renderable.h"
+#include "opengl/shaders/deferred_lighting.h"
+#include "opengl/shaders/depth_only.h"
+#include "opengl/shaders/pbr_geometry_pass.h"
 #include "opengl/shaders/pbr_standard.h"
 #include "opengl/shaders/ssao.h"
 
@@ -12,9 +16,13 @@
 #include <unordered_map>
 #include <vector>
 
-struct MaterialRenderData {
-	std::vector<GLint> start_indexes;
-	std::vector<GLsizei> counts;
+struct OpenGLDrawItem {
+	Material* material = nullptr;
+	glm::mat4 transform = glm::mat4(1.0f);
+	Bounds world_bounds;
+	GLint start_index = 0;
+	GLsizei count = 0;
+	uint32_t flags = 0;
 };
 
 struct OpenGLMaterialResources {
@@ -34,8 +42,6 @@ struct ShaderBuffers {
 	~ShaderBuffers();
 
 	void Destroy();
-
-	std::vector<Material*> materials;
 
 	GLuint vertex_array_obj = 0;
 	GLuint vertex_buffer = 0;
@@ -57,18 +63,36 @@ public:
 	bool Initialize(GLFWwindow* window, int window_width, int window_height) override;
 	void Shutdown() override;
 	void Render() override;
+	void RenderDepthOnly(const glm::mat4& view, const glm::mat4& projection,
+		uint32_t native_depth_texture, int texture_width, int texture_height) override;
 	void RegisterRenderable(const Renderable& renderable) override;
 	void RegisterMaterial(Material* material) override;
 
 private:
 	static ShaderBuffers InitShaderBuffers();
 
+	bool CreateFrameResources(int width, int height);
+	void DestroyFrameResources();
+	void BuildRenderQueues();
+	void RenderGeometryPass();
+	void RenderDeferredLightingPass();
+	void RenderForwardQueue(const std::vector<uint32_t>& queue);
+	void DrawItem(const OpenGLDrawItem& item) const;
+	bool DrawsInDeferredGeometry(MaterialRenderMode mode) const;
+	bool DrawsInForward(MaterialRenderMode mode) const;
+	bool DrawsTransparent(MaterialRenderMode mode) const;
+	bool DrawsShadowCaster(const OpenGLDrawItem& item) const;
 	void RenderScreenSpaceQuad();
 	PBRStandard* GetShader(MaterialShaderType shader_type);
 
-	GLuint g_buffer = 0;
-	GLuint g_color = 0;
-	GLuint rbo_depth = 0;
+	GLuint g_buffer_fbo = 0;
+	GLuint g_albedo = 0;
+	GLuint g_normal_roughness = 0;
+	GLuint g_material = 0;
+	GLuint scene_depth = 0;
+	GLuint lit_color_fbo = 0;
+	GLuint lit_color = 0;
+	GLuint depth_only_fbo = 0;
 	GLuint quad_VAO = 0;
 	GLuint quad_VBO = 0;
 
@@ -77,9 +101,16 @@ private:
 
 	std::unique_ptr<SSAO> ssao;
 	std::unique_ptr<PBRStandard> pbr_shader;
+	std::unique_ptr<PBRGeometryPass> pbr_geometry_pass;
+	std::unique_ptr<DeferredLighting> deferred_lighting;
+	std::unique_ptr<DepthOnly> depth_only_shader;
 	std::unordered_map<MaterialShaderType, ShaderBuffers> shader_buffer_dict;
-	std::unordered_map<Material*, MaterialRenderData> material_render_dict;
 	std::unordered_map<Material*, OpenGLMaterialResources> material_resources;
+	std::vector<OpenGLDrawItem> draw_items;
+	std::vector<uint32_t> opaque_deferred_queue;
+	std::vector<uint32_t> forward_queue;
+	std::vector<uint32_t> transparent_queue;
+	std::vector<uint32_t> shadow_caster_queue;
 };
 
 #endif

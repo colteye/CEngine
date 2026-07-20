@@ -27,8 +27,8 @@ void main(){
     vertex_pos_world = vec3(model * vec4(i_vertex_pos, 1.0));
 	
 	// Convert normal basis vectors into world space.
-	normal_pos_world = vec3(model * vec4(i_normal_pos, 1.0));
-	tangent_pos_world = vec3(model * vec4(i_tangent_pos, 1.0));
+	normal_pos_world = normalize(mat3(model) * i_normal_pos);
+	tangent_pos_world = normalize(mat3(model) * i_tangent_pos);
 	bitangent_pos_world = cross(tangent_pos_world, normal_pos_world);
 
     // UV of the vertex.

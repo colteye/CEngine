@@ -194,6 +194,17 @@ void VulkanRenderBackend::RegisterRenderable(const Renderable& /*renderable*/)
 	}
 }
 
+void VulkanRenderBackend::RenderDepthOnly(const glm::mat4& /*view*/, const glm::mat4& /*projection*/,
+	uint32_t /*native_depth_texture*/, int /*texture_width*/, int /*texture_height*/)
+{
+	static bool warned = false;
+	if (!warned)
+	{
+		std::cout << "Vulkan backend is active; depth-only rendering is not implemented yet.\n";
+		warned = true;
+	}
+}
+
 void VulkanRenderBackend::RegisterMaterial(Material* /*material*/)
 {
 	static bool warned = false;
