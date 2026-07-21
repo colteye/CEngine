@@ -19,8 +19,10 @@ struct Bounds {
 struct MeshData {
 	std::vector<glm::vec3> vertices;
 	std::vector<glm::vec2> uvs;
+	std::vector<glm::vec2> lightmap_uvs;
 	std::vector<glm::vec3> normals;
 	std::vector<glm::vec3> tangents;
+	bool has_lightmap_uv = false;
 	Bounds local_bounds;
 };
 

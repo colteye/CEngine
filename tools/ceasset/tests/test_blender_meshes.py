@@ -64,8 +64,22 @@ class FakeUvLayer:
 
 
 class FakeUvLayers:
-    def __init__(self, data: list[FakeUv]) -> None:
+    def __init__(self, data: list[FakeUv], lightmap: list[FakeUv] | None = None) -> None:
         self.active = FakeUvLayer(data)
+        self.layers = [self.active]
+        if lightmap is not None:
+            layer = FakeUvLayer(lightmap)
+            layer.name = "CEngineLightmap"
+            self.layers.append(layer)
+
+    def get(self, name: str):
+        return next((layer for layer in self.layers if getattr(layer, "name", "") == name), None)
+
+    def __len__(self) -> int:
+        return len(self.layers)
+
+    def __getitem__(self, index: int):
+        return self.layers[index]
 
 
 class FakeMesh:
@@ -179,10 +193,21 @@ class BlenderMeshesTests(unittest.TestCase):
         self.assertEqual(buffers.vertex_stride, VERTEX.size)
         self.assertFalse(buffers.skinned)
         self.assertEqual(len(buffers.data), 3 * VERTEX.size + 3 * 4)
-        self.assertEqual(VERTEX.unpack_from(buffers.data, 0), (0.0, 0.0, -0.0, 0.0, 1.0, -0.0, 0.0, 0.0))
+        self.assertEqual(VERTEX.unpack_from(buffers.data, 0),
+            (0.0, 0.0, -0.0, 0.0, 1.0, -0.0, 0.0, 0.0, 0.0, 0.0))
 
     def test_blender_to_engine_vector_maps_z_up_to_y_up(self) -> None:
         self.assertEqual(blender_to_engine_vector((1.0, 2.0, 3.0)), (1.0, 3.0, -2.0))
+
+    def test_named_lightmap_uv_layer_is_packed_as_uv1(self) -> None:
+        mesh = FakeMesh()
+        mesh.uv_layers = FakeUvLayers(mesh.uv_layers.active.data, [
+            FakeUv((0.25, 0.5)), FakeUv((0.75, 0.5)), FakeUv((0.25, 1.0))])
+
+        buffers = mesh_buffers(mesh)
+
+        self.assertTrue(buffers.lightmap_uv)
+        self.assertEqual(VERTEX.unpack_from(buffers.data, 0)[8:10], (0.25, 0.5))
 
     def test_mesh_buffers_pack_skin_indices_and_weights(self) -> None:
         armature = FakeArmature()
@@ -194,8 +219,8 @@ class BlenderMeshesTests(unittest.TestCase):
         self.assertEqual(buffers.skeleton, "ARM_Hero")
         self.assertEqual(buffers.vertex_stride, SKINNED_VERTEX.size)
         first = SKINNED_VERTEX.unpack_from(buffers.data, 0)
-        self.assertEqual(first[8:12], (0, 1, 0, 0))
-        self.assertEqual(sum(first[12:16]), 65535)
+        self.assertEqual(first[10:14], (0, 1, 0, 0))
+        self.assertEqual(sum(first[14:18]), 65535)
 
     def test_polygon_triangles_fans_quads_and_ngons(self) -> None:
         self.assertEqual(polygon_triangles(FakePolygon([0, 1, 2, 3])), [(0, 1, 2), (0, 2, 3)])

@@ -40,7 +40,8 @@ hash.
 | Skeletons/rig metadata | `.cskel` | Keep | Rigs are shared across meshes and animations. Store bone hierarchy, inverse bind pose, bone names or stable hashes, sockets, masks, IK metadata, retarget data, flex names, and jiggle-chain references separately from mesh and animation bulk data. |
 | Animation/curves | `.canim` | Keep | Animation should stream and share independently. Store compressed tracks, curve targets, root motion, animation events, morph weights, material curves, camera/light tracks, and per-track error settings in runtime form. |
 | Physics/simulation | `.cphys` | Keep | Physics data should be engine-neutral at the asset layer: primitives, convex hulls, static triangle meshes, ragdoll bodies, constraints, hitboxes, triggers, cloth setup, and jiggle/spring settings. Backend-specific optimized caches can be added later but should not be the only source. |
-| Asset composition | `.casset` | Keep | A Blender-authored character/prefab/scene root is composition data: objects/entities, transforms, roles, and component target paths such as `.cmesh`, `.cskel`, `.canim`, `.cmat`, `.cphys`, audio, and VFX. Heavy component data stays in component files. |
+| Prefabs | `.casset` | Keep | Reusable entity hierarchies reference separate mesh, material, skeleton, animation, physics, audio, and VFX assets. |
+| Scenes | `.cscene` | Keep | Complete Blender-authored scenes contain stable classnamed entities and type-grouped, versioned field blocks. Heavy asset data remains separate. |
 | Audio | `.opus`/`.ogg` payloads plus optional `.caudio` metadata | Defer `.caudio` until needed | Opus/Vorbis in Ogg are OSS, mature runtime payloads. A `.caudio` wrapper is only worth it for loop points, attenuation, subtitles, dialogue IDs, banks, streaming chunks, or target-platform variants. Do not wrap audio just to rename it. |
 | VFX | `.cvfx` | Keep | VFX is engine-authored behavior: emitter graphs, spawn modules, curves, material bindings, mesh particle refs, flipbook refs, trails, beams, and simulation settings. No standard runtime format covers the engine contract cleanly. |
 | Navigation | `.cnav` | Keep | Navigation data is engine/game-specific: nav meshes, tiles, off-mesh links, cover points, costs, AI zones, and streaming chunks. Keep it custom and load-ready. |
@@ -71,7 +72,7 @@ The first Blender add-on export contract is selected-root-collection based:
 
 - `PREFAB_<name>` collections export hierarchy/component target assets as
   `.casset`.
-- `SCENE_<name>` collections export placement/chunk target assets as `.casset`.
+- `SCENE_<name>` collections export complete scenes as `.cscene`.
 - Collection custom properties may use `ce_asset_type = prefab|scene` and
   `ce_asset_name = <name>` when naming prefixes are inconvenient.
 
@@ -116,14 +117,18 @@ without parsing text.
 
 The initial `.cmesh` payload contains a fixed mesh header followed by geometry
 bytes. Metadata records vertex/index counts, bounds, vertex stride, index size,
-skinned flags, material slot count, and geometry offset. Static vertices are
-tightly packed as `float3 position, float3 normal, float2 uv0`. Skinned vertices
-append `uint16x4 bone_indices` and `unorm16x4 bone_weights`, normalized to
-65535. All mesh blobs end with `uint32` triangle indices. The exporter fans
+skinned/lightmap-UV flags, material slot count, and geometry offset. Static
+vertices are tightly packed as `float3 position, float3 normal, float2 uv0,
+float2 uv1`. Skinned vertices append `uint16x4 bone_indices` and `unorm16x4
+bone_weights`, normalized to 65535. UV1 is the normalized per-mesh lightmap
+unwrap; placement-specific atlas scale/offset stays in `.cscene`. All mesh blobs
+end with `uint32` triangle indices. The exporter fans
 Blender polygon loop data into triangles at write time. `LoadMeshAsset`
 validates the payload and fills the renderer `Mesh` using explicit material
 slots supplied by the caller. Morph deltas, LOD tables, animation tracks, and
-optimized vertex/index reordering are future explicit additions.
+optimized vertex/index reordering are future explicit additions. The loader
+still accepts legacy 32-byte static and 48-byte skinned vertices without UV1;
+such meshes cannot be assigned a baked lightmap.
 
 The initial `.canim` payload is binary animation data. It stores a fixed header,
 track rows, keyframe rows, and a UTF-8 string table. Track rows contain Blender
@@ -147,6 +152,37 @@ Preferred dependencies and formats:
 
 Avoid dependencies whose runtime behavior depends on unavailable proprietary
 source, opaque build steps, or undocumented binary formats.
+
+## `.cscene` v1 Contract
+
+`.cscene` is a complete world; `.casset` remains a reusable prefab hierarchy.
+Runtime code never interprets Blender object types. A scene uses the common
+`DiskAssetHeader` with `AssetType::Scene`, followed by a little-endian `CSCN`
+payload. Fixed structures are packed to one-byte alignment. All 64-bit offsets
+are relative to the start of the scene payload. Writers align non-empty tables
+and component payloads to 16 bytes; readers validate bounds and integer overflow
+and do not rely on that alignment.
+
+The payload order is: header, settings, asset references, entities, component
+block descriptors, per-block entity-index and typed-payload arrays, auxiliary
+arrays, and a UTF-8 string table. Strings are offset/size byte ranges without a
+terminator. The mesh-renderer material-index list is a variable auxiliary array.
+
+| ID | Component | Version | Requirement |
+| ---: | --- | ---: | --- |
+| 1 | Transform | 1 | Required exactly once per entity; no generic parent relationship |
+| 2 | MeshRenderer | 1 | Optional |
+| 3 | Camera | 1 | Optional |
+| 4 | Light | 1 | Optional |
+| 5 | PrefabInstance | 1 | Optional |
+| 6 | LightmapBinding | 1 | Optional |
+
+Entity flags are enabled (`1`) and static (`2`). Component flags are required
+(`1`) and enabled (`2`). Unknown required blocks fail loading; unknown optional
+blocks are skipped. References use zero-based indices and `0xffffffff` for no
+reference. UUIDs/GUIDs are raw 16-byte values. Deterministic writers sort
+entities by UUID, group blocks by component ID, deduplicate and sort normalized
+project-relative asset paths, and zero all padding.
 
 ## Sources
 

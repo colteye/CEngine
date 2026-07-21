@@ -2,7 +2,9 @@
 #define RENDERABLE_H
 
 #include "renderer/mesh.h"
+#include "renderer/lightmap.h"
 
+#include <array>
 #include <cstdint>
 
 #include <glm/glm.hpp>
@@ -24,15 +26,26 @@ struct Renderable
 {
 	const Mesh* mesh = nullptr;
 	Material* material = nullptr;
+	const Lightmap* lightmap = nullptr;
+	glm::vec2 lightmap_scale = glm::vec2(1.0f);
+	glm::vec2 lightmap_offset = glm::vec2(0.0f);
+	float lightmap_rgbm_range = 8.0f;
 	glm::mat4 transform = glm::mat4(1.0f);
 	Bounds local_bounds;
 	Bounds world_bounds;
 	uint32_t flags = RenderableFlagStatic | RenderableFlagCastsShadow | RenderableFlagReceivesShadow;
 };
 
+struct Frustum
+{
+	std::array<glm::vec4, 6> planes {};
+};
+
 Bounds CalculateBounds(const std::vector<glm::vec3>& vertices);
 Bounds MergeBounds(const Bounds& first, const Bounds& second);
 Bounds TransformBounds(const Bounds& bounds, const glm::mat4& transform);
+Frustum ExtractFrustum(const glm::mat4& view_projection);
+bool IntersectsFrustum(const Bounds& bounds, const Frustum& frustum);
 
 } // namespace CEngine::Renderer
 

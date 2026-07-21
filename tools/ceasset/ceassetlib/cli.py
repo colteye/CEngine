@@ -15,6 +15,7 @@ from .pipeline import (
     import_asset,
     watch,
 )
+from .scene_inspect import inspect_scene, print_scene
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -37,6 +38,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     watch_parser.add_argument("--force", action="store_true")
     watch_parser.add_argument("--interval-ms", type=int, default=1000)
     watch_parser.add_argument("--dds-format", default="DXT5")
+
+    inspect_parser = subparsers.add_parser("inspect")
+    inspect_parser.add_argument("asset", type=Path)
+    validate_parser = subparsers.add_parser("validate")
+    validate_parser.add_argument("asset", type=Path)
 
     return parser.parse_args(argv)
 
@@ -69,6 +75,14 @@ def main(argv: list[str]) -> int:
                 ),
                 max(args.interval_ms, 100),
             )
+        if args.command in ("inspect", "validate"):
+            asset = args.asset if args.asset.is_absolute() else paths.root / args.asset
+            inspection = inspect_scene(asset, paths.root, validate_assets=args.command == "validate")
+            if args.command == "inspect":
+                print_scene(inspection)
+            else:
+                print(f"valid: {asset}")
+            return 0
     except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:
         print(f"ceasset: {error}", file=sys.stderr)
         return 1

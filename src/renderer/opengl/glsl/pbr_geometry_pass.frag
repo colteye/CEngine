@@ -3,11 +3,13 @@
 layout(location = 0) out vec4 g_albedo;
 layout(location = 1) out vec4 g_normal_roughness;
 layout(location = 2) out vec4 g_material;
+layout(location = 3) out vec3 g_baked_light;
 
 in vec2 uv;
 in vec3 normal_pos_world;
 in vec3 tangent_pos_world;
 in vec3 bitangent_pos_world;
+in vec2 lightmap_uv;
 
 uniform sampler2D albedo;
 uniform sampler2D normal;
@@ -16,6 +18,10 @@ uniform vec4 base_color_factor;
 uniform float alpha_cutoff;
 uniform int render_mode;
 uniform bool receives_shadows;
+uniform sampler2D lightmap;
+uniform vec4 lightmap_scale_offset;
+uniform float lightmap_rgbm_range;
+uniform bool has_lightmap;
 
 const int RENDER_MODE_ALPHA_CLIP = 1;
 const int RENDER_MODE_ALPHA_HASH_DITHER = 2;
@@ -48,5 +54,12 @@ void main()
 
 	g_albedo = albedo_sample;
 	g_normal_roughness = vec4(world_normal * 0.5 + 0.5, mra.g);
-	g_material = vec4(mra.r, mra.b, flags, 1.0);
+	g_material = vec4(mra.r, mra.b, flags, has_lightmap ? 1.0 : 0.0);
+	if (has_lightmap) {
+		vec2 atlas_uv = lightmap_uv * lightmap_scale_offset.xy + lightmap_scale_offset.zw;
+		vec4 rgbm = texture(lightmap, atlas_uv);
+		g_baked_light = rgbm.rgb * (rgbm.a * lightmap_rgbm_range);
+	} else {
+		g_baked_light = vec3(0.0);
+	}
 }

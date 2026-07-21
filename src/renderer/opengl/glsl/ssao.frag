@@ -1,15 +1,13 @@
 #version 330 core
 
 in vec2 uv;
-layout(location = 0) out vec3 frag_color;
+layout(location = 0) out float frag_ao;
 
-uniform sampler2D render_tex;
 uniform sampler2D depth_tex;
 uniform sampler2D normal_roughness_tex;
 uniform mat4 projection;
 uniform mat4 inverse_projection;
 uniform mat4 view;
-uniform vec2 texel_size;
 
 const float radius = 0.65;
 const float bias = 0.025;
@@ -113,47 +111,7 @@ float raw_ao(vec2 tex_coord)
     return pow(saturate(ao), contrast);
 }
 
-float filtered_ao()
-{
-    vec3 center_pos = view_position_from_depth(uv);
-    float total = raw_ao(uv) * 4.0;
-    float weight = 4.0;
-
-    const vec2 offsets[4] = vec2[4](
-        vec2( 1.0,  0.0),
-        vec2(-1.0,  0.0),
-        vec2( 0.0,  1.0),
-        vec2( 0.0, -1.0)
-    );
-
-    for (int i = 0; i < 4; ++i) {
-        vec2 sample_uv = clamp(uv + offsets[i] * texel_size, vec2(0.0), vec2(1.0));
-        float sample_depth = texture(depth_tex, sample_uv).r;
-        if (sample_depth >= 1.0) {
-            continue;
-        }
-
-        vec3 sample_pos = view_position_from_depth(sample_uv);
-        float depth_delta = abs(center_pos.z - sample_pos.z);
-        if (depth_delta > radius) {
-            continue;
-        }
-
-        float edge_weight = exp(-depth_delta * 12.0);
-        total += raw_ao(sample_uv) * edge_weight;
-        weight += edge_weight;
-    }
-
-    return total / weight;
-}
-
 void main()
 {
-    vec3 color = texture(render_tex, uv).rgb;
-    if (texture(depth_tex, uv).r >= 1.0) {
-        frag_color = color;
-        return;
-    }
-
-    frag_color = color * filtered_ao();
+	frag_ao = raw_ao(uv);
 }

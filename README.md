@@ -15,6 +15,20 @@ CEngine is now built with CMake instead of Visual Studio project files.
 
 ## Build
 
+On macOS, install the Xcode Command Line Tools, then build natively for the
+current Mac (Apple Silicon or Intel):
+
+```sh
+xcode-select --install # only needed once
+cmake --preset mac-debug
+cmake --build --preset mac-debug
+./build/mac-debug/CEngine
+```
+
+Use `mac-release` in place of `mac-debug` for an optimized build. CMake links
+the system OpenGL framework and builds GLFW's Cocoa backend automatically; a
+separate Vulkan SDK is not required.
+
 From a Windows command prompt:
 
 ```bat
@@ -65,6 +79,14 @@ The viewer copies the full `assets/` tree beside the executable after each build
 
 ## Asset pipeline
 
+The target scene/entity model is documented in
+[`docs/scene_architecture.md`](docs/scene_architecture.md). CEngine presents
+flat classnamed entities implemented as one shallow `Entity` base and direct
+`final` classes with fixed fields. Mesh objects remain first-class scene entities;
+BSP world geometry and mandatory scene-tree traversal are not part of the design.
+The dependency-ordered delivery plan is in
+[`docs/cscene_implementation_plan.md`](docs/cscene_implementation_plan.md).
+
 The engine runtime should load target assets only. Source formats from tools such
 as Blender and Photoshop are converted by Python tooling before they become
 runtime files.
@@ -97,14 +119,22 @@ at export time, and writes one tagged collection target asset directly under
 collections are ignored.
 
 - `PREFAB_Hero` writes `Hero.casset`.
-- `SCENE_TestRoom` writes `TestRoom.casset`.
+- `SCENE_TestRoom` writes `TestRoom.cscene`.
 - Collection custom properties can override names with
   `ce_asset_type = prefab|scene` and `ce_asset_name = desired_name`.
 
-Select the top-level collection you want to become the asset root before running
-`File > Export > CEngine Assets`. Nested child collections are walked through
-that root, and the resulting component files are linked together by the single
-`.casset` root.
+Select the top-level collection you want to export before running
+`File > Export > CEngine Assets`. `PREFAB_` collections produce reusable
+`.casset` roots. `SCENE_` collections produce flat `.cscene` maps and generate
+referenced `.casset` files before publishing the scene.
+
+Scene exports also build baked lighting automatically. Static meshes retain an
+existing `CEngineLightmap` UV layer or receive a generated UV1, placements are
+packed into a deterministic padded atlas, and Cycles bakes `baked` lights into
+RGBM BC3 DDS. `.cmesh` owns UV1; `.cscene` stores only the atlas DDS reference,
+scale/offset, and RGBM range for each static placement. Optional scene custom
+properties `ce_lightmap_resolution`, `ce_lightmap_padding`, and
+`ce_lightmap_rgbm_range` override the 1024, 4-pixel, and 8.0 defaults.
 
 The current Blender phase exports hierarchy/placement payloads, static and
 skinned mesh geometry buffers, material payloads, skeleton metadata, animation
@@ -112,7 +142,7 @@ F-curve payloads, and textures.
 Each exported object record contains its Blender name, Blender object type,
 CEngine role, parent name when the parent is inside the exported collection, and
 a row-major `world_from_local` transform. `.casset` object records also include
-generated component asset paths such as `.cmesh`, `.cmat`, `.cskel`, and
+generated asset paths such as `.cmesh`, `.cmat`, `.cskel`, and
 `.canim`. These references are project-relative target paths, for example
 `assets/compiled/hero/meshes/SM_Body.cmesh`, so exported assets remain movable
 with the project.
@@ -127,9 +157,8 @@ Runtime-side asset support lives in `src/assets/`. `AssetFile` reads the common
 asset header and exposes the single payload. `LoadMeshAsset` builds the
 renderer's in-memory `Mesh` from `.cmesh` using explicit material slots supplied
 by the caller. `SkeletonAsset` validates `.cskel` and exposes bone rows/names
-without allocations. A future `.casset` runtime loader can instantiate component
-graphs from the binary composition payload when the entity/component side is
-ready.
+without allocations. `.cscene` loading constructs the fixed entity classes and
+retains referenced `.casset` and other asset handles transactionally.
 
 Install the Python tool dependency with:
 

@@ -147,6 +147,13 @@ RenderableHandle RenderSystem::RegisterRenderable(const Renderable& renderable)
 	return static_cast<RenderableHandle>(id);
 }
 
+void RenderSystem::RemoveRenderable(RenderableHandle handle)
+{
+	if (handle >= renderables.size()) return;
+	renderables[handle] = {};
+	if (backend != nullptr) backend->RemoveRenderable(handle);
+}
+
 void RenderSystem::UpdateRenderableTransform(RenderableHandle handle, const glm::mat4& transform)
 {
 	if (handle >= renderables.size())
@@ -169,6 +176,21 @@ void RenderSystem::RegisterMaterial(Material* material)
 	{
 		backend->RegisterMaterial(material);
 	}
+}
+
+void RenderSystem::RemoveMaterial(Material* material)
+{
+	if (backend != nullptr) backend->RemoveMaterial(material);
+}
+
+bool RenderSystem::RegisterLightmap(const Lightmap* lightmap)
+{
+	return backend == nullptr || backend->RegisterLightmap(lightmap);
+}
+
+void RenderSystem::RemoveLightmap(const Lightmap* lightmap)
+{
+	if (backend != nullptr) backend->RemoveLightmap(lightmap);
 }
 
 LightHandle RenderSystem::RegisterLight(const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow)
@@ -199,6 +221,14 @@ LightHandle RenderSystem::RegisterLight(const LightRecord& light)
 	lights_dirty = true;
 	++light_revision;
 	return static_cast<LightHandle>(id);
+}
+
+void RenderSystem::RemoveLight(LightHandle id)
+{
+	if (id >= direct_lights.size()) return;
+	direct_lights[id].enabled = false;
+	lights_dirty = true;
+	++light_revision;
 }
 
 void RenderSystem::UpdateLight(LightHandle id, const LightRecord& light)

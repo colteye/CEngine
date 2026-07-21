@@ -43,12 +43,17 @@ public:
 
 	static void RegisterMesh(const Mesh* mesh);
 	static RenderableHandle RegisterRenderable(const Renderable& renderable);
+	static void RemoveRenderable(RenderableHandle handle);
 	static void UpdateRenderableTransform(RenderableHandle handle, const glm::mat4& transform);
 	static void RegisterMaterial(Material* material);
+	static void RemoveMaterial(Material* material);
+	static bool RegisterLightmap(const Lightmap* lightmap);
+	static void RemoveLightmap(const Lightmap* lightmap);
 
 	static LightHandle RegisterLight(const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow);
 	static void UpdateLight(LightHandle id, const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow);
 	static LightHandle RegisterLight(const LightRecord& light);
+	static void RemoveLight(LightHandle id);
 	static void UpdateLight(LightHandle id, const LightRecord& light);
 
 	static const std::vector<Renderable>& GetRenderables();

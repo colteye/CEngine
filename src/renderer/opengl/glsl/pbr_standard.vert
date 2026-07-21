@@ -5,6 +5,7 @@ layout(location = 0) in vec3 i_vertex_pos;
 layout(location = 1) in vec2 i_vertex_uv;
 layout(location = 2) in vec3 i_normal_pos;
 layout(location = 3) in vec3 i_tangent_pos;
+layout(location = 4) in vec2 i_lightmap_uv;
 
 // Output data will be interpolated for each fragment.
 out vec3 normal_pos_world;
@@ -13,6 +14,7 @@ out vec3 bitangent_pos_world;
 
 out vec3 vertex_pos_world;
 out vec2 uv;
+out vec2 lightmap_uv;
 
 // Values that stay constant for the whole mesh.
 uniform mat4 model; // model matrix.
@@ -33,5 +35,6 @@ void main(){
 
     // UV of the vertex.
     uv = i_vertex_uv;
+    lightmap_uv = i_lightmap_uv;
 
 }

@@ -397,6 +397,7 @@ class BlenderAddonTests(unittest.TestCase):
                 patch.object(addon, "write_material_assets") as write_materials,
                 patch.object(addon, "write_skeleton_assets", return_value=[]),
                 patch.object(addon, "write_animation_assets", return_value=[]),
+                patch.object(addon, "bake_scene_lightmaps", return_value=({}, [])),
                 patch.object(addon, "write_mesh_assets") as write_meshes,
                 patch.object(addon, "register_outputs"),
             ):
@@ -425,6 +426,54 @@ class BlenderAddonTests(unittest.TestCase):
             self.assertTrue(casset.exists())
             self.assertIn(b"SM_Body", casset.read_bytes())
             self.assertNotIn(b"SM_Orphan", casset.read_bytes())
+
+    def test_scene_collection_writes_cscene_after_generating_referenced_casset(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "assets" / "source" / "maps" / "Test.blend"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"blend")
+            placed_mesh = FakeObject("SM_Floor")
+            prefab_mesh = FakeObject("SM_Door")
+            prefab = FakeCollection("PREFAB_Door", [prefab_mesh])
+            instance = FakeObject("Door", obj_type="EMPTY", instance_collection=prefab)
+            scene = FakeCollection("SCENE_Test", [placed_mesh, instance])
+            addon.bpy = types.SimpleNamespace(
+                data=types.SimpleNamespace(filepath=str(source), collections=[scene, prefab], images=[]),
+                context=types.SimpleNamespace(collection=scene, selected_objects=[]),
+                path=types.SimpleNamespace(abspath=lambda value: value),
+            )
+            compiled = root / "assets" / "compiled"
+
+            with (
+                patch.object(addon, "write_material_assets") as write_materials,
+                patch.object(addon, "write_skeleton_assets", return_value=[]),
+                patch.object(addon, "write_animation_assets", return_value=[]),
+                patch.object(addon, "bake_scene_lightmaps", return_value=({}, [])),
+                patch.object(addon, "write_mesh_assets") as write_meshes,
+            ):
+                write_materials.return_value = [
+                    types.SimpleNamespace(
+                        source=types.SimpleNamespace(name="SM_Floor_DefaultMaterial"),
+                        output=compiled / "maps" / "materials" / "SM_Floor_DefaultMaterial.cmat"),
+                    types.SimpleNamespace(
+                        source=types.SimpleNamespace(name="SM_Door_DefaultMaterial"),
+                        output=compiled / "maps" / "materials" / "SM_Door_DefaultMaterial.cmat"),
+                ]
+                write_meshes.return_value = [
+                    types.SimpleNamespace(source=placed_mesh, output=compiled / "maps" / "meshes" / "SM_Floor.cmesh"),
+                    types.SimpleNamespace(source=prefab_mesh, output=compiled / "maps" / "meshes" / "SM_Door.cmesh"),
+                ]
+                result = addon.export_current_file(compiled)
+
+            cscene = compiled / "maps" / "Test" / "Test.cscene"
+            casset = compiled / "maps" / "Test" / "Door.casset"
+            self.assertEqual(result.scenes, 1)
+            self.assertEqual(result.collections, 1)
+            self.assertTrue(cscene.exists())
+            self.assertTrue(casset.exists())
+            self.assertIn(b"assets/compiled/maps/Test/Door.casset", cscene.read_bytes())
+            self.assertIn(b"assets/compiled/maps/meshes/SM_Floor.cmesh", cscene.read_bytes())
 
     def test_object_component_assets_reference_generated_targets(self) -> None:
         obj = FakeObject("SM_Body", ["HeroSkin"])
@@ -459,6 +508,7 @@ class BlenderAddonTests(unittest.TestCase):
             self.assertIn("__init__.py", names)
             self.assertIn("blender_manifest.toml", names)
             self.assertIn("meshes.py", names)
+            self.assertIn("lightmaps.py", names)
             self.assertIn("ceassetlib/assetfile.py", names)
             self.assertIn("vendor/PIL/Image.py", names)
             self.assertIn("vendor/PIL/_imaging.cp311-win_amd64.pyd", names)

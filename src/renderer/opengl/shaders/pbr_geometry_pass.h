@@ -14,8 +14,9 @@ public:
 	PBRGeometryPass();
 
 	void Use() const;
-	void Update(const glm::mat4& model, const Material& material);
-	void SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao);
+	void Update(const glm::mat4& model, const Material& material, const glm::vec2& lightmap_scale,
+		const glm::vec2& lightmap_offset, float lightmap_rgbm_range);
+	void SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao, GLuint lightmap);
 
 private:
 	void InitializeParameters();
@@ -24,6 +25,7 @@ private:
 	GLuint albedo_tex = 0;
 	GLuint normal_tex = 0;
 	GLuint metallic_roughness_ao_tex = 0;
+	GLuint lightmap_tex = 0;
 
 	GLint model_id = -1;
 	GLint view_id = -1;
@@ -35,6 +37,10 @@ private:
 	GLint alpha_cutoff_id = -1;
 	GLint render_mode_id = -1;
 	GLint receives_shadows_id = -1;
+	GLint lightmap_id = -1;
+	GLint lightmap_scale_offset_id = -1;
+	GLint lightmap_rgbm_range_id = -1;
+	GLint has_lightmap_id = -1;
 };
 
 

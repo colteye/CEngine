@@ -6,6 +6,7 @@ out vec4 frag_color;
 uniform sampler2D g_albedo;
 uniform sampler2D g_normal_roughness;
 uniform sampler2D g_material;
+uniform sampler2D g_baked_light;
 uniform sampler2D g_depth;
 uniform sampler2D shadow_atlas;
 uniform samplerCube point_shadow_maps[8];
@@ -286,13 +287,16 @@ void main()
 	float metallic = material.r;
 	float ao = material.g;
 	bool receives_shadows = material.b > 0.5;
+	bool has_lightmap = material.a > 0.5;
 	vec3 world_pos = world_position_from_depth(depth);
 	vec3 view_dir = normalize(cam_pos_world - world_pos);
 
 	float sky_weight = clamp(normal.y * 0.5 + 0.5, 0.0, 1.0);
 	vec3 ambient_color = mix(ambient_ground_color, ambient_sky_color, sky_weight);
-	vec3 ambient = ambient_enabled ? ambient_color * ambient_intensity * albedo * ao : vec3(0.0);
-	vec3 color = ambient + evaluate_direct_lights(world_pos, normal, view_dir, albedo, metallic, roughness,
+	vec3 ambient = ambient_enabled && !has_lightmap ?
+		ambient_color * ambient_intensity * albedo * ao : vec3(0.0);
+	vec3 color = ambient + texture(g_baked_light, uv).rgb +
+		evaluate_direct_lights(world_pos, normal, view_dir, albedo, metallic, roughness,
 		receives_shadows);
 
 	color = color / (color + vec3(1.0));

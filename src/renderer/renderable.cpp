@@ -82,4 +82,47 @@ Bounds TransformBounds(const Bounds& bounds, const glm::mat4& transform)
 	return transformed;
 }
 
+Frustum ExtractFrustum(const glm::mat4& view_projection)
+{
+	const glm::mat4 rows = glm::transpose(view_projection);
+	Frustum frustum;
+	frustum.planes = {
+		rows[3] + rows[0], rows[3] - rows[0],
+		rows[3] + rows[1], rows[3] - rows[1],
+		rows[3] + rows[2], rows[3] - rows[2]
+	};
+
+	for (glm::vec4& plane : frustum.planes)
+	{
+		const float normal_length = glm::length(glm::vec3(plane));
+		if (normal_length > 0.0f)
+		{
+			plane /= normal_length;
+		}
+	}
+	return frustum;
+}
+
+bool IntersectsFrustum(const Bounds& bounds, const Frustum& frustum)
+{
+	// Missing bounds must remain visible; culling is only safe with valid spatial data.
+	if (!bounds.valid)
+	{
+		return true;
+	}
+
+	for (const glm::vec4& plane : frustum.planes)
+	{
+		const glm::vec3 positive(
+			plane.x >= 0.0f ? bounds.max.x : bounds.min.x,
+			plane.y >= 0.0f ? bounds.max.y : bounds.min.y,
+			plane.z >= 0.0f ? bounds.max.z : bounds.min.z);
+		if (glm::dot(glm::vec3(plane), positive) + plane.w < 0.0f)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 } // namespace CEngine::Renderer

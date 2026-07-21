@@ -18,13 +18,14 @@ from ceassetlib.paths import generic_path, output_dir_for_source
 from .materials import default_material_name_for_object, object_slot_materials
 
 
-VERTEX = struct.Struct("<ffffffff")
-SKINNED_VERTEX = struct.Struct("<ffffffffHHHHHHHH")
+VERTEX = struct.Struct("<ffffffffff")
+SKINNED_VERTEX = struct.Struct("<ffffffffffHHHHHHHH")
 INDEX = struct.Struct("<I")
 MESH_METADATA = struct.Struct("<4sHHIIIIIffffffIIIII")
 MESH_METADATA_MAGIC = b"CEMH"
 MESH_METADATA_VERSION = 1
 MESH_FLAG_SKINNED = 1 << 0
+MESH_FLAG_LIGHTMAP_UV = 1 << 1
 MAX_SKIN_INFLUENCES = 4
 
 
@@ -43,6 +44,7 @@ class MeshBuffers:
     bounds_max: tuple[float, float, float]
     vertex_stride: int
     skinned: bool
+    lightmap_uv: bool
     skeleton: str
     data: bytes
 
@@ -161,6 +163,20 @@ def active_uv_data(mesh: object):
     return getattr(active, "data", ()) if active is not None else ()
 
 
+def lightmap_uv_data(mesh: object):
+    uv_layers = getattr(mesh, "uv_layers", None)
+    if uv_layers is None:
+        return ()
+    getter = getattr(uv_layers, "get", None)
+    layer = getter("CEngineLightmap") if callable(getter) else None
+    if layer is None:
+        try:
+            layer = uv_layers[1] if len(uv_layers) > 1 else None
+        except (TypeError, IndexError):
+            layer = None
+    return getattr(layer, "data", ()) if layer is not None else ()
+
+
 def polygon_loop_indices(polygon: object) -> list[int]:
     return [int(index) for index in getattr(polygon, "loop_indices", ())]
 
@@ -187,6 +203,7 @@ def mesh_buffers(
     loops = getattr(mesh, "loops", ())
     polygons = getattr(mesh, "polygons", ())
     uv_data = active_uv_data(mesh)
+    uv1_data = lightmap_uv_data(mesh)
 
     packed_vertices = bytearray()
     packed_indices = bytearray()
@@ -207,6 +224,7 @@ def mesh_buffers(
                 position = blender_to_engine_vector(vertex.co)
                 normal = blender_to_engine_vector(getattr(loop, "normal", (0.0, 0.0, 1.0)))
                 uv = tuple2(uv_data[loop_index].uv) if loop_index < len(uv_data) else (0.0, 0.0)
+                uv1 = tuple2(uv1_data[loop_index].uv) if loop_index < len(uv1_data) else (0.0, 0.0)
 
                 for axis in range(3):
                     bounds_min[axis] = min(bounds_min[axis], position[axis])
@@ -214,15 +232,17 @@ def mesh_buffers(
 
                 if skinned:
                     skin_indices, skin_weights = skin_influences(obj, vertex, bone_lookup)
-                    packed_vertices.extend(SKINNED_VERTEX.pack(*position, *normal, *uv, *skin_indices, *skin_weights))
+                    packed_vertices.extend(SKINNED_VERTEX.pack(
+                        *position, *normal, *uv, *uv1, *skin_indices, *skin_weights))
                 else:
-                    packed_vertices.extend(VERTEX.pack(*position, *normal, *uv))
+                    packed_vertices.extend(VERTEX.pack(*position, *normal, *uv, *uv1))
                 packed_indices.extend(INDEX.pack(vertex_count))
                 vertex_count += 1
 
     if vertex_count == 0:
         bounds = (0.0, 0.0, 0.0)
-        return MeshBuffers(0, 0, bounds, bounds, vertex_stride, skinned, getattr(armature, "name", ""), b"")
+        return MeshBuffers(0, 0, bounds, bounds, vertex_stride, skinned,
+            bool(uv1_data), getattr(armature, "name", ""), b"")
 
     return MeshBuffers(
         vertex_count,
@@ -231,6 +251,7 @@ def mesh_buffers(
         tuple(bounds_max),
         vertex_stride,
         skinned,
+        bool(uv1_data),
         getattr(armature, "name", ""),
         bytes(packed_vertices + packed_indices),
     )
@@ -241,7 +262,8 @@ def mesh_metadata_payload(
     material_slot_count: int,
     geometry_offset: int,
 ) -> bytes:
-    flags = MESH_FLAG_SKINNED if buffers.skinned else 0
+    flags = (MESH_FLAG_SKINNED if buffers.skinned else 0) | \
+        (MESH_FLAG_LIGHTMAP_UV if buffers.lightmap_uv else 0)
     return MESH_METADATA.pack(
         MESH_METADATA_MAGIC,
         MESH_METADATA_VERSION,

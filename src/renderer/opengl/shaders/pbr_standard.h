@@ -15,18 +15,20 @@ public:
 	GLuint albedo_tex;
 	GLuint normal_tex;
 	GLuint metallic_roughness_ao_tex;
+	GLuint lightmap_tex;
 
 	PBRStandard();
 	void Use() const;
-	void Update(const glm::mat4& model, const Material& material, const OpenGLShadowGpuData& shadow_data,
+	void UpdateFrame(const OpenGLShadowGpuData& shadow_data,
 		GLuint shadow_atlas, const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_shadow_maps);
-	void SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao);
+	void UpdateObject(const glm::mat4& model, const Material& material, const glm::vec2& lightmap_scale,
+		const glm::vec2& lightmap_offset, float lightmap_rgbm_range);
+	void SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao, GLuint lightmap);
 
 private:
 	void InitializeParameters();
 	void SetParametersStatic();
 	void SetMaterialParameters(const Material& material);
-	void SetParametersDynamic(const glm::mat4& model);
 
 	ShaderProgram shader_program;
 	OpenGLDirectLightBuffer direct_lights;
@@ -40,6 +42,10 @@ private:
 	GLuint alpha_cutoff_id;
 	GLuint render_mode_id;
 	GLuint receives_shadows_id;
+	GLuint lightmap_id;
+	GLuint lightmap_scale_offset_id;
+	GLuint lightmap_rgbm_range_id;
+	GLuint has_lightmap_id;
 
 };
 

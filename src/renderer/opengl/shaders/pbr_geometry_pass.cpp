@@ -17,7 +17,8 @@ void PBRGeometryPass::Use() const
 	shader_program.Use();
 }
 
-void PBRGeometryPass::Update(const glm::mat4& model, const Material& material)
+void PBRGeometryPass::Update(const glm::mat4& model, const Material& material,
+	const glm::vec2& lightmap_scale, const glm::vec2& lightmap_offset, float lightmap_rgbm_range)
 {
 	const RenderFrameConstants& constants = RenderSystem::GetFrameConstants();
 	glUniformMatrix4fv(model_id, 1, GL_FALSE, glm::value_ptr(model));
@@ -27,6 +28,10 @@ void PBRGeometryPass::Update(const glm::mat4& model, const Material& material)
 	glUniform1f(alpha_cutoff_id, material.GetAlphaCutoff());
 	glUniform1i(render_mode_id, static_cast<int>(material.GetRenderMode()));
 	glUniform1i(receives_shadows_id, material.ReceivesShadows() ? 1 : 0);
+	glUniform4f(lightmap_scale_offset_id, lightmap_scale.x, lightmap_scale.y,
+		lightmap_offset.x, lightmap_offset.y);
+	glUniform1f(lightmap_rgbm_range_id, lightmap_rgbm_range);
+	glUniform1i(has_lightmap_id, lightmap_tex != 0 ? 1 : 0);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, albedo_tex);
@@ -39,13 +44,19 @@ void PBRGeometryPass::Update(const glm::mat4& model, const Material& material)
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, metallic_roughness_ao_tex);
 	glUniform1i(metallic_roughness_ao_id, 2);
+
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, lightmap_tex);
+	glUniform1i(lightmap_id, 3);
 }
 
-void PBRGeometryPass::SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao)
+void PBRGeometryPass::SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao,
+	GLuint lightmap)
 {
 	albedo_tex = albedo;
 	normal_tex = normal;
 	metallic_roughness_ao_tex = metallic_roughness_ao;
+	lightmap_tex = lightmap;
 }
 
 void PBRGeometryPass::InitializeParameters()
@@ -61,6 +72,10 @@ void PBRGeometryPass::InitializeParameters()
 	alpha_cutoff_id = glGetUniformLocation(shader_id, "alpha_cutoff");
 	render_mode_id = glGetUniformLocation(shader_id, "render_mode");
 	receives_shadows_id = glGetUniformLocation(shader_id, "receives_shadows");
+	lightmap_id = glGetUniformLocation(shader_id, "lightmap");
+	lightmap_scale_offset_id = glGetUniformLocation(shader_id, "lightmap_scale_offset");
+	lightmap_rgbm_range_id = glGetUniformLocation(shader_id, "lightmap_rgbm_range");
+	has_lightmap_id = glGetUniformLocation(shader_id, "has_lightmap");
 }
 
 } // namespace CEngine::Renderer

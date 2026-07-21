@@ -20,7 +20,7 @@ COLLECTION_PREFIXES = {
 
 RUNTIME_EXTENSIONS = {
     AssetType.PREFAB: ".casset",
-    AssetType.SCENE: ".casset",
+    AssetType.SCENE: ".cscene",
 }
 
 OBJECT_ROLE_PREFIXES = (
@@ -379,6 +379,8 @@ def write_collection_asset(
         if logger is not None:
             logger(f"Collection skipped: {collection.name} is not tagged as a CEngine asset")
         return None
+    if spec.asset_type == AssetType.SCENE:
+        raise RuntimeError("scene collections must be written with the .cscene exporter")
 
     extension = RUNTIME_EXTENSIONS[spec.asset_type]
     output = output_dir_for_source(source, output_root) / f"{spec.asset_name}{extension}"

@@ -3,6 +3,7 @@ out vec4 frag_color;
 
 // Data from vertex shader.
 in vec2 uv;
+in vec2 lightmap_uv;
 in vec3 vertex_pos_world;
 in vec3 normal_pos_world;
 in vec3 tangent_pos_world;
@@ -14,6 +15,7 @@ uniform sampler2D normal;
 uniform sampler2D metallic_roughness_ao;
 uniform sampler2D shadow_atlas;
 uniform samplerCube point_shadow_maps[8];
+uniform sampler2D lightmap;
 
 uniform vec3 cam_pos_world;
 uniform vec4 base_color_factor;
@@ -25,6 +27,9 @@ uniform vec3 ambient_ground_color;
 uniform float ambient_intensity;
 uniform bool ambient_enabled;
 uniform mat4 view;
+uniform vec4 lightmap_scale_offset;
+uniform float lightmap_rgbm_range;
+uniform bool has_lightmap;
 
 const int MAX_DIRECT_LIGHTS = 64;
 const float LIGHT_TYPE_DIRECTIONAL = 0.0;
@@ -337,8 +342,15 @@ void main()
   
     float sky_weight = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
     vec3 ambient_color = mix(ambient_ground_color, ambient_sky_color, sky_weight);
-    vec3 ambient = ambient_enabled ? ambient_color * ambient_intensity * albedo * ao : vec3(0.0);
-    vec3 color = ambient + Lo;
+	vec3 ambient = ambient_enabled && !has_lightmap ?
+		ambient_color * ambient_intensity * albedo * ao : vec3(0.0);
+	vec3 baked_light = vec3(0.0);
+	if (has_lightmap) {
+		vec2 atlas_uv = lightmap_uv * lightmap_scale_offset.xy + lightmap_scale_offset.zw;
+		vec4 rgbm = texture(lightmap, atlas_uv);
+		baked_light = rgbm.rgb * (rgbm.a * lightmap_rgbm_range);
+	}
+    vec3 color = ambient + baked_light + Lo;
 	
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));  

@@ -25,6 +25,10 @@ struct OpenGLDrawItem {
 	GLuint albedo_tex = 0;
 	GLuint normal_tex = 0;
 	GLuint metallic_roughness_ao_tex = 0;
+	GLuint lightmap_tex = 0;
+	glm::vec2 lightmap_scale = glm::vec2(1.0f);
+	glm::vec2 lightmap_offset = glm::vec2(0.0f);
+	float lightmap_rgbm_range = 8.0f;
 };
 
 enum class OpenGLRenderQueue

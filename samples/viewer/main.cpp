@@ -12,6 +12,10 @@
 #include <utility>
 #include <vector>
 
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
+
 #if defined(CENGINE_ENABLE_OPENGL)
 #include <glad/glad.h>
 #endif
@@ -21,12 +25,18 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "assets/casset_loader.h"
+#include "assets/asset_database.h"
 #include "assets/material_loader.h"
 #include "assets/mesh_loader.h"
 #include "controls.h"
 #include "camera.h"
 #include "physics/physics_system.h"
 #include "renderer/render_system.h"
+#include "scene/scene_loader.h"
+#include "scene/scene_render_state.h"
+#include "scene/scene_physics_state.h"
+#include "scene/scene.h"
+#include "entity/camera_entity.h"
 
 #if defined(CENGINE_ENABLE_JOLT_PHYSICS)
 #include "physics/jolt/jolt_physics_backend.h"
@@ -38,6 +48,34 @@
 namespace Renderer = CEngine::Renderer;
 
 namespace {
+bool SetRuntimeWorkingDirectory(const char* argv0)
+{
+	std::filesystem::path executable_path;
+
+#if defined(__APPLE__)
+	uint32_t buffer_size = 0;
+	_NSGetExecutablePath(nullptr, &buffer_size);
+	std::vector<char> buffer(buffer_size);
+	if (_NSGetExecutablePath(buffer.data(), &buffer_size) == 0)
+	{
+		executable_path = std::filesystem::weakly_canonical(buffer.data());
+	}
+#endif
+
+	if (executable_path.empty() && argv0 != nullptr)
+	{
+		executable_path = std::filesystem::absolute(argv0);
+	}
+	if (executable_path.empty() || executable_path.parent_path().empty())
+	{
+		return false;
+	}
+
+	std::error_code error;
+	std::filesystem::current_path(executable_path.parent_path(), error);
+	return !error;
+}
+
 struct SimulatedModel
 {
 	PhysicsBodyHandle body = kInvalidPhysicsBodyHandle;
@@ -416,6 +454,91 @@ Renderer::RenderBackendType ParseBackend(int argc, char** argv)
 #endif
 }
 
+std::filesystem::path ParseScenePath(int argc, char** argv)
+{
+	for (int index = 1; index < argc; ++index)
+	{
+		if (std::strcmp(argv[index], "--backend") == 0) { ++index; continue; }
+		const std::filesystem::path path(argv[index]);
+		if (path.extension() == ".cscene") return std::filesystem::absolute(path);
+	}
+	return {};
+}
+
+std::filesystem::path ProjectRootForScene(const std::filesystem::path& scene_path)
+{
+	for (std::filesystem::path path = scene_path.parent_path(); !path.empty(); path = path.parent_path())
+	{
+		if (path.filename() == "assets") return path.parent_path();
+		if (path == path.root_path()) break;
+	}
+	return std::filesystem::current_path();
+}
+
+int RunSceneViewer(GLFWwindow* window, Renderer::RenderBackendType backend_type,
+	const std::filesystem::path& scene_path)
+{
+	CEngine::Assets::AssetDatabase assets(ProjectRootForScene(scene_path));
+	std::string error;
+	auto scene = CEngine::Scene::LoadScene(scene_path, assets, &error);
+	if (scene == nullptr)
+	{
+		std::cerr << "Failed to load scene: " << error << '\n';
+		return -1;
+	}
+	CEngine::Scene::SceneRenderState render_state;
+	if (!render_state.Activate(*scene, assets, &error))
+	{
+		std::cerr << "Failed to activate scene rendering: " << error << '\n';
+		return -1;
+	}
+#if defined(CENGINE_ENABLE_JOLT_PHYSICS)
+	PhysicsSystem physics(std::make_unique<JoltPhysicsBackend>());
+	if (!physics.Initialize({}))
+	{
+		std::cerr << "Failed to initialize scene physics.\n";
+		return -1;
+	}
+	CEngine::Scene::ScenePhysicsState physics_state;
+	if (!physics_state.Activate(*scene, physics, &error))
+	{
+		std::cerr << "Failed to activate scene physics: " << error << '\n';
+		return -1;
+	}
+#endif
+
+	Camera camera;
+	for (const auto& entity : scene->Entities())
+	{
+		if (entity == nullptr || entity->Classname() != "camera") continue;
+		const auto& source = static_cast<const CEngine::Entities::CameraEntity&>(*entity);
+		camera.SetPosition(source.GetTransform().position);
+		camera.SetAnglesCartesian(glm::normalize(glm::vec3(
+			source.GetTransform().world_matrix * glm::vec4(0, 0, -1, 0))));
+		camera.SetFOV(glm::degrees(source.vertical_fov_radians));
+		break;
+	}
+	Controls controls(window);
+	double previous = glfwGetTime();
+	do
+	{
+		const double current = glfwGetTime();
+		const float delta_seconds = static_cast<float>(current - previous);
+		controls.Update(&camera, delta_seconds);
+		previous = current;
+#if defined(CENGINE_ENABLE_JOLT_PHYSICS)
+		physics_state.Step(delta_seconds);
+		render_state.UpdateDynamic(*scene);
+#endif
+		Renderer::RenderSystem::Render();
+		if (backend_type == Renderer::RenderBackendType::OpenGL) glfwSwapBuffers(window);
+		glfwPollEvents();
+	}
+	while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS &&
+		glfwWindowShouldClose(window) == 0);
+	return 0;
+}
+
 #if defined(CENGINE_ENABLE_JOLT_PHYSICS)
 SimulatedModel CreateDynamicBarrel(PhysicsSystem& physics, const DemoModel& model,
 	const glm::vec3& floor_position, float yaw_degrees, const glm::vec3& initial_velocity)
@@ -517,6 +640,12 @@ GLFWwindow* Initialization(Renderer::RenderBackendType backend_type)
 
 int main(int argc, char** argv)
 {
+	const std::filesystem::path scene_path = ParseScenePath(argc, argv);
+	if (!SetRuntimeWorkingDirectory(argc > 0 ? argv[0] : nullptr))
+	{
+		std::cerr << "Warning: could not use the executable directory for runtime assets.\n";
+	}
+
 	const Renderer::RenderBackendType backend_type = ParseBackend(argc, argv);
 
 	// Init control related stuff.
@@ -534,6 +663,14 @@ int main(int argc, char** argv)
 		glfwDestroyWindow(window);
 		glfwTerminate();
 		return -1;
+	}
+	if (!scene_path.empty())
+	{
+		const int result = RunSceneViewer(window, backend_type, scene_path);
+		Renderer::RenderSystem::Shutdown();
+		glfwDestroyWindow(window);
+		glfwTerminate();
+		return result;
 	}
 
 	{

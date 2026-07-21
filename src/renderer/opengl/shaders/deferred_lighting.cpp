@@ -17,8 +17,8 @@ void DeferredLighting::Use() const
 	shader_program.Use();
 }
 
-void DeferredLighting::Update(GLuint albedo, GLuint normal_roughness, GLuint material, GLuint depth,
-	int width, int height, const OpenGLShadowGpuData& shadow_data, GLuint shadow_atlas,
+void DeferredLighting::Update(GLuint albedo, GLuint normal_roughness, GLuint material, GLuint baked_light,
+	GLuint depth, int width, int height, const OpenGLShadowGpuData& shadow_data, GLuint shadow_atlas,
 	const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_shadow_maps)
 {
 	const RenderFrameConstants& constants = RenderSystem::GetFrameConstants();
@@ -38,8 +38,12 @@ void DeferredLighting::Update(GLuint albedo, GLuint normal_roughness, GLuint mat
 	glUniform1i(material_id, 2);
 
 	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, baked_light);
+	glUniform1i(baked_light_id, 3);
+
+	glActiveTexture(GL_TEXTURE4);
 	glBindTexture(GL_TEXTURE_2D, depth);
-	glUniform1i(depth_id, 3);
+	glUniform1i(depth_id, 4);
 
 	glUniformMatrix4fv(view_id, 1, GL_FALSE, glm::value_ptr(constants.view));
 	glUniformMatrix4fv(projection_id, 1, GL_FALSE, glm::value_ptr(constants.proj));
@@ -65,6 +69,7 @@ void DeferredLighting::InitializeParameters()
 	albedo_id = glGetUniformLocation(shader_id, "g_albedo");
 	normal_roughness_id = glGetUniformLocation(shader_id, "g_normal_roughness");
 	material_id = glGetUniformLocation(shader_id, "g_material");
+	baked_light_id = glGetUniformLocation(shader_id, "g_baked_light");
 	depth_id = glGetUniformLocation(shader_id, "g_depth");
 	view_id = glGetUniformLocation(shader_id, "view");
 	projection_id = glGetUniformLocation(shader_id, "projection");

@@ -34,9 +34,12 @@ struct OpenGLFrameResources {
 	GLuint g_albedo = 0;
 	GLuint g_normal_roughness = 0;
 	GLuint g_material = 0;
+	GLuint g_baked_light = 0;
 	GLuint scene_depth = 0;
 	GLuint opaque_lit_fbo = 0;
 	GLuint opaque_lit_color = 0;
+	GLuint ssao_fbo = 0;
+	GLuint ssao = 0;
 	GLuint scene_color_fbo = 0;
 	GLuint scene_color = 0;
 	GLuint depth_only_fbo = 0;
@@ -66,12 +69,14 @@ struct ShaderBuffers {
 	GLuint vertex_array_obj = 0;
 	GLuint vertex_buffer = 0;
 	GLuint uv_buffer = 0;
+	GLuint lightmap_uv_buffer = 0;
 	GLuint normal_buffer = 0;
 	GLuint tangent_buffer = 0;
 	GLuint indice_buffer = 0;
 
 	size_t vertex_buffer_length = 0;
 	size_t uv_buffer_length = 0;
+	size_t lightmap_uv_buffer_length = 0;
 	size_t normal_buffer_length = 0;
 	size_t tangent_buffer_length = 0;
 	size_t indice_buffer_length = 0;
@@ -86,9 +91,13 @@ public:
 	void RenderDepthOnly(const glm::mat4& view, const glm::mat4& projection,
 		uint32_t native_depth_texture, int texture_width, int texture_height) override;
 	void RegisterRenderable(const Renderable& renderable) override;
+	void RemoveRenderable(RenderableHandle handle) override;
 	void UpdateRenderableTransform(RenderableHandle handle, const glm::mat4& transform,
 		const Bounds& world_bounds) override;
 	void RegisterMaterial(Material* material) override;
+	void RemoveMaterial(Material* material) override;
+	bool RegisterLightmap(const Lightmap* lightmap) override;
+	void RemoveLightmap(const Lightmap* lightmap) override;
 
 private:
 	static ShaderBuffers InitShaderBuffers();
@@ -119,6 +128,7 @@ private:
 	OpenGLShaderPasses shader_passes;
 	std::unordered_map<MaterialShaderType, ShaderBuffers> shader_buffer_dict;
 	std::unordered_map<Material*, OpenGLMaterialResources> material_resources;
+	std::unordered_map<const Lightmap*, GLuint> lightmap_resources;
 	std::vector<OpenGLDrawItem> draw_items;
 };
 

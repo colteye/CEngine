@@ -13,6 +13,8 @@ namespace Renderer = CEngine::Renderer;
 namespace {
 
 constexpr std::uint32_t StaticVertexStride = 32;
+constexpr std::uint32_t LightmapVertexStride = 40;
+constexpr std::uint32_t MeshFlagLightmapUv = 1u << 1u;
 constexpr std::array<char, 4> MeshMetadataMagic = {'C', 'E', 'M', 'H'};
 constexpr std::uint16_t MeshMetadataVersion = 1;
 
@@ -168,7 +170,14 @@ bool LoadMeshAsset(const std::filesystem::path& path,
     mesh_data.vertices.reserve(metadata.index_count);
     mesh_data.normals.reserve(metadata.index_count);
     mesh_data.uvs.reserve(metadata.index_count);
+    mesh_data.lightmap_uvs.reserve(metadata.index_count);
     mesh_data.tangents.reserve(metadata.index_count);
+	mesh_data.has_lightmap_uv = (metadata.flags & MeshFlagLightmapUv) != 0;
+	if (mesh_data.has_lightmap_uv && metadata.vertex_stride < LightmapVertexStride)
+	{
+		SetError(error, "mesh declares lightmap UVs but its vertex stride is too small");
+		return false;
+	}
     mesh_data.local_bounds.min = glm::vec3(
         metadata.bounds_min[0],
         metadata.bounds_min[1],
@@ -192,6 +201,8 @@ bool LoadMeshAsset(const std::filesystem::path& path,
         mesh_data.vertices.push_back(ReadVec3(vertex));
         mesh_data.normals.push_back(ReadVec3(vertex + 12));
         mesh_data.uvs.push_back(ReadVec2(vertex + 24));
+        mesh_data.lightmap_uvs.push_back(mesh_data.has_lightmap_uv ?
+            ReadVec2(vertex + 32) : glm::vec2(0.0f));
         mesh_data.tangents.push_back(glm::vec3(1.0f, 0.0f, 0.0f));
     }
 

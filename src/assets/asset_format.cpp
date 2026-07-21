@@ -93,8 +93,9 @@ const char* RuntimeExtensionFor(AssetType type)
     case AssetType::Physics:
         return ".cphys";
     case AssetType::Prefab:
-    case AssetType::Scene:
         return ".casset";
+    case AssetType::Scene:
+        return ".cscene";
     case AssetType::Audio:
         return "";
     case AssetType::Vfx:

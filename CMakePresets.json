@@ -24,6 +24,28 @@
       }
     },
     {
+      "name": "mac-debug",
+      "displayName": "macOS Debug",
+      "inherits": "debug",
+      "binaryDir": "${sourceDir}/build/mac-debug",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": "mac-release",
+      "displayName": "macOS Release",
+      "inherits": "release",
+      "binaryDir": "${sourceDir}/build/mac-release",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
       "name": "debug-headless",
       "displayName": "Debug Headless Compile Check",
       "binaryDir": "${sourceDir}/build/debug-headless",
@@ -70,6 +92,16 @@
     {
       "name": "release",
       "configurePreset": "release",
+      "configuration": "Release"
+    },
+    {
+      "name": "mac-debug",
+      "configurePreset": "mac-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "mac-release",
+      "configurePreset": "mac-release",
       "configuration": "Release"
     },
     {

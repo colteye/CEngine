@@ -21,6 +21,7 @@ namespace Renderer = CEngine::Renderer;
 constexpr std::array<char, 4> MeshMetadataMagic = {'C', 'E', 'M', 'H'};
 constexpr std::uint16_t MeshMetadataVersion = 1;
 constexpr std::uint32_t MeshFlagSkinned = 1u << 0u;
+constexpr std::uint32_t MeshFlagLightmapUv = 1u << 1u;
 constexpr std::array<char, 4> MaterialPayloadMagic = {'C', 'E', 'M', 'A'};
 constexpr std::uint16_t MaterialPayloadVersion = 1;
 constexpr std::string_view DefaultTexturePath = "assets/missing/missing.DDS";
@@ -134,6 +135,15 @@ void AppendSkinnedStaticVertex(std::vector<std::uint8_t>& bytes,
     }
 }
 
+void AppendLightmappedVertex(std::vector<std::uint8_t>& bytes,
+    float x, float y, float z, float nx, float ny, float nz,
+    float u, float v, float lightmap_u, float lightmap_v)
+{
+    AppendStaticVertex(bytes, x, y, z, nx, ny, nz, u, v);
+    AppendF32(bytes, lightmap_u);
+    AppendF32(bytes, lightmap_v);
+}
+
 std::vector<std::uint8_t> StaticTriangleGeometry()
 {
     std::vector<std::uint8_t> geometry;
@@ -160,6 +170,19 @@ std::vector<std::uint8_t> SkinnedTriangleGeometry()
     return geometry;
 }
 
+std::vector<std::uint8_t> LightmappedTriangleGeometry()
+{
+    std::vector<std::uint8_t> geometry;
+    geometry.reserve(3 * 40 + 3 * 4);
+    AppendLightmappedVertex(geometry, 0, 0, 0, 0, 0, 1, 0, 0, 0.25f, 0.25f);
+    AppendLightmappedVertex(geometry, 1, 0, 0, 0, 0, 1, 1, 0, 0.75f, 0.25f);
+    AppendLightmappedVertex(geometry, 0, 2, 0, 0, 0, 1, 0, 1, 0.25f, 0.75f);
+    AppendU32(geometry, 0);
+    AppendU32(geometry, 1);
+    AppendU32(geometry, 2);
+    return geometry;
+}
+
 std::vector<std::uint8_t> StaticMeshPayload(std::uint32_t flags = 0, std::uint32_t vertex_stride = 32)
 {
     DiskMeshMetadata mesh_metadata;
@@ -176,8 +199,8 @@ std::vector<std::uint8_t> StaticMeshPayload(std::uint32_t flags = 0, std::uint32
 
     std::vector<std::uint8_t> payload;
     AppendStruct(payload, mesh_metadata);
-    const std::vector<std::uint8_t> geometry =
-        vertex_stride == 48 ? SkinnedTriangleGeometry() : StaticTriangleGeometry();
+    const std::vector<std::uint8_t> geometry = vertex_stride == 48 ? SkinnedTriangleGeometry() :
+        (vertex_stride == 40 ? LightmappedTriangleGeometry() : StaticTriangleGeometry());
     payload.insert(payload.end(), geometry.begin(), geometry.end());
     return payload;
 }
@@ -218,6 +241,14 @@ bool CommonAssetPayloadRemainsDirectlyAddressable()
 
     std::filesystem::remove_all(root);
     return true;
+}
+
+bool SceneAndPrefabExtensionsRemainDistinct()
+{
+    return Expect(std::string_view(RuntimeExtensionFor(AssetType::Scene)) == ".cscene",
+               "scene assets must use .cscene") &&
+        Expect(std::string_view(RuntimeExtensionFor(AssetType::Prefab)) == ".casset",
+            "prefab assets must keep .casset");
 }
 
 bool MeshLoaderBuildsRendererMeshFromTargetAsset()
@@ -298,6 +329,30 @@ bool MeshLoaderTreatsSkinnedMeshesAsStaticGeometry()
 
     std::filesystem::remove_all(root);
     return true;
+}
+
+bool MeshLoaderReadsLightmapUvStream()
+{
+    const std::filesystem::path root = TestRoot();
+    const std::filesystem::path path = root / "assets" / "compiled" / "maps" / "Floor.cmesh";
+    AssetWriteDesc asset;
+    asset.type = AssetType::Mesh;
+    asset.guid = GuidFromStableName("assets/compiled/maps/Floor.cmesh");
+    asset.payload = StaticMeshPayload(MeshFlagLightmapUv, 40);
+    std::string error;
+    if (!Expect(WriteBinaryAsset(path, asset, &error), error.c_str())) return false;
+
+    auto* material = reinterpret_cast<Renderer::Material*>(static_cast<std::uintptr_t>(1));
+    Renderer::Mesh mesh;
+    if (!Expect(LoadMeshAsset(path, {material}, mesh, &error), error.c_str())) return false;
+    const Renderer::MeshData& data = mesh.GetMaterialMeshData().begin()->second;
+    const bool result =
+        Expect(data.has_lightmap_uv, "mesh should retain its lightmap UV flag") &&
+        Expect(data.lightmap_uvs.size() == 3, "mesh should expand its lightmap UV stream") &&
+        Expect(data.lightmap_uvs[1] == glm::vec2(0.75f, 0.25f),
+            "mesh should decode UV1 independently from UV0");
+    std::filesystem::remove_all(root);
+    return result;
 }
 
 bool MaterialLoaderFillsMissingTextureSlots()
@@ -640,8 +695,10 @@ bool SkeletonViewReadsBinaryBonesAndNames()
 int main()
 {
     if (!CommonAssetPayloadRemainsDirectlyAddressable() ||
+        !SceneAndPrefabExtensionsRemainDistinct() ||
         !MeshLoaderBuildsRendererMeshFromTargetAsset() ||
         !MeshLoaderTreatsSkinnedMeshesAsStaticGeometry() ||
+		!MeshLoaderReadsLightmapUvStream() ||
         !MaterialLoaderFillsMissingTextureSlots() ||
         !MaterialLoaderResolvesLegacyCompiledTexturePaths() ||
         !CAssetLoaderReadsBinaryComposition() ||

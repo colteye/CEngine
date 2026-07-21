@@ -25,7 +25,7 @@ GLuint OpenGLTexture::LoadDDS(const std::string& image_p) {
 	glGenTextures(1, &TextureID);
 	glBindTexture(GL_TEXTURE_2D, TextureID);
 
-	glCompressedTexImage2DARB(GL_TEXTURE_2D, 0, image.get_format(),
+		glCompressedTexImage2D(GL_TEXTURE_2D, 0, image.get_format(),
 		image.get_width(), image.get_height(), 0, image.get_size(),
 		image);
 
@@ -33,7 +33,7 @@ GLuint OpenGLTexture::LoadDDS(const std::string& image_p) {
 	{
 		nv_dds::CSurface mipmap = image.get_mipmap(i);
 
-		glCompressedTexImage2DARB(GL_TEXTURE_2D, i + 1, image.get_format(),
+			glCompressedTexImage2D(GL_TEXTURE_2D, i + 1, image.get_format(),
 			mipmap.get_width(), mipmap.get_height(), 0, mipmap.get_size(),
 			mipmap);
 	}

@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.22)
 
 project(CEngine VERSION 0.1.0 LANGUAGES C CXX)
 
+include(CTest)
+
 option(CENGINE_BUILD_VIEWER "Build the interactive CEngine viewer executable." ON)
 option(CENGINE_ENABLE_OPENGL "Build the OpenGL 3.3 render backend." ON)
 option(CENGINE_USE_SYSTEM_GLFW "Use an installed system GLFW package instead of fetching GLFW source." OFF)
@@ -105,6 +107,15 @@ ce_setup_glfw(CEngine_GLFW_TARGET)
 
 if(CENGINE_ENABLE_JOLT_PHYSICS)
     include(FetchContent)
+    # CEngine only consumes Jolt's CPU physics library.  Jolt enables its
+    # optional GPU compute backends by default; on macOS that can make an
+    # otherwise OpenGL-only build require Vulkan's glslc shader compiler.
+    set(JPH_USE_DX12 OFF CACHE BOOL "" FORCE)
+    set(JPH_USE_VK OFF CACHE BOOL "" FORCE)
+    set(JPH_USE_MTL OFF CACHE BOOL "" FORCE)
+    set(JPH_USE_CPU_COMPUTE ON CACHE BOOL "" FORCE)
+    set(DEBUG_RENDERER_IN_DEBUG_AND_RELEASE OFF CACHE BOOL "" FORCE)
+    set(ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
     set(DOUBLE_PRECISION OFF CACHE BOOL "" FORCE)
     set(GENERATE_DEBUG_SYMBOLS ON CACHE BOOL "" FORCE)
     set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "" FORCE)
@@ -138,19 +149,45 @@ if(CENGINE_ENABLE_OPENGL)
         src/renderer/opengl/glsl/pbr_standard.frag
         src/renderer/opengl/glsl/ssao.vert
         src/renderer/opengl/glsl/ssao.frag
+		src/renderer/opengl/glsl/ssao_composite.frag
     )
 endif()
 
 set(CENGINE_ASSET_SOURCES
+    src/assets/asset_database.cpp
     src/assets/asset_format.cpp
     src/assets/asset_io.cpp
     src/assets/casset_loader.cpp
+    src/assets/cscene_reader.cpp
     src/assets/material_loader.cpp
     src/assets/mesh_loader.cpp
     src/assets/skeleton_loader.cpp
 )
 
 add_library(CEngineAssets STATIC ${CENGINE_ASSET_SOURCES})
+
+add_library(CEngineScene STATIC
+    src/entity/camera_entity.cpp
+    src/entity/dynamic_prop.cpp
+    src/entity/empty_entity.cpp
+    src/entity/entity.cpp
+    src/entity/entity_factory.cpp
+    src/entity/light_entity.cpp
+    src/entity/player_start.cpp
+    src/entity/prefab_entity.cpp
+    src/entity/static_prop.cpp
+    src/entity/trigger_entity.cpp
+    src/scene/scene.cpp
+    src/scene/scene_loader.cpp
+)
+target_link_libraries(CEngineScene PUBLIC CEngineAssets)
+target_include_directories(CEngineScene PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_include_directories(CEngineScene SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glm")
+if(MSVC)
+    target_compile_options(CEngineScene PRIVATE /W4 /permissive- /Zc:__cplusplus)
+else()
+    target_compile_options(CEngineScene PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 
 target_include_directories(CEngineAssets
     PUBLIC
@@ -169,6 +206,15 @@ else()
 endif()
 
 if(CENGINE_BUILD_TESTS)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    add_executable(CEngineSceneTests tests/scene/entity_tests.cpp)
+    target_link_libraries(CEngineSceneTests PRIVATE CEngineScene)
+    if(MSVC)
+        target_compile_options(CEngineSceneTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+    else()
+        target_compile_options(CEngineSceneTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME scene_entities COMMAND CEngineSceneTests)
     add_executable(CEngineAssetTests
         src/renderer/material.cpp
         src/renderer/mesh.cpp
@@ -185,6 +231,35 @@ if(CENGINE_BUILD_TESTS)
     else()
         target_compile_options(CEngineAssetTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
+    add_test(NAME asset_runtime COMMAND CEngineAssetTests)
+    add_executable(CEngineAssetDatabaseTests tests/assets/asset_database_tests.cpp)
+    target_link_libraries(CEngineAssetDatabaseTests PRIVATE CEngineAssets)
+    if(MSVC)
+        target_compile_options(CEngineAssetDatabaseTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+    else()
+        target_compile_options(CEngineAssetDatabaseTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME asset_database COMMAND CEngineAssetDatabaseTests)
+    add_executable(CEngineCSceneReaderTests tests/assets/cscene_reader_tests.cpp)
+    target_link_libraries(CEngineCSceneReaderTests PRIVATE CEngineAssets)
+    if(MSVC)
+        target_compile_options(CEngineCSceneReaderTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+    else()
+        target_compile_options(CEngineCSceneReaderTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME cscene_reader COMMAND CEngineCSceneReaderTests)
+    set(CENGINE_PYTHON_CSCENE_FIXTURE "${CMAKE_CURRENT_BINARY_DIR}/python_fixture.cscene")
+    add_test(NAME generate_python_cscene_fixture
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/ceasset/tests/generate_cscene_fixture.py"
+            --output "${CENGINE_PYTHON_CSCENE_FIXTURE}")
+    set_tests_properties(generate_python_cscene_fixture PROPERTIES FIXTURES_SETUP python_cscene)
+    add_test(NAME read_python_cscene_fixture
+        COMMAND CEngineCSceneReaderTests "${CENGINE_PYTHON_CSCENE_FIXTURE}")
+    set_tests_properties(read_python_cscene_fixture PROPERTIES FIXTURES_REQUIRED python_cscene)
+    add_test(NAME load_python_cscene_fixture
+        COMMAND CEngineSceneTests "${CENGINE_PYTHON_CSCENE_FIXTURE}")
+    set_tests_properties(load_python_cscene_fixture PROPERTIES FIXTURES_REQUIRED python_cscene)
 endif()
 
 set(CENGINE_CORE_SOURCES
@@ -197,6 +272,8 @@ set(CENGINE_CORE_SOURCES
     src/physics/physics_system.cpp
     src/renderer/renderable.cpp
     src/renderer/render_system.cpp
+    src/scene/scene_render_state.cpp
+    src/scene/scene_physics_state.cpp
 )
 
 if(CENGINE_ENABLE_JOLT_PHYSICS)
@@ -257,6 +334,7 @@ target_include_directories(CEngineCore
 
 target_link_libraries(CEngineCore PUBLIC ${CEngine_GLFW_TARGET})
 target_link_libraries(CEngineCore PUBLIC CEngineAssets)
+target_link_libraries(CEngineCore PUBLIC CEngineScene)
 target_link_libraries(CEngineCore PRIVATE ${CMAKE_DL_LIBS})
 
 if(CENGINE_ENABLE_JOLT_PHYSICS)
@@ -276,6 +354,12 @@ target_compile_definitions(CEngineCore
     PUBLIC
         GLFW_INCLUDE_NONE
 )
+
+if(CENGINE_BUILD_TESTS)
+    add_executable(CEngineSceneRenderTests tests/scene/scene_render_state_tests.cpp)
+    target_link_libraries(CEngineSceneRenderTests PRIVATE CEngineCore)
+    add_test(NAME scene_render_state COMMAND CEngineSceneRenderTests)
+endif()
 
 if(CENGINE_ENABLE_OPENGL)
     target_compile_definitions(CEngineCore PUBLIC CENGINE_ENABLE_OPENGL GL_SILENCE_DEPRECATION)

@@ -10,9 +10,12 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-
 SCRIPT = Path(__file__).resolve().parents[1] / "ceasset.py"
 sys.path.insert(0, str(SCRIPT.parent))
+from ceassetlib.assetfile import make_asset_desc, write_binary_asset
+from ceassetlib.scene_export import (
+    AssetReference, EntityDescription, PrefabEntity, SceneDescription, write_scene,
+)
 SPEC = importlib.util.spec_from_file_location("ceasset_tool", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 ceasset = importlib.util.module_from_spec(SPEC)
@@ -112,6 +115,31 @@ class CeassetTests(unittest.TestCase):
             paths = ceasset.make_project_paths(root)
             self.assertEqual(quiet_call(ceasset.convert_source, paths, source), 1)
             self.assertFalse(paths.registry_path.exists())
+
+    def test_inspect_and_validate_cscene_with_casset_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            prefab_path = root / "assets" / "compiled" / "Door.casset"
+            prefab_name = "assets/compiled/Door.casset"
+            prefab = make_asset_desc(ceasset.AssetType.ASSET, prefab_name, 0, b"prefab")
+            write_binary_asset(prefab_path, prefab)
+            scene_path = root / "assets" / "compiled" / "Map.cscene"
+            write_scene(scene_path, SceneDescription((EntityDescription(
+                PrefabEntity(AssetReference(ceasset.AssetType.ASSET, prefab_name, prefab.guid))),)),
+                "assets/compiled/Map.cscene")
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(ceasset.main([
+                    "--project", str(root), "inspect", "assets/compiled/Map.cscene"]), 0)
+            self.assertIn("prefab_instance: 1", output.getvalue())
+            self.assertIn(prefab_name, output.getvalue())
+            self.assertEqual(quiet_call(ceasset.main,
+                ["--project", str(root), "validate", "assets/compiled/Map.cscene"]), 0)
+
+            prefab_path.unlink()
+            self.assertEqual(quiet_call(ceasset.main,
+                ["--project", str(root), "validate", "assets/compiled/Map.cscene"]), 1)
 
 
 if __name__ == "__main__":

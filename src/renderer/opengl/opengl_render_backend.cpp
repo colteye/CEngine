@@ -19,6 +19,7 @@ bool CanAppendBufferData(const ShaderBuffers& buffers, size_t vertex_size, size_
 {
 	return buffers.vertex_buffer_length + vertex_size <= kDefaultBufferSize &&
 		buffers.uv_buffer_length + uv_size <= kDefaultBufferSize &&
+		buffers.lightmap_uv_buffer_length + uv_size <= kDefaultBufferSize &&
 		buffers.normal_buffer_length + normal_size <= kDefaultBufferSize &&
 		buffers.tangent_buffer_length + tangent_size <= kDefaultBufferSize;
 }
@@ -79,11 +80,13 @@ ShaderBuffers& ShaderBuffers::operator=(ShaderBuffers&& other) noexcept
 	vertex_array_obj = other.vertex_array_obj;
 	vertex_buffer = other.vertex_buffer;
 	uv_buffer = other.uv_buffer;
+	lightmap_uv_buffer = other.lightmap_uv_buffer;
 	normal_buffer = other.normal_buffer;
 	tangent_buffer = other.tangent_buffer;
 	indice_buffer = other.indice_buffer;
 	vertex_buffer_length = other.vertex_buffer_length;
 	uv_buffer_length = other.uv_buffer_length;
+	lightmap_uv_buffer_length = other.lightmap_uv_buffer_length;
 	normal_buffer_length = other.normal_buffer_length;
 	tangent_buffer_length = other.tangent_buffer_length;
 	indice_buffer_length = other.indice_buffer_length;
@@ -91,11 +94,13 @@ ShaderBuffers& ShaderBuffers::operator=(ShaderBuffers&& other) noexcept
 	other.vertex_array_obj = 0;
 	other.vertex_buffer = 0;
 	other.uv_buffer = 0;
+	other.lightmap_uv_buffer = 0;
 	other.normal_buffer = 0;
 	other.tangent_buffer = 0;
 	other.indice_buffer = 0;
 	other.vertex_buffer_length = 0;
 	other.uv_buffer_length = 0;
+	other.lightmap_uv_buffer_length = 0;
 	other.normal_buffer_length = 0;
 	other.tangent_buffer_length = 0;
 	other.indice_buffer_length = 0;
@@ -125,6 +130,11 @@ void OpenGLFrameResources::Destroy()
 		glDeleteTextures(1, &g_material);
 		g_material = 0;
 	}
+	if (g_baked_light != 0)
+	{
+		glDeleteTextures(1, &g_baked_light);
+		g_baked_light = 0;
+	}
 	if (scene_depth != 0)
 	{
 		glDeleteTextures(1, &scene_depth);
@@ -134,6 +144,11 @@ void OpenGLFrameResources::Destroy()
 	{
 		glDeleteTextures(1, &opaque_lit_color);
 		opaque_lit_color = 0;
+	}
+	if (ssao != 0)
+	{
+		glDeleteTextures(1, &ssao);
+		ssao = 0;
 	}
 	if (scene_color != 0)
 	{
@@ -149,6 +164,11 @@ void OpenGLFrameResources::Destroy()
 	{
 		glDeleteFramebuffers(1, &opaque_lit_fbo);
 		opaque_lit_fbo = 0;
+	}
+	if (ssao_fbo != 0)
+	{
+		glDeleteFramebuffers(1, &ssao_fbo);
+		ssao_fbo = 0;
 	}
 	if (scene_color_fbo != 0)
 	{
@@ -190,6 +210,11 @@ void ShaderBuffers::Destroy()
 		glDeleteBuffers(1, &uv_buffer);
 		uv_buffer = 0;
 	}
+	if (lightmap_uv_buffer != 0)
+	{
+		glDeleteBuffers(1, &lightmap_uv_buffer);
+		lightmap_uv_buffer = 0;
+	}
 	if (normal_buffer != 0)
 	{
 		glDeleteBuffers(1, &normal_buffer);
@@ -213,6 +238,7 @@ void ShaderBuffers::Destroy()
 
 	vertex_buffer_length = 0;
 	uv_buffer_length = 0;
+	lightmap_uv_buffer_length = 0;
 	normal_buffer_length = 0;
 	tangent_buffer_length = 0;
 	indice_buffer_length = 0;
@@ -238,7 +264,7 @@ bool OpenGLRenderBackend::Initialize(GLFWwindow* /*window*/, int in_window_width
 
 	shader_passes.ssao = std::make_unique<SSAO>();
 	shader_passes.ssao->SetTextures(frame_resources.opaque_lit_color, frame_resources.scene_depth,
-		frame_resources.g_normal_roughness, in_window_width, in_window_height);
+		frame_resources.g_normal_roughness, frame_resources.ssao, in_window_width, in_window_height);
 
 	window_width = in_window_width;
 	window_height = in_window_height;
@@ -254,6 +280,11 @@ void OpenGLRenderBackend::Shutdown()
 		it.second.Destroy();
 	}
 	material_resources.clear();
+	for (const auto& lightmap : lightmap_resources)
+	{
+		if (lightmap.second != 0) glDeleteTextures(1, &lightmap.second);
+	}
+	lightmap_resources.clear();
 
 	if (quad_VBO != 0)
 	{
@@ -296,6 +327,7 @@ void OpenGLRenderBackend::RegisterRenderable(const Renderable& renderable)
 		}
 
 		assert(current_mesh_data.uvs.size() == current_mesh_data.vertices.size());
+		assert(current_mesh_data.lightmap_uvs.size() == current_mesh_data.vertices.size());
 		assert(current_mesh_data.normals.size() == current_mesh_data.vertices.size());
 		assert(current_mesh_data.tangents.size() == current_mesh_data.vertices.size());
 
@@ -306,16 +338,28 @@ void OpenGLRenderBackend::RegisterRenderable(const Renderable& renderable)
 			
 		// This assumes that the materials and shader are both already registered.
 		ShaderBuffers* current_buffers = &shader_buffer_dict.at(material->shader_type);
-		assert(CanAppendBufferData(*current_buffers, vertex_size, uv_size, normal_size, tangent_size));
+		if (!CanAppendBufferData(*current_buffers, vertex_size, uv_size, normal_size, tangent_size))
+		{
+			std::cerr << "OpenGL mesh buffer capacity exceeded; renderable was not registered.\n";
+			return;
+		}
 
-		glNamedBufferSubData(current_buffers->vertex_buffer, current_buffers->vertex_buffer_length,
-			vertex_size, current_mesh_data.vertices.data());
-		glNamedBufferSubData(current_buffers->uv_buffer, current_buffers->uv_buffer_length,
-			uv_size, current_mesh_data.uvs.data());
-		glNamedBufferSubData(current_buffers->normal_buffer, current_buffers->normal_buffer_length,
-			normal_size, current_mesh_data.normals.data());
-		glNamedBufferSubData(current_buffers->tangent_buffer, current_buffers->tangent_buffer_length,
-			tangent_size, current_mesh_data.tangents.data());
+			glBindBuffer(GL_ARRAY_BUFFER, current_buffers->vertex_buffer);
+			glBufferSubData(GL_ARRAY_BUFFER, current_buffers->vertex_buffer_length,
+				vertex_size, current_mesh_data.vertices.data());
+			glBindBuffer(GL_ARRAY_BUFFER, current_buffers->uv_buffer);
+			glBufferSubData(GL_ARRAY_BUFFER, current_buffers->uv_buffer_length,
+				uv_size, current_mesh_data.uvs.data());
+			glBindBuffer(GL_ARRAY_BUFFER, current_buffers->lightmap_uv_buffer);
+			glBufferSubData(GL_ARRAY_BUFFER, current_buffers->lightmap_uv_buffer_length,
+				uv_size, current_mesh_data.lightmap_uvs.data());
+			glBindBuffer(GL_ARRAY_BUFFER, current_buffers->normal_buffer);
+			glBufferSubData(GL_ARRAY_BUFFER, current_buffers->normal_buffer_length,
+				normal_size, current_mesh_data.normals.data());
+			glBindBuffer(GL_ARRAY_BUFFER, current_buffers->tangent_buffer);
+			glBufferSubData(GL_ARRAY_BUFFER, current_buffers->tangent_buffer_length,
+				tangent_size, current_mesh_data.tangents.data());
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 		OpenGLDrawItem draw_item;
 		draw_item.material = material;
@@ -329,10 +373,19 @@ void OpenGLRenderBackend::RegisterRenderable(const Renderable& renderable)
 		draw_item.albedo_tex = resources.albedo_tex;
 		draw_item.normal_tex = resources.normal_tex;
 		draw_item.metallic_roughness_ao_tex = resources.metallic_roughness_ao_tex;
+		if (renderable.lightmap != nullptr)
+		{
+			const auto lightmap = lightmap_resources.find(renderable.lightmap);
+			if (lightmap != lightmap_resources.end()) draw_item.lightmap_tex = lightmap->second;
+		}
+		draw_item.lightmap_scale = renderable.lightmap_scale;
+		draw_item.lightmap_offset = renderable.lightmap_offset;
+		draw_item.lightmap_rgbm_range = renderable.lightmap_rgbm_range;
 		draw_items.push_back(draw_item);
 
 		current_buffers->vertex_buffer_length += vertex_size;
 		current_buffers->uv_buffer_length += uv_size;
+		current_buffers->lightmap_uv_buffer_length += uv_size;
 		current_buffers->normal_buffer_length += normal_size;
 		current_buffers->tangent_buffer_length += tangent_size;
 	}
@@ -348,6 +401,13 @@ void OpenGLRenderBackend::UpdateRenderableTransform(RenderableHandle handle, con
 
 	draw_items[handle].transform = transform;
 	draw_items[handle].world_bounds = world_bounds;
+}
+
+void OpenGLRenderBackend::RemoveRenderable(RenderableHandle handle)
+{
+	if (handle >= draw_items.size()) return;
+	draw_items[handle].material = nullptr;
+	draw_items[handle].count = 0;
 }
 
 ShaderBuffers OpenGLRenderBackend::InitShaderBuffers()
@@ -370,6 +430,12 @@ ShaderBuffers OpenGLRenderBackend::InitShaderBuffers()
 	glBindBuffer(GL_ARRAY_BUFFER, buffers.uv_buffer);
 	glBufferData(GL_ARRAY_BUFFER, kDefaultBufferSize, nullptr, GL_STATIC_DRAW);
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
+
+	glGenBuffers(1, &buffers.lightmap_uv_buffer);
+	glEnableVertexAttribArray(4);
+	glBindBuffer(GL_ARRAY_BUFFER, buffers.lightmap_uv_buffer);
+	glBufferData(GL_ARRAY_BUFFER, kDefaultBufferSize, nullptr, GL_STATIC_DRAW);
+	glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
 	
 	glGenBuffers(1, &buffers.normal_buffer);
 
@@ -402,6 +468,31 @@ void OpenGLRenderBackend::RegisterMaterial(Material* material)
 	resources.albedo_tex = OpenGLTexture::LoadDDS(material->GetAlbedoPath());
 	resources.normal_tex = OpenGLTexture::LoadDDS(material->GetNormalPath());
 	resources.metallic_roughness_ao_tex = OpenGLTexture::LoadDDS(material->GetMetallicRoughnessAoPath());
+}
+
+void OpenGLRenderBackend::RemoveMaterial(Material* material)
+{
+	const auto found = material_resources.find(material);
+	if (found == material_resources.end()) return;
+	found->second.Destroy();
+	material_resources.erase(found);
+}
+
+bool OpenGLRenderBackend::RegisterLightmap(const Lightmap* lightmap)
+{
+	assert(lightmap != nullptr);
+	const GLuint texture = OpenGLTexture::LoadDDS(lightmap->path);
+	if (texture == 0) return false;
+	lightmap_resources.emplace(lightmap, texture);
+	return true;
+}
+
+void OpenGLRenderBackend::RemoveLightmap(const Lightmap* lightmap)
+{
+	const auto found = lightmap_resources.find(lightmap);
+	if (found == lightmap_resources.end()) return;
+	if (found->second != 0) glDeleteTextures(1, &found->second);
+	lightmap_resources.erase(found);
 }
 
 PBRStandard* OpenGLRenderBackend::GetShader(MaterialShaderType shader_type)
@@ -441,12 +532,17 @@ bool OpenGLRenderBackend::CreateFrameResources(int width, int height)
 	ConfigureFramebufferTexture(resources.g_material, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, width, height);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, resources.g_material, 0);
 
+	glGenTextures(1, &resources.g_baked_light);
+	ConfigureFramebufferTexture(resources.g_baked_light, GL_RGB16F, GL_RGB, GL_FLOAT, width, height);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, resources.g_baked_light, 0);
+
 	glGenTextures(1, &resources.scene_depth);
 	ConfigureFramebufferTexture(resources.scene_depth, GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT, GL_FLOAT, width, height);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, resources.scene_depth, 0);
 
-	const GLenum g_buffer_attachments[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
-	glDrawBuffers(3, g_buffer_attachments);
+	const GLenum g_buffer_attachments[4] = {
+		GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
+	glDrawBuffers(4, g_buffer_attachments);
 
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 	{
@@ -470,6 +566,18 @@ bool OpenGLRenderBackend::CreateFrameResources(int width, int height)
 		return false;
 	}
 
+	glGenFramebuffers(1, &resources.ssao_fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, resources.ssao_fbo);
+	glGenTextures(1, &resources.ssao);
+	ConfigureFramebufferTexture(resources.ssao, GL_R8, GL_RED, GL_UNSIGNED_BYTE, width, height);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, resources.ssao, 0);
+	glDrawBuffers(1, &color_attachment);
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+	{
+		std::cout << "OpenGL SSAO framebuffer is incomplete.\n";
+		return false;
+	}
+
 	glGenFramebuffers(1, &resources.scene_color_fbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, resources.scene_color_fbo);
 
@@ -485,7 +593,7 @@ bool OpenGLRenderBackend::CreateFrameResources(int width, int height)
 		return false;
 	}
 
-	std::cout << "OpenGL G-buffer ready: albedo, normal/roughness, material/flags, depth.\n";
+	std::cout << "OpenGL G-buffer ready: albedo, normal/roughness, material/flags, baked light, depth.\n";
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	return true;
 }
@@ -498,23 +606,29 @@ void OpenGLRenderBackend::DestroyFrameResources()
 void OpenGLRenderBackend::BuildRenderQueues()
 {
 	render_queues.ClearAndReserve(draw_items.size());
+	const RenderFrameConstants& frame = RenderSystem::GetFrameConstants();
+	const Frustum camera_frustum = ExtractFrustum(frame.proj * frame.view);
 
 	for (uint32_t index = 0; index < draw_items.size(); ++index)
 	{
 		const OpenGLDrawItem& item = draw_items[index];
-		switch (ClassifyRenderMode(item.material->GetRenderMode()))
+		if (item.material == nullptr || item.count == 0) continue;
+		if (IntersectsFrustum(item.world_bounds, camera_frustum))
 		{
-		case OpenGLRenderQueue::DeferredOpaque:
-			render_queues.opaque_deferred.push_back(index);
-			break;
-		case OpenGLRenderQueue::ForwardOpaque:
-			render_queues.forward.push_back(index);
-			break;
-		case OpenGLRenderQueue::Transparent:
-			render_queues.transparent.push_back(index);
-			break;
-		case OpenGLRenderQueue::None:
-			break;
+			switch (ClassifyRenderMode(item.material->GetRenderMode()))
+			{
+			case OpenGLRenderQueue::DeferredOpaque:
+				render_queues.opaque_deferred.push_back(index);
+				break;
+			case OpenGLRenderQueue::ForwardOpaque:
+				render_queues.forward.push_back(index);
+				break;
+			case OpenGLRenderQueue::Transparent:
+				render_queues.transparent.push_back(index);
+				break;
+			case OpenGLRenderQueue::None:
+				break;
+			}
 		}
 
 		if (DrawsShadowCaster(item))
@@ -523,16 +637,20 @@ void OpenGLRenderBackend::BuildRenderQueues()
 		}
 	}
 
-	const glm::vec3 camera_position = RenderSystem::GetFrameConstants().camera_position;
+	const glm::vec3 camera_position = frame.camera_position;
+	const auto distance_to_camera = [&](uint32_t index) {
+		const glm::vec3 offset = BoundsCenter(draw_items[index].world_bounds,
+			draw_items[index].transform) - camera_position;
+		return glm::dot(offset, offset);
+	};
+	const auto front_to_back = [&](uint32_t left, uint32_t right) {
+		return distance_to_camera(left) < distance_to_camera(right);
+	};
+	std::sort(render_queues.opaque_deferred.begin(), render_queues.opaque_deferred.end(), front_to_back);
+	std::sort(render_queues.forward.begin(), render_queues.forward.end(), front_to_back);
 	std::sort(render_queues.transparent.begin(), render_queues.transparent.end(),
 		[&](uint32_t left_index, uint32_t right_index) {
-			const glm::vec3 left_center = BoundsCenter(draw_items[left_index].world_bounds,
-				draw_items[left_index].transform);
-			const glm::vec3 right_center = BoundsCenter(draw_items[right_index].world_bounds,
-				draw_items[right_index].transform);
-			const float left_distance = glm::dot(left_center - camera_position, left_center - camera_position);
-			const float right_distance = glm::dot(right_center - camera_position, right_center - camera_position);
-			return left_distance > right_distance;
+			return distance_to_camera(left_index) > distance_to_camera(right_index);
 		});
 }
 
@@ -545,8 +663,9 @@ void OpenGLRenderBackend::RenderGeometryPass()
 
 	glBindFramebuffer(GL_FRAMEBUFFER, frame_resources.g_buffer_fbo);
 	glViewport(0, 0, window_width, window_height);
-	const GLenum attachments[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
-	glDrawBuffers(3, attachments);
+	const GLenum attachments[4] = {
+		GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
+	glDrawBuffers(4, attachments);
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
 	glDepthMask(GL_TRUE);
@@ -555,13 +674,20 @@ void OpenGLRenderBackend::RenderGeometryPass()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	shader_passes.pbr_geometry->Use();
+	GLuint bound_vertex_array = 0;
 	for (uint32_t draw_index : render_queues.opaque_deferred)
 	{
 		const OpenGLDrawItem& item = draw_items[draw_index];
 
-		glBindVertexArray(item.vertex_array_obj);
-		shader_passes.pbr_geometry->SetTextures(item.albedo_tex, item.normal_tex, item.metallic_roughness_ao_tex);
-		shader_passes.pbr_geometry->Update(item.transform, *item.material);
+		if (bound_vertex_array != item.vertex_array_obj)
+		{
+			glBindVertexArray(item.vertex_array_obj);
+			bound_vertex_array = item.vertex_array_obj;
+		}
+		shader_passes.pbr_geometry->SetTextures(item.albedo_tex, item.normal_tex,
+			item.metallic_roughness_ao_tex, item.lightmap_tex);
+		shader_passes.pbr_geometry->Update(item.transform, *item.material, item.lightmap_scale,
+			item.lightmap_offset, item.lightmap_rgbm_range);
 		DrawItem(item);
 	}
 	glBindVertexArray(0);
@@ -584,24 +710,29 @@ void OpenGLRenderBackend::RenderDeferredLightingPass()
 
 	shader_passes.deferred_lighting->Use();
 	shader_passes.deferred_lighting->Update(frame_resources.g_albedo, frame_resources.g_normal_roughness,
-		frame_resources.g_material, frame_resources.scene_depth, window_width, window_height,
+		frame_resources.g_material, frame_resources.g_baked_light, frame_resources.scene_depth,
+		window_width, window_height,
 		shadow_system.GetGpuData(), shadow_system.GetAtlasTexture(), shadow_system.GetPointTextures());
 	RenderScreenSpaceQuad();
 }
 
 void OpenGLRenderBackend::RenderAmbientOcclusionPass()
 {
-	glBindFramebuffer(GL_FRAMEBUFFER, frame_resources.scene_color_fbo);
+	assert(shader_passes.ssao != nullptr);
+	glBindFramebuffer(GL_FRAMEBUFFER, frame_resources.ssao_fbo);
 	glViewport(0, 0, window_width, window_height);
 	const GLenum attachment = GL_COLOR_ATTACHMENT0;
 	glDrawBuffers(1, &attachment);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
-	glClear(GL_COLOR_BUFFER_BIT);
 
-	assert(shader_passes.ssao != nullptr);
-	shader_passes.ssao->Use();
-	shader_passes.ssao->Update();
+	shader_passes.ssao->UseCompute();
+	shader_passes.ssao->UpdateCompute();
+	RenderScreenSpaceQuad();
+
+	glBindFramebuffer(GL_FRAMEBUFFER, frame_resources.scene_color_fbo);
+	shader_passes.ssao->UseComposite();
+	shader_passes.ssao->UpdateComposite();
 	RenderScreenSpaceQuad();
 }
 
@@ -629,6 +760,8 @@ void OpenGLRenderBackend::RenderForwardQueue(const std::vector<uint32_t>& queue,
 		glDepthMask(GL_TRUE);
 	}
 
+	GLuint bound_vertex_array = 0;
+	PBRStandard* bound_shader = nullptr;
 	for (uint32_t draw_index : queue)
 	{
 		const OpenGLDrawItem& item = draw_items[draw_index];
@@ -638,11 +771,22 @@ void OpenGLRenderBackend::RenderForwardQueue(const std::vector<uint32_t>& queue,
 			continue;
 		}
 
+		if (bound_vertex_array != item.vertex_array_obj)
+		{
 		glBindVertexArray(item.vertex_array_obj);
-		shader->Use();
-		shader->SetTextures(item.albedo_tex, item.normal_tex, item.metallic_roughness_ao_tex);
-		shader->Update(item.transform, *item.material, shadow_system.GetGpuData(),
-			shadow_system.GetAtlasTexture(), shadow_system.GetPointTextures());
+			bound_vertex_array = item.vertex_array_obj;
+		}
+		if (bound_shader != shader)
+		{
+			shader->Use();
+			shader->UpdateFrame(shadow_system.GetGpuData(), shadow_system.GetAtlasTexture(),
+				shadow_system.GetPointTextures());
+			bound_shader = shader;
+		}
+		shader->SetTextures(item.albedo_tex, item.normal_tex, item.metallic_roughness_ao_tex,
+			item.lightmap_tex);
+		shader->UpdateObject(item.transform, *item.material, item.lightmap_scale,
+			item.lightmap_offset, item.lightmap_rgbm_range);
 		DrawItem(item);
 	}
 

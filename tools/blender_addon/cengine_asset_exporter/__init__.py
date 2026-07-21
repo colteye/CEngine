@@ -52,6 +52,8 @@ from ceassetlib.collection_export import (
     write_collection_asset,
 )
 from ceassetlib.formats import AssetType, asset_type_for_extension
+from ceassetlib.blender_scene import scene_description
+from ceassetlib.scene_export import write_scene
 from ceassetlib.ids import fnv1a, guid_from_stable_name, guid_to_string
 from ceassetlib.paths import generic_path, make_project_paths, output_dir_for_source, stored_path
 from ceassetlib.state import AssetRecord, load_registry, save_cache, save_registry
@@ -59,6 +61,7 @@ from ceassetlib.texture import convert_texture_to_dds
 
 from .animations import write_animation_assets
 from .materials import effective_material_names, write_material_assets
+from .lightmaps import bake_scene_lightmaps
 from .meshes import write_mesh_assets
 from .skeletons import write_skeleton_assets
 
@@ -82,6 +85,7 @@ class ExportResult:
     skeletons: int
     meshes: int
     animations: int
+    scenes: int = 0
 
 
 @dataclass(frozen=True)
@@ -170,7 +174,10 @@ def image_source_path(image) -> Path | None:
         return None
 
     blender = require_bpy()
-    path = Path(blender.path.abspath(filepath)).resolve()
+    # Keep Blender's spelling of an absolute path.  Path.resolve() follows
+    # macOS's /var -> /private/var symlink, which makes the same image acquire
+    # two different path identities depending on which API supplied it.
+    path = Path(blender.path.abspath(filepath)).absolute()
     if path.suffix.lower() not in SOURCE_TEXTURE_EXTENSIONS or not path.exists():
         return None
     return path
@@ -473,6 +480,25 @@ def exported_collection_objects(collections, logger: Callable[[str], None] | Non
     return result
 
 
+def exported_scene_objects(collection: object) -> list[object]:
+    result: list[object] = []
+    seen: set[int] = set()
+
+    def visit(current: object) -> None:
+        if not collection_is_exportable(current):
+            return
+        for obj in getattr(current, "objects", ()):
+            key = id(obj)
+            if key not in seen and object_is_exportable(obj):
+                seen.add(key)
+                result.append(obj)
+        for child in getattr(current, "children", ()):
+            visit(child)
+
+    visit(collection)
+    return sorted(result, key=lambda obj: obj.name)
+
+
 def selected_export_collection(include_plain: bool = False) -> object | None:
     blender = require_bpy()
     collection = getattr(getattr(blender, "context", None), "collection", None)
@@ -578,6 +604,8 @@ def export_selected_collection_assets(output_root: Path, source: Path | None = N
     spec = collection_export_spec(collection, AssetType.PREFAB, source.stem if source is not None else None)
     if spec is None:
         raise RuntimeError("select a collection before exporting CEngine collection assets")
+    if spec.asset_type == AssetType.SCENE:
+        raise RuntimeError("SCENE_ collections require a saved Blender file and full map export")
     output_dir = output_dir_for_source(source, root) if source is not None else root
     output = output_dir / f"{spec.asset_name}{RUNTIME_EXTENSIONS[spec.asset_type]}"
     payload_source = Path(source.name) if source is not None else Path(f"unsaved:{spec.collection_name}")
@@ -624,6 +652,10 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
     if collection is None:
         raise RuntimeError("select the top-level collection to export as a CEngine asset")
     log(f"Selected asset root collection: {collection.name}")
+    collection_spec = collection_export_spec(collection, AssetType.PREFAB, source.stem)
+    if collection_spec is None:
+        raise RuntimeError("selected collection has no CEngine export type")
+    is_scene = collection_spec.asset_type == AssetType.SCENE
     objects = exported_collection_objects([collection], log)
 
     packed_sources: dict[int, Path] = {}
@@ -664,6 +696,17 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         source_hash,
     )
     log(f"Animation export complete: {len(animation_outputs)} .canim in {elapsed(phase_start)}")
+
+    lightmap_placements = {}
+    lightmap_outputs: list[Path] = []
+    if is_scene:
+        phase_start = time.perf_counter()
+        log("Lightmap bake started")
+        lightmap_placements, lightmap_outputs = bake_scene_lightmaps(
+            blender, source, root, exported_scene_objects(collection),
+            collection_spec.asset_name, log)
+        log(f"Lightmap bake complete: {len(lightmap_outputs)} .dds in {elapsed(phase_start)}")
+
     phase_start = time.perf_counter()
     log("Mesh export started")
     mesh_outputs = write_mesh_assets(
@@ -685,42 +728,56 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         animation_outputs_by_armature.setdefault(animation.armature.name, []).append(animation.output)
 
     collection_outputs: list[Path] = []
+    scene_outputs: list[Path] = []
     collection_output_dir = output_dir_for_source(source, root)
     casset_asset_path = lambda output: asset_path_relative_to(collection_output_dir, output)
     phase_start = time.perf_counter()
-    log("Root .casset export started")
-    output = write_collection_asset(
-        source,
-        root,
-        collection,
-        lambda obj: object_component_assets(
-            obj,
-            mesh_outputs_by_name,
-            material_outputs_by_name,
-            skeleton_outputs_by_name,
-            animation_outputs_by_armature,
-            casset_asset_path,
-        ),
-        asset_path,
-        AssetType.PREFAB,
-        source.stem,
-        Path(source.name),
-        log,
-        objects,
-        source_hash,
-    )
-    if output is not None:
-        collection_outputs.append(output)
-    log(f"Root .casset export complete: {len(collection_outputs)} file(s) in {elapsed(phase_start)}")
+    object_assets = lambda obj: object_component_assets(
+        obj, mesh_outputs_by_name, material_outputs_by_name,
+        skeleton_outputs_by_name, animation_outputs_by_armature,
+        casset_asset_path)
+    if is_scene:
+        log("Referenced .casset export started")
+        prefab_outputs: dict[str, Path] = {}
+        for obj in exported_scene_objects(collection):
+            instance = object_instance_collection(obj)
+            if instance is None or instance.name in prefab_outputs:
+                continue
+            output = write_collection_asset(
+                source, root, instance, object_assets, asset_path,
+                AssetType.PREFAB, instance.name, Path(source.name), log,
+                collection_export_objects(instance, logger=log), source_hash)
+            if output is not None:
+                prefab_outputs[instance.name] = output
+                collection_outputs.append(output)
+        log(f"Referenced .casset export complete: {len(collection_outputs)} file(s) in {elapsed(phase_start)}")
+        scene_output = collection_output_dir / f"{collection_spec.asset_name}.cscene"
+        description = scene_description(
+            exported_scene_objects(collection), mesh_outputs_by_name,
+            material_outputs_by_name, prefab_outputs, asset_path, object_material_names,
+            lightmap_placements)
+        write_scene(scene_output, description, asset_path(scene_output), source_hash)
+        scene_outputs.append(scene_output)
+        log(f"Scene export complete: {scene_output}")
+    else:
+        log("Root .casset export started")
+        output = write_collection_asset(
+            source, root, collection, object_assets, asset_path,
+            AssetType.PREFAB, source.stem, Path(source.name), log, objects, source_hash)
+        if output is not None:
+            collection_outputs.append(output)
+        log(f"Root .casset export complete: {len(collection_outputs)} file(s) in {elapsed(phase_start)}")
 
     register_outputs(
         project_root,
         source,
         collection_outputs
+        + scene_outputs
         + [material.output for material in material_outputs]
         + [mesh.output for mesh in mesh_outputs]
         + [skeleton.output for skeleton in skeleton_outputs]
-        + [animation.output for animation in animation_outputs],
+        + [animation.output for animation in animation_outputs]
+		+ lightmap_outputs,
         log,
         source_hash,
     )
@@ -735,11 +792,12 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
 
     result = ExportResult(
         len(collection_outputs),
-        len(texture_outputs),
+        len(texture_outputs) + len(lightmap_outputs),
         len(material_outputs),
         len(skeleton_outputs),
         len(mesh_outputs),
         len(animation_outputs),
+        len(scene_outputs),
     )
     log(f"Export finished: {export_summary(result, root)} in {elapsed(export_start)}")
     return result
@@ -761,7 +819,7 @@ def run_export(output_root: Path | None, dds_format: str = "DXT5", collection_on
 def export_summary(result: ExportResult, output_root: Path | None) -> str:
     destination = f" to {output_root}" if output_root is not None else ""
     return (
-        f"Exported {result.collections} .casset, {result.meshes} .cmesh, "
+        f"Exported {result.scenes} .cscene, {result.collections} .casset, {result.meshes} .cmesh, "
         f"{result.materials} .cmat, {result.skeletons} .cskel, "
         f"{result.animations} .canim, and {result.textures} .dds assets{destination}"
     )

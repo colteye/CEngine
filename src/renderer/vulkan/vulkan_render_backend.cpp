@@ -196,6 +196,23 @@ void VulkanRenderBackend::RegisterRenderable(const Renderable& /*renderable*/)
 	}
 }
 
+void VulkanRenderBackend::RemoveRenderable(RenderableHandle /*handle*/)
+{
+}
+
+void VulkanRenderBackend::RemoveMaterial(Material* /*material*/)
+{
+}
+
+bool VulkanRenderBackend::RegisterLightmap(const Lightmap* /*lightmap*/)
+{
+	return true;
+}
+
+void VulkanRenderBackend::RemoveLightmap(const Lightmap* /*lightmap*/)
+{
+}
+
 void VulkanRenderBackend::UpdateRenderableTransform(RenderableHandle /*handle*/, const glm::mat4& /*transform*/,
 	const Bounds& /*world_bounds*/)
 {

@@ -10,7 +10,8 @@ namespace CEngine::Renderer {
 PBRStandard::PBRStandard()
 	: albedo_tex(0),
 	  normal_tex(0),
-	  metallic_roughness_ao_tex(0)
+	  metallic_roughness_ao_tex(0),
+	  lightmap_tex(0)
 {
     shader_program.Load("shaders/opengl/pbr_standard.vert",
                         "shaders/opengl/pbr_standard.frag");
@@ -22,14 +23,29 @@ void PBRStandard::Use() const
     shader_program.Use();
 }
 
-void PBRStandard::Update(const glm::mat4& model, const Material& material, const OpenGLShadowGpuData& shadow_data,
+void PBRStandard::UpdateFrame(const OpenGLShadowGpuData& shadow_data,
     GLuint shadow_atlas, const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_shadow_maps)
 {
-    SetParametersStatic();
-    SetMaterialParameters(material);
-    SetParametersDynamic(model);
+	const RenderFrameConstants& constants = RenderSystem::GetFrameConstants();
+	glUniform3fv(cam_pos_id, 1, glm::value_ptr(constants.camera_position));
+	glUniformMatrix4fv(v_id, 1, GL_FALSE, glm::value_ptr(constants.view));
+	glUniformMatrix4fv(p_id, 1, GL_FALSE, glm::value_ptr(constants.proj));
+	ambient_uniforms.Upload();
+	direct_lights.BindAndUploadIfNeeded();
     shadow_buffer.Upload(shadow_data);
     shadow_samplers.Bind(shadow_atlas, point_shadow_maps);
+}
+
+void PBRStandard::UpdateObject(const glm::mat4& model, const Material& material,
+	const glm::vec2& lightmap_scale, const glm::vec2& lightmap_offset, float lightmap_rgbm_range)
+{
+	SetParametersStatic();
+	SetMaterialParameters(material);
+	glUniformMatrix4fv(m_id, 1, GL_FALSE, glm::value_ptr(model));
+	glUniform4f(lightmap_scale_offset_id, lightmap_scale.x, lightmap_scale.y,
+		lightmap_offset.x, lightmap_offset.y);
+	glUniform1f(lightmap_rgbm_range_id, lightmap_rgbm_range);
+	glUniform1i(has_lightmap_id, lightmap_tex != 0 ? 1 : 0);
 }
 
 void PBRStandard::InitializeParameters()
@@ -52,14 +68,19 @@ void PBRStandard::InitializeParameters()
     base_color_factor_id = glGetUniformLocation(shader_id, "base_color_factor");
     alpha_cutoff_id = glGetUniformLocation(shader_id, "alpha_cutoff");
     render_mode_id = glGetUniformLocation(shader_id, "render_mode");
-    receives_shadows_id = glGetUniformLocation(shader_id, "receives_shadows");
+	receives_shadows_id = glGetUniformLocation(shader_id, "receives_shadows");
+	lightmap_id = glGetUniformLocation(shader_id, "lightmap");
+	lightmap_scale_offset_id = glGetUniformLocation(shader_id, "lightmap_scale_offset");
+	lightmap_rgbm_range_id = glGetUniformLocation(shader_id, "lightmap_rgbm_range");
+	has_lightmap_id = glGetUniformLocation(shader_id, "has_lightmap");
 }
 
-void PBRStandard::SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao)
+void PBRStandard::SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao, GLuint lightmap)
 {
     albedo_tex = albedo;
     normal_tex = normal;
-    metallic_roughness_ao_tex = metallic_roughness_ao;
+	metallic_roughness_ao_tex = metallic_roughness_ao;
+	lightmap_tex = lightmap;
 }
 
 void PBRStandard::SetParametersStatic()
@@ -74,7 +95,11 @@ void PBRStandard::SetParametersStatic()
 
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, metallic_roughness_ao_tex);
-    glUniform1i(metallic_roughness_ao_id, 2);
+	glUniform1i(metallic_roughness_ao_id, 2);
+
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, lightmap_tex);
+	glUniform1i(lightmap_id, 3);
 }
 
 void PBRStandard::SetMaterialParameters(const Material& material)
@@ -84,19 +109,6 @@ void PBRStandard::SetMaterialParameters(const Material& material)
     glUniform1f(alpha_cutoff_id, material.GetAlphaCutoff());
     glUniform1i(render_mode_id, static_cast<int>(material.GetRenderMode()));
     glUniform1i(receives_shadows_id, material.ReceivesShadows() ? 1 : 0);
-}
-
-void PBRStandard::SetParametersDynamic(const glm::mat4& model)
-{
-    const RenderFrameConstants& constants = RenderSystem::GetFrameConstants();
-    glUniform3f(cam_pos_id, constants.camera_position[0],
-                constants.camera_position[1], constants.camera_position[2]);
-    glUniformMatrix4fv(m_id, 1, GL_FALSE, glm::value_ptr(model));
-    glUniformMatrix4fv(v_id, 1, GL_FALSE, &constants.view[0][0]);
-    glUniformMatrix4fv(p_id, 1, GL_FALSE, &constants.proj[0][0]);
-
-    ambient_uniforms.Upload();
-    direct_lights.BindAndUploadIfNeeded();
 }
 
 } // namespace CEngine::Renderer

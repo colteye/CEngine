@@ -58,6 +58,7 @@ RUNTIME_EXTENSIONS = {
     ".cshader": AssetType.SHADER,
     ".cpak": AssetType.PACKAGE,
     ".casset": AssetType.ASSET,
+    ".cscene": AssetType.SCENE,
 }
 
 
