@@ -25,16 +25,16 @@ glm::vec3 NormalizeOrDefault(const glm::vec3& value, const glm::vec3& fallback)
 
 glm::vec3 StableUpForDirection(const glm::vec3& direction)
 {
-	if (std::abs(glm::dot(direction, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.95f)
+	if (std::abs(glm::dot(direction, glm::vec3(0.0f, 0.0f, 1.0f))) > 0.95f)
 	{
-		return glm::vec3(0.0f, 0.0f, 1.0f);
+		return glm::vec3(0.0f, 1.0f, 0.0f);
 	}
-	return glm::vec3(0.0f, 1.0f, 0.0f);
+	return glm::vec3(0.0f, 0.0f, 1.0f);
 }
 
 glm::mat4 LookAlong(const glm::vec3& position, const glm::vec3& direction)
 {
-	const glm::vec3 forward = NormalizeOrDefault(direction, glm::vec3(0.0f, -1.0f, 0.0f));
+	const glm::vec3 forward = NormalizeOrDefault(direction, glm::vec3(0.0f, 0.0f, -1.0f));
 	return glm::lookAt(position, position + forward, StableUpForDirection(forward));
 }
 

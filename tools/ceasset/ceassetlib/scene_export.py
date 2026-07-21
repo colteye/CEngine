@@ -10,10 +10,10 @@ from typing import Union
 from .assetfile import align_up, make_asset_desc, write_binary_asset
 from .formats import AssetType
 from .scene_format import (
-    ASSET_REFERENCE, CAMERA_ENTITY, DYNAMIC_PROP, ENTITY_CLASS_BLOCK,
+    ASSET_REFERENCE, CAMERA_ENTITY, ENTITY_CLASS_BLOCK,
     ENTITY_CLASS_VERSION, ENTITY_CONNECTION, EntityClassBlockFlags, LIGHT_ENTITY, PLAYER_START,
-    PREFAB_ENTITY, SCENE_ENTITY, SCENE_HEADER, SCENE_MAGIC, SCENE_SETTINGS,
-    SCENE_VERSION, STATIC_PROP, TRANSFORM, TRIGGER_ENTITY, INVALID_INDEX,
+    PREFAB_ENTITY, PROP, PropFlags, SCENE_ENTITY, SCENE_HEADER, SCENE_MAGIC,
+    SCENE_SETTINGS, SCENE_VERSION, TRANSFORM, TRIGGER_ENTITY, INVALID_INDEX,
 )
 
 TABLE_ALIGNMENT = 16
@@ -53,7 +53,7 @@ class EmptyEntity:
 
 
 @dataclass(frozen=True)
-class StaticProp:
+class Prop:
     mesh: AssetReference
     transform: Transform = field(default_factory=Transform)
     materials: tuple[AssetReference, ...] = ()
@@ -61,16 +61,9 @@ class StaticProp:
     lightmap_scale: tuple[float, float] = (1.0, 1.0)
     lightmap_offset: tuple[float, float] = (0.0, 0.0)
     lightmap_rgbm_range: float = 8.0
+    dynamic: bool = False
     visible: bool = True
-
-
-@dataclass(frozen=True)
-class DynamicProp:
-    mesh: AssetReference
-    transform: Transform = field(default_factory=Transform)
-    materials: tuple[AssetReference, ...] = ()
-    visible: bool = True
-    physics_enabled: bool = False
+    collision_enabled: bool = False
     collision_half_extents: tuple[float, float, float] = (0.5, 0.5, 0.5)
     mass: float = 1.0
 
@@ -120,7 +113,7 @@ class PlayerStart:
     team: int = 0
 
 
-EntityData = Union[EmptyEntity, StaticProp, DynamicProp, CameraEntity,
+EntityData = Union[EmptyEntity, Prop, CameraEntity,
                    LightEntity, PrefabEntity, TriggerEntity, PlayerStart]
 
 
@@ -135,9 +128,8 @@ class EntityDescription:
 class SceneSettings:
     ambient_color: tuple[float, float, float] = (0.0, 0.0, 0.0)
     exposure: float = 1.0
-    gravity: tuple[float, float, float] = (0.0, -9.81, 0.0)
+    gravity: tuple[float, float, float] = (0.0, 0.0, -9.81)
     active_camera_entity: int | None = None
-    flags: int = 0
 
 
 @dataclass(frozen=True)
@@ -158,8 +150,7 @@ class SceneDescription:
 
 CLASS_INFO = {
     EmptyEntity: ("empty", TRANSFORM),
-    StaticProp: ("prop_static", STATIC_PROP),
-    DynamicProp: ("prop_dynamic", DYNAMIC_PROP),
+    Prop: ("prop", PROP),
     CameraEntity: ("camera", CAMERA_ENTITY),
     LightEntity: ("light", LIGHT_ENTITY),
     PrefabEntity: ("prefab_instance", PREFAB_ENTITY),
@@ -195,9 +186,9 @@ def _append_aligned(output: bytearray, data: bytes) -> int:
 
 
 def _references(value: EntityData) -> tuple[AssetReference, ...]:
-    if isinstance(value, (StaticProp, DynamicProp)):
+    if isinstance(value, Prop):
         result = (value.mesh, *value.materials)
-        if isinstance(value, StaticProp) and value.lightmap is not None:
+        if value.lightmap is not None:
             result += (value.lightmap,)
         return result
     if isinstance(value, PrefabEntity):
@@ -226,10 +217,12 @@ def _pack_entity(value: EntityData, assets: dict[AssetReference, int], materials
     transform = _transform_values(value.transform)
     if isinstance(value, EmptyEntity):
         return TRANSFORM.pack(*transform)
-    if isinstance(value, StaticProp):
+    if isinstance(value, Prop):
         first = len(materials) if value.materials else INVALID_INDEX
         materials.extend(_asset_index(item, assets) for item in value.materials)
         lightmap = INVALID_INDEX if value.lightmap is None else _asset_index(value.lightmap, assets)
+        if value.lightmap is not None and value.dynamic:
+            raise ValueError("only a static prop may have a baked lightmap")
         if value.lightmap_rgbm_range <= 0.0:
             raise ValueError("lightmap RGBM range must be positive")
         if (value.lightmap is not None and
@@ -238,17 +231,19 @@ def _pack_entity(value: EntityData, assets: dict[AssetReference, int], materials
                  value.lightmap_offset[0] + value.lightmap_scale[0] > 1.0 or
                  value.lightmap_offset[1] + value.lightmap_scale[1] > 1.0)):
             raise ValueError("lightmap atlas transform must stay inside zero-to-one UV space")
-        return STATIC_PROP.pack(*transform, _asset_index(value.mesh, assets), first, len(value.materials),
-                                lightmap, *value.lightmap_scale, *value.lightmap_offset,
-                                value.lightmap_rgbm_range, int(value.visible))
-    if isinstance(value, DynamicProp):
-        first = len(materials) if value.materials else INVALID_INDEX
-        materials.extend(_asset_index(item, assets) for item in value.materials)
-        flags = int(value.visible) | (int(value.physics_enabled) << 1)
-        if value.physics_enabled and (value.mass <= 0.0 or any(size <= 0.0 for size in value.collision_half_extents)):
-            raise ValueError("dynamic prop physics dimensions and mass must be positive")
-        return DYNAMIC_PROP.pack(*transform, _asset_index(value.mesh, assets), first,
-                                 len(value.materials), flags, *value.collision_half_extents, value.mass)
+        if value.collision_enabled and any(size <= 0.0 for size in value.collision_half_extents):
+            raise ValueError("prop collision dimensions must be positive")
+        if value.dynamic and value.collision_enabled and value.mass <= 0.0:
+            raise ValueError("dynamic prop mass must be positive")
+        flags = (PropFlags.VISIBLE if value.visible else PropFlags(0))
+        if value.collision_enabled:
+            flags |= PropFlags.COLLISION_ENABLED
+        if value.dynamic:
+            flags |= PropFlags.DYNAMIC
+        return PROP.pack(*transform, _asset_index(value.mesh, assets), first, len(value.materials),
+                         lightmap, *value.lightmap_scale, *value.lightmap_offset,
+                         value.lightmap_rgbm_range, int(flags),
+                         *value.collision_half_extents, value.mass)
     if isinstance(value, CameraEntity):
         if value.near_clip <= 0.0 or value.far_clip <= value.near_clip:
             raise ValueError("camera clip distances are invalid")
@@ -283,6 +278,8 @@ def build_scene_payload(scene: SceneDescription) -> bytes:
     if scene.settings.active_camera_entity is not None:
         if not 0 <= scene.settings.active_camera_entity < len(entities):
             raise ValueError("active camera entity index is invalid")
+        if not isinstance(entities[scene.settings.active_camera_entity].data, CameraEntity):
+            raise ValueError("active camera entity must reference a camera")
         active_camera = scene.settings.active_camera_entity
 
     strings = StringTable()
@@ -297,15 +294,14 @@ def build_scene_payload(scene: SceneDescription) -> bytes:
         classname, _ = CLASS_INFO[type(entity.data)]
         class_offset, class_size = strings.add(classname)
         name_offset, name_size = strings.add(entity.name)
-        flags = entity.flags | (2 if isinstance(entity.data, StaticProp) else 0)
         entity_rows.extend(SCENE_ENTITY.pack(class_offset, class_size,
-                                             name_offset, name_size, flags))
+                                             name_offset, name_size, entity.flags))
         grouped.setdefault(type(entity.data), []).append((index, entity))
 
     output = bytearray(SCENE_HEADER.size)
     settings_offset = _append_aligned(output, SCENE_SETTINGS.pack(
         *scene.settings.ambient_color, scene.settings.exposure, *scene.settings.gravity,
-        active_camera, scene.settings.flags, 0, 0, 0))
+        active_camera, 0, 0, 0, 0))
     asset_offset = _append_aligned(output, asset_rows) if asset_rows else 0
     entity_offset = _append_aligned(output, entity_rows)
     groups = sorted(grouped.items(), key=lambda item: CLASS_INFO[item[0]][0])

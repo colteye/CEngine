@@ -10,8 +10,8 @@ sys.path.insert(0, str(ROOT))
 
 from ceassetlib.blender_scene import LightmapPlacement, object_transform, scene_description
 from ceassetlib.scene_export import (
-    CameraEntity, DynamicProp, EmptyEntity, LightEntity, PlayerStart,
-    PrefabEntity, StaticProp, TriggerEntity,
+    CameraEntity, EmptyEntity, LightEntity, PlayerStart,
+    PrefabEntity, Prop, TriggerEntity,
 )
 
 
@@ -41,7 +41,7 @@ class BlenderSceneTests(unittest.TestCase):
 
         transform = object_transform(obj)
 
-        self.assertEqual(transform.position, (2.0, 4.0, -3.0))
+        self.assertEqual(transform.position, (3.0, -2.0, 4.0))
         self.assertAlmostEqual(transform.scale[0], 1.0)
         self.assertAlmostEqual(transform.rotation[3], 1.0)
 
@@ -59,14 +59,14 @@ class BlenderSceneTests(unittest.TestCase):
 
         scene = scene_description(
             objects,
-            {"Mesh": [Path("compiled/Mesh.cmesh")]},
+            {"Mesh": [(Path("compiled/Mesh.cmesh"), "Brick")]},
             {"Brick": Path("compiled/Brick.cmat")},
             {"PREFAB_Door": Path("compiled/Door.casset")},
             lambda path: path.as_posix(),
         )
 
         self.assertEqual([type(entity.data) for entity in scene.entities], [
-            CameraEntity, PrefabEntity, LightEntity, EmptyEntity, StaticProp,
+            CameraEntity, PrefabEntity, LightEntity, EmptyEntity, Prop,
         ])
         prop = scene.entities[-1].data
         self.assertEqual(prop.mesh.path, "compiled/Mesh.cmesh")
@@ -78,8 +78,8 @@ class BlenderSceneTests(unittest.TestCase):
         obj = FakeObject("Floor", "MESH")
         scene = scene_description(
             (obj,),
-            {"Floor": [Path("compiled/Floor.cmesh")]},
-            {},
+            {"Floor": [(Path("compiled/Floor.cmesh"), "FloorMaterial")]},
+            {"FloorMaterial": Path("compiled/Floor.cmat")},
             {},
             lambda path: path.as_posix(),
             lightmaps={"Floor": LightmapPlacement(
@@ -87,7 +87,7 @@ class BlenderSceneTests(unittest.TestCase):
         )
 
         prop = scene.entities[0].data
-        self.assertIsInstance(prop, StaticProp)
+        self.assertIsInstance(prop, Prop)
         self.assertEqual(prop.lightmap.path, "compiled/lightmap_0.dds")
         self.assertEqual(prop.lightmap_scale, (0.5, 0.5))
         self.assertEqual(prop.lightmap_offset, (0.5, 0.0))
@@ -99,16 +99,23 @@ class BlenderSceneTests(unittest.TestCase):
 
     def test_explicit_gameplay_classnames_select_fixed_entity_types(self) -> None:
         objects = (
-            FakeObject("Mover", "MESH", props={"ce_classname": "prop_dynamic", "ce_physics": True}),
+            FakeObject("Mover", "MESH", props={
+                "ce_classname": "prop", "ce_dynamic": True, "ce_collision": True}),
             FakeObject("Spawn", "EMPTY", props={"ce_classname": "info_player_start", "ce_team": 2}),
             FakeObject("Volume", "EMPTY", props={
                 "ce_classname": "trigger", "ce_half_extents": (2, 3, 4), "ce_trigger_once": True}),
         )
 
-        scene = scene_description(objects, {"Mover": [Path("Mover.cmesh")]}, {}, {}, lambda path: path.as_posix())
+        scene = scene_description(
+            objects,
+            {"Mover": [(Path("Mover.cmesh"), "MoverMaterial")]},
+            {"MoverMaterial": Path("Mover.cmat")},
+            {},
+            lambda path: path.as_posix())
 
-        self.assertIsInstance(scene.entities[0].data, DynamicProp)
-        self.assertTrue(scene.entities[0].data.physics_enabled)
+        self.assertIsInstance(scene.entities[0].data, Prop)
+        self.assertTrue(scene.entities[0].data.dynamic)
+        self.assertTrue(scene.entities[0].data.collision_enabled)
         self.assertIsInstance(scene.entities[1].data, PlayerStart)
         self.assertEqual(scene.entities[1].data.team, 2)
         self.assertIsInstance(scene.entities[2].data, TriggerEntity)

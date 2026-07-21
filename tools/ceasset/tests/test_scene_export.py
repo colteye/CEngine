@@ -17,7 +17,7 @@ from ceassetlib.scene_export import (
     PrefabEntity,
     SceneDescription,
     SceneSettings,
-    StaticProp,
+    Prop,
     Transform,
     build_scene_payload,
 )
@@ -38,7 +38,7 @@ class SceneExportTests(unittest.TestCase):
         mesh = AssetReference(AssetType.MESH, "assets/compiled/props/crate.cmesh", guid(1))
         material = AssetReference(AssetType.MATERIAL, "assets/compiled/props/crate.cmat", guid(2))
         lightmap = AssetReference(AssetType.TEXTURE, "assets/compiled/maps/test/lightmap_0.dds", guid(3))
-        prefab = AssetReference(AssetType.ASSET, "assets/compiled/props/barrel.casset", guid(4))
+        prefab = AssetReference(AssetType.ASSET, "assets/compiled/props/statue.casset", guid(4))
         return SceneDescription(
             entities=(
                 EntityDescription(
@@ -46,7 +46,7 @@ class SceneExportTests(unittest.TestCase):
                     name="KeyLight",
                 ),
                 EntityDescription(
-                    data=StaticProp(mesh, materials=(material,), lightmap=lightmap),
+                    data=Prop(mesh, materials=(material,), lightmap=lightmap),
                     name="CrateA",
                 ),
                 EntityDescription(
@@ -89,16 +89,28 @@ class SceneExportTests(unittest.TestCase):
     def test_invalid_descriptions_fail_before_writing(self) -> None:
         with self.assertRaisesRegex(ValueError, "project-relative"):
             build_scene_payload(SceneDescription((EntityDescription(
-                StaticProp(AssetReference(
+                Prop(AssetReference(
                     AssetType.MESH, "../bad.cmesh", guid(9)))),)))
         with self.assertRaisesRegex(ValueError, "active camera entity index"):
             build_scene_payload(SceneDescription(
                 (EntityDescription(CameraEntity()),),
                 SceneSettings(active_camera_entity=4)))
+        with self.assertRaisesRegex(ValueError, "must reference a camera"):
+            build_scene_payload(SceneDescription(
+                (EntityDescription(LightEntity()),),
+                SceneSettings(active_camera_entity=0)))
         with self.assertRaisesRegex(ValueError, "connection entity index"):
             build_scene_payload(SceneDescription(
                 (EntityDescription(CameraEntity()),),
                 connections=(EntityConnection(0, "OnReady", 2, "Enable"),)))
+        mesh = AssetReference(AssetType.MESH, "assets/compiled/prop.cmesh", guid(10))
+        lightmap = AssetReference(AssetType.TEXTURE, "assets/compiled/lightmap.dds", guid(11))
+        with self.assertRaisesRegex(ValueError, "only a static prop"):
+            build_scene_payload(SceneDescription((EntityDescription(
+                Prop(mesh, lightmap=lightmap, dynamic=True)),)))
+        with self.assertRaisesRegex(ValueError, "dynamic prop mass"):
+            build_scene_payload(SceneDescription((EntityDescription(
+                Prop(mesh, dynamic=True, collision_enabled=True, mass=0.0)),)))
 
 
 if __name__ == "__main__":

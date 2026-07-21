@@ -24,8 +24,8 @@ public:
 private:
 
 	void UpdateMatrices();
-	glm::vec3 m_position = glm::vec3(0, 0, 5);
-	glm::vec2 m_angles = glm::vec2(3.14f, 0.0f);
+	glm::vec3 m_position = glm::vec3(-5.0f, 0.0f, 2.0f);
+	glm::vec2 m_angles = glm::vec2(0.0f);
 
 	glm::mat4 m_model;
 	glm::mat4 m_view;

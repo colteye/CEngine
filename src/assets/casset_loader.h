@@ -12,7 +12,7 @@
 namespace CEngine::Assets {
 
 constexpr std::array<char, 4> CAssetPayloadMagic = {'C', 'E', 'C', 'A'};
-constexpr std::uint16_t CAssetPayloadVersion = 1;
+constexpr std::uint16_t CAssetPayloadVersion = 2;
 
 enum class CAssetCompositionType : std::uint32_t {
     Unknown = 0,

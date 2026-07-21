@@ -44,7 +44,7 @@ CASSET_HEADER = struct.Struct("<4sHHIIIIIIIIIII")
 CASSET_OBJECT = struct.Struct("<IIIIIIII16f")
 CASSET_COMPONENT = struct.Struct("<III")
 CASSET_MAGIC = b"CECA"
-CASSET_VERSION = 1
+CASSET_VERSION = 2
 COMPOSITION_TYPE_IDS = {
     AssetType.PREFAB: 1,
     AssetType.SCENE: 2,
@@ -197,15 +197,15 @@ def blender_to_engine_matrix_rows(matrix: object | None) -> list[float]:
         matrix_rows = [[float(matrix[row][column]) for column in range(4)] for row in range(4)]
 
     blender_to_engine = [
-        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [-1.0, 0.0, 0.0, 0.0],
         [0.0, 0.0, 1.0, 0.0],
-        [0.0, -1.0, 0.0, 0.0],
         [0.0, 0.0, 0.0, 1.0],
     ]
     engine_to_blender = [
+        [0.0, -1.0, 0.0, 0.0],
         [1.0, 0.0, 0.0, 0.0],
-        [0.0, 0.0, -1.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
         [0.0, 0.0, 0.0, 1.0],
     ]
     converted = matrix_multiply(matrix_multiply(blender_to_engine, matrix_rows), engine_to_blender)

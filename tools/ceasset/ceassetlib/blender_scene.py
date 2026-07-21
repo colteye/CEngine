@@ -9,9 +9,9 @@ from .collection_export import blender_to_engine_matrix_rows
 from .formats import AssetType
 from .ids import guid_from_stable_name
 from .scene_export import (
-    AssetReference, CameraEntity, DynamicProp, EmptyEntity, EntityDescription,
-    LightEntity, PlayerStart, PrefabEntity, SceneDescription, StaticProp,
-    Transform, TriggerEntity,
+    AssetReference, CameraEntity, EmptyEntity, EntityDescription,
+    LightEntity, PlayerStart, PrefabEntity, Prop, SceneDescription,
+    SceneSettings, Transform, TriggerEntity,
 )
 
 
@@ -21,6 +21,31 @@ class LightmapPlacement:
     scale: tuple[float, float]
     offset: tuple[float, float]
     rgbm_range: float = 8.0
+
+
+def blender_scene_settings(blender: object) -> SceneSettings:
+    scene = getattr(getattr(blender, "context", None), "scene", None)
+    world = getattr(scene, "world", None)
+    color = tuple(float(value) for value in getattr(world, "color", (0.05, 0.05, 0.05)))[:3]
+    strength = 1.0
+    node_tree = getattr(world, "node_tree", None)
+    for node in getattr(node_tree, "nodes", ()) if node_tree is not None else ():
+        if getattr(node, "type", "") != "BACKGROUND":
+            continue
+        inputs = getattr(node, "inputs", None)
+        getter = getattr(inputs, "get", None)
+        color_socket = getter("Color") if callable(getter) else None
+        strength_socket = getter("Strength") if callable(getter) else None
+        if color_socket is not None:
+            color = tuple(float(value) for value in color_socket.default_value)[:3]
+        if strength_socket is not None:
+            strength = max(0.0, float(strength_socket.default_value))
+        break
+    exposure = float(getattr(getattr(scene, "view_settings", None), "exposure", 0.0))
+    return SceneSettings(
+        ambient_color=tuple(max(0.0, component * strength) for component in color),
+        exposure=2.0 ** exposure,
+    )
 
 
 def _property(obj: object, name: str, default: object = None) -> object:
@@ -81,11 +106,10 @@ def _reference(asset_type: AssetType, path: Path, asset_path: Callable[[Path], s
 
 def scene_description(
     objects: Iterable[object],
-    mesh_outputs: dict[str, list[Path]],
+    mesh_outputs: dict[str, list[tuple[Path, str]]],
     material_outputs: dict[str, Path],
     prefab_outputs: dict[str, Path],
     asset_path: Callable[[Path], str],
-    material_names: Callable[[object], list[str]] | None = None,
     lightmaps: dict[str, LightmapPlacement] | None = None,
 ) -> SceneDescription:
     entities: list[EntityDescription] = []
@@ -99,35 +123,34 @@ def scene_description(
             outputs = mesh_outputs.get(name, ())
             if not outputs:
                 raise ValueError(f"mesh entity has no generated .cmesh: {name}")
-            dynamic = classname == "prop_dynamic" or bool(_property(obj, "ce_dynamic", False))
-            if classname not in ("", "prop_static", "prop_dynamic"):
+            if classname not in ("", "prop"):
                 raise ValueError(f"unsupported mesh entity classname: {classname}")
-            names = material_names(obj) if material_names is not None else [
-                slot.material.name for slot in getattr(obj, "material_slots", ())
-                if getattr(slot, "material", None) is not None]
-            missing = [material for material in names if material not in material_outputs]
-            if missing:
-                raise ValueError(f"mesh entity has no generated .cmat for {missing[0]}: {name}")
-            materials = tuple(_reference(
-                AssetType.MATERIAL, material_outputs[material], asset_path) for material in names)
-            mesh = _reference(AssetType.MESH, outputs[0], asset_path)
-            if dynamic:
-                data = DynamicProp(mesh, transform, materials,
-                    physics_enabled=bool(_property(obj, "ce_physics", False)),
+            dynamic = bool(_property(obj, "ce_dynamic", False))
+            placement = lightmaps.get(name) if lightmaps is not None else None
+            if placement is not None and dynamic:
+                raise ValueError(f"only a static prop may have a baked lightmap: {name}")
+            for output, material_name in outputs:
+                material_output = material_outputs.get(material_name)
+                if material_output is None:
+                    raise ValueError(f"mesh entity has no generated .cmat for {material_name}: {name}")
+                data = Prop(
+                    mesh=_reference(AssetType.MESH, output, asset_path),
+                    transform=transform,
+                    materials=(_reference(AssetType.MATERIAL, material_output, asset_path),),
+                    lightmap=_reference(AssetType.TEXTURE, placement.texture, asset_path) if placement else None,
+                    lightmap_scale=placement.scale if placement else (1.0, 1.0),
+                    lightmap_offset=placement.offset if placement else (0.0, 0.0),
+                    lightmap_rgbm_range=placement.rgbm_range if placement else 8.0,
+                    dynamic=dynamic,
+                    collision_enabled=bool(_property(obj, "ce_collision",
+                        _property(obj, "ce_physics", False))),
                     collision_half_extents=tuple(float(value) for value in _property(
                         obj, "ce_collision_half_extents", (0.5, 0.5, 0.5))),
-                    mass=float(_property(obj, "ce_mass", 1.0)))
-            else:
-                placement = lightmaps.get(name) if lightmaps is not None else None
-                data = StaticProp(
-                    mesh,
-                    transform,
-                    materials,
-                    _reference(AssetType.TEXTURE, placement.texture, asset_path) if placement else None,
-                    placement.scale if placement else (1.0, 1.0),
-                    placement.offset if placement else (0.0, 0.0),
-                    placement.rgbm_range if placement else 8.0,
+                    mass=float(_property(obj, "ce_mass", 1.0)),
                 )
+                entity_name = name if len(outputs) == 1 else f"{name}:{material_name}"
+                entities.append(EntityDescription(data, entity_name))
+            continue
         elif obj_type == "CAMERA":
             camera = getattr(obj, "data", None)
             projection = 1 if str(getattr(camera, "type", "PERSP")) == "ORTHO" else 0

@@ -4,7 +4,7 @@
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Core/Factory.h>
-#include <Jolt/Core/JobSystemThreadPool.h>
+#include <Jolt/Core/JobSystemSingleThreaded.h>
 #include <Jolt/Core/Memory.h>
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/RegisterTypes.h>
@@ -17,10 +17,8 @@
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 
-#include <algorithm>
 #include <iostream>
 #include <memory>
-#include <thread>
 #include <vector>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -167,24 +165,30 @@ public:
 
 struct JoltPhysicsBackend::Impl
 {
+	struct BodySlot
+	{
+		JPH::BodyID body;
+		std::uint32_t generation = 1;
+	};
+
 	JPH::BodyID GetBodyID(PhysicsBodyHandle handle) const
 	{
-		if (handle >= bodies.size())
+		if (handle.index >= bodies.size() || bodies[handle.index].generation != handle.generation)
 		{
 			return JPH::BodyID();
 		}
 
-		return bodies[handle];
+		return bodies[handle.index].body;
 	}
 
 	std::unique_ptr<BroadPhaseLayerInterfaceImpl> broad_phase_layer_interface;
 	std::unique_ptr<ObjectVsBroadPhaseLayerFilterImpl> object_vs_broad_phase_layer_filter;
 	std::unique_ptr<ObjectLayerPairFilterImpl> object_layer_pair_filter;
 	std::unique_ptr<JPH::TempAllocatorImpl> temp_allocator;
-	std::unique_ptr<JPH::JobSystemThreadPool> job_system;
+	std::unique_ptr<JPH::JobSystemSingleThreaded> job_system;
 	std::unique_ptr<JPH::PhysicsSystem> physics_system;
-	std::vector<JPH::BodyID> bodies;
-	std::vector<PhysicsBodyHandle> free_handles;
+	std::vector<BodySlot> bodies;
+	std::vector<std::uint32_t> free_handles;
 	bool initialized = false;
 	bool owns_jolt_runtime = false;
 };
@@ -214,12 +218,7 @@ bool JoltPhysicsBackend::Initialize(const PhysicsSystemDesc& desc)
 	impl->object_layer_pair_filter = std::make_unique<ObjectLayerPairFilterImpl>();
 	impl->temp_allocator = std::make_unique<JPH::TempAllocatorImpl>(10 * 1024 * 1024);
 
-	const uint32_t hardware_threads = std::max(1u, std::thread::hardware_concurrency());
-	const uint32_t worker_threads = hardware_threads > 1u ? hardware_threads - 1u : 1u;
-	impl->job_system = std::make_unique<JPH::JobSystemThreadPool>(
-		JPH::cMaxPhysicsJobs,
-		JPH::cMaxPhysicsBarriers,
-		static_cast<int>(worker_threads));
+	impl->job_system = std::make_unique<JPH::JobSystemSingleThreaded>(JPH::cMaxPhysicsJobs);
 
 	impl->physics_system = std::make_unique<JPH::PhysicsSystem>();
 	impl->physics_system->Init(
@@ -246,8 +245,9 @@ void JoltPhysicsBackend::Shutdown()
 	if (impl->physics_system != nullptr)
 	{
 		JPH::BodyInterface& body_interface = impl->physics_system->GetBodyInterface();
-		for (JPH::BodyID body_id : impl->bodies)
+		for (const Impl::BodySlot& slot : impl->bodies)
 		{
+			const JPH::BodyID body_id = slot.body;
 			if (!body_id.IsInvalid())
 			{
 				body_interface.RemoveBody(body_id);
@@ -335,17 +335,18 @@ PhysicsBodyHandle JoltPhysicsBackend::CreateBody(const PhysicsBodyDesc& desc)
 		body_interface.SetAngularVelocity(body_id, ToJoltVec3(desc.angular_velocity));
 	}
 
-	PhysicsBodyHandle handle = kInvalidPhysicsBodyHandle;
+	PhysicsBodyHandle handle;
 	if (!impl->free_handles.empty())
 	{
-		handle = impl->free_handles.back();
+		handle.index = impl->free_handles.back();
 		impl->free_handles.pop_back();
-		impl->bodies[handle] = body_id;
+		impl->bodies[handle.index].body = body_id;
+		handle.generation = impl->bodies[handle.index].generation;
 	}
 	else
 	{
-		handle = static_cast<PhysicsBodyHandle>(impl->bodies.size());
-		impl->bodies.push_back(body_id);
+		handle = {static_cast<std::uint32_t>(impl->bodies.size()), 1};
+		impl->bodies.push_back({body_id, handle.generation});
 	}
 
 	return handle;
@@ -367,8 +368,11 @@ void JoltPhysicsBackend::DestroyBody(PhysicsBodyHandle body)
 	JPH::BodyInterface& body_interface = impl->physics_system->GetBodyInterface();
 	body_interface.RemoveBody(body_id);
 	body_interface.DestroyBody(body_id);
-	impl->bodies[body] = JPH::BodyID();
-	impl->free_handles.push_back(body);
+	Impl::BodySlot& slot = impl->bodies[body.index];
+	slot.body = JPH::BodyID();
+	++slot.generation;
+	if (slot.generation == 0) ++slot.generation;
+	impl->free_handles.push_back(body.index);
 }
 
 glm::mat4 JoltPhysicsBackend::GetBodyTransform(PhysicsBodyHandle body) const

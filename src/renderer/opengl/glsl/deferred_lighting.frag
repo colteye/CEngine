@@ -291,7 +291,7 @@ void main()
 	vec3 world_pos = world_position_from_depth(depth);
 	vec3 view_dir = normalize(cam_pos_world - world_pos);
 
-	float sky_weight = clamp(normal.y * 0.5 + 0.5, 0.0, 1.0);
+	float sky_weight = clamp(normal.z * 0.5 + 0.5, 0.0, 1.0);
 	vec3 ambient_color = mix(ambient_ground_color, ambient_sky_color, sky_weight);
 	vec3 ambient = ambient_enabled && !has_lightmap ?
 		ambient_color * ambient_intensity * albedo * ao : vec3(0.0);

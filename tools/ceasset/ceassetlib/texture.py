@@ -27,7 +27,12 @@ def convert_texture_to_dds(source: Path, output: Path, dds_format: str) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(output.name + ".tmp")
     with Image.open(source) as image:
-        image.save(temporary, format="DDS", pixel_format=pixel_format)
+        converted = image.convert("RGBA") if getattr(image, "mode", "RGBA") != "RGBA" else image
+        try:
+            converted.save(temporary, format="DDS", pixel_format=pixel_format)
+        finally:
+            if converted is not image:
+                converted.close()
     temporary.replace(output)
 
 

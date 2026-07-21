@@ -1,18 +1,23 @@
 #include "scene/scene_loader.h"
 
 #include "assets/asset_database.h"
+#include "assets/asset_io.h"
+#include "assets/casset_loader.h"
 #include "assets/cscene_reader.h"
 #include "entity/camera_entity.h"
-#include "entity/dynamic_prop.h"
 #include "entity/light_entity.h"
 #include "entity/player_start.h"
 #include "entity/prefab_entity.h"
-#include "entity/static_prop.h"
+#include "entity/prop_entity.h"
 #include "entity/trigger_entity.h"
 #include "scene/scene.h"
 
 #include <cstring>
+#include <filesystem>
+#include <string>
 #include <vector>
+
+#include <glm/gtx/matrix_decompose.hpp>
 
 namespace CEngine::Scene {
 namespace {
@@ -96,50 +101,43 @@ bool LoadClassRecord(Scene& scene, Entity& entity, std::string_view classname,
         CopyTransform(disk, entity.GetTransform());
         return true;
     }
-    if (classname == "prop_static")
+    if (classname == "prop")
     {
-        DiskStaticProp disk;
-        if (!ReadRecord(records, row, stride, disk)) return Fail(error, "static prop record stride is unsupported");
+        DiskProp disk;
+        if (!ReadRecord(records, row, stride, disk)) return Fail(error, "prop record stride is unsupported");
         if (disk.mesh_asset >= scene.AssetReferenceCount() ||
             scene.ReferencedAssetType(disk.mesh_asset) != Assets::AssetType::Mesh ||
             (disk.lightmap_asset != InvalidAssetIndex && disk.lightmap_asset >= scene.AssetReferenceCount()))
-            return Fail(error, "static prop asset index is invalid");
+            return Fail(error, "prop asset index is invalid");
         if (disk.lightmap_asset != InvalidAssetIndex &&
             scene.ReferencedAssetType(disk.lightmap_asset) != Assets::AssetType::Texture)
-            return Fail(error, "static prop lightmap asset is invalid");
-		if (disk.lightmap_asset != InvalidAssetIndex &&
-			(disk.lightmap_scale[0] <= 0.0f || disk.lightmap_scale[1] <= 0.0f ||
-			 disk.lightmap_offset[0] < 0.0f || disk.lightmap_offset[1] < 0.0f ||
-			 disk.lightmap_offset[0] + disk.lightmap_scale[0] > 1.0f ||
-			 disk.lightmap_offset[1] + disk.lightmap_scale[1] > 1.0f ||
-			 disk.lightmap_rgbm_range <= 0.0f))
-			return Fail(error, "static prop lightmap binding is invalid");
-        auto& prop = static_cast<Entities::StaticProp&>(entity);
+            return Fail(error, "prop lightmap asset is invalid");
+        const bool dynamic = (disk.flags & PropDynamic) != 0;
+        if (disk.lightmap_asset != InvalidAssetIndex && dynamic)
+            return Fail(error, "only a static prop may have a baked lightmap");
+        if (disk.lightmap_asset != InvalidAssetIndex &&
+            (disk.lightmap_scale[0] <= 0.0f || disk.lightmap_scale[1] <= 0.0f ||
+             disk.lightmap_offset[0] < 0.0f || disk.lightmap_offset[1] < 0.0f ||
+             disk.lightmap_offset[0] + disk.lightmap_scale[0] > 1.0f ||
+             disk.lightmap_offset[1] + disk.lightmap_scale[1] > 1.0f ||
+             disk.lightmap_rgbm_range <= 0.0f))
+            return Fail(error, "prop lightmap binding is invalid");
+        const bool collision_enabled = (disk.flags & PropCollisionEnabled) != 0;
+        if (collision_enabled && (disk.collision_half_extents[0] <= 0.0f ||
+            disk.collision_half_extents[1] <= 0.0f || disk.collision_half_extents[2] <= 0.0f))
+            return Fail(error, "prop collision dimensions are invalid");
+        if (collision_enabled && dynamic && disk.mass <= 0.0f)
+            return Fail(error, "dynamic prop mass is invalid");
+        auto& prop = static_cast<Entities::PropEntity&>(entity);
         CopyTransform(disk.transform, prop.GetTransform());
         prop.mesh = scene.AssetReference(disk.mesh_asset);
         prop.lightmap = scene.AssetReference(disk.lightmap_asset);
         prop.lightmap_scale = {disk.lightmap_scale[0], disk.lightmap_scale[1]};
         prop.lightmap_offset = {disk.lightmap_offset[0], disk.lightmap_offset[1]};
         prop.lightmap_rgbm_range = disk.lightmap_rgbm_range;
-        prop.visible = disk.visible != 0;
-        return LoadMaterials(scene, disk.first_material_asset, disk.material_count, auxiliary,
-            prop.first_material, prop.material_count, error);
-    }
-    if (classname == "prop_dynamic")
-    {
-        DiskDynamicProp disk;
-        if (!ReadRecord(records, row, stride, disk)) return Fail(error, "dynamic prop record stride is unsupported");
-        if (disk.mesh_asset >= scene.AssetReferenceCount() ||
-            scene.ReferencedAssetType(disk.mesh_asset) != Assets::AssetType::Mesh)
-            return Fail(error, "dynamic prop mesh index is invalid");
-        auto& prop = static_cast<Entities::DynamicProp&>(entity);
-        CopyTransform(disk.transform, prop.GetTransform());
-        prop.mesh = scene.AssetReference(disk.mesh_asset);
-        prop.visible = (disk.flags & 1u) != 0;
-        prop.physics_enabled = (disk.flags & 2u) != 0;
-        if (prop.physics_enabled && (disk.mass <= 0.0f || disk.collision_half_extents[0] <= 0.0f ||
-            disk.collision_half_extents[1] <= 0.0f || disk.collision_half_extents[2] <= 0.0f))
-            return Fail(error, "dynamic prop physics record is invalid");
+        prop.dynamic = dynamic;
+        prop.visible = (disk.flags & PropVisible) != 0;
+        prop.collision_enabled = collision_enabled;
         prop.collision_half_extents = {disk.collision_half_extents[0],
             disk.collision_half_extents[1], disk.collision_half_extents[2]};
         prop.mass = disk.mass;
@@ -215,6 +213,124 @@ bool LoadClassRecord(Scene& scene, Entity& entity, std::string_view classname,
     }
     return Fail(error, "scene contains an unsupported entity classname");
 }
+
+bool CopyComposedTransform(const Transform& instance,
+    const std::array<float, 16>& row_major_object, Transform& target, std::string* error)
+{
+    glm::mat4 object(1.0f);
+    for (std::size_t row = 0; row < 4; ++row)
+        for (std::size_t column = 0; column < 4; ++column)
+            object[column][row] = row_major_object[row * 4 + column];
+    const glm::mat4 world = instance.world_matrix * object;
+    glm::vec3 skew;
+    glm::vec4 perspective;
+    if (!glm::decompose(world, target.scale, target.rotation, target.position, skew, perspective))
+        return Fail(error, "prefab object transform is invalid");
+    target.rotation = glm::normalize(target.rotation);
+    target.dirty = true;
+    target.UpdateWorldMatrix();
+    return true;
+}
+
+Assets::AssetType ComponentAssetType(Assets::CAssetComponentKind kind)
+{
+    switch (kind)
+    {
+    case Assets::CAssetComponentKind::Mesh: return Assets::AssetType::Mesh;
+    case Assets::CAssetComponentKind::Material: return Assets::AssetType::Material;
+    case Assets::CAssetComponentKind::Skeleton: return Assets::AssetType::Skeleton;
+    case Assets::CAssetComponentKind::Animation: return Assets::AssetType::Animation;
+    default: return Assets::AssetType::Unknown;
+    }
+}
+
+bool AcquirePrefabComponent(Scene& scene, Assets::AssetDatabase& database,
+    Assets::AssetHandle prefab, const Assets::CAssetComponent& component,
+    Assets::AssetHandle& handle, std::string* error)
+{
+    const Assets::AssetType type = ComponentAssetType(component.kind);
+    if (type == Assets::AssetType::Unknown)
+        return Fail(error, "prefab component type is unsupported");
+    const std::filesystem::path relative =
+        (std::filesystem::path(database.Path(prefab)).parent_path() / component.path).lexically_normal();
+    std::string normalized;
+    if (!Assets::NormalizeProjectAssetPath(relative.generic_string(), normalized))
+        return Fail(error, "prefab component path is outside the project");
+
+    Assets::AssetFile target;
+    const std::filesystem::path full = database.FullPath(prefab).parent_path() / component.path;
+    if (!target.Load(full.lexically_normal(), error)) return false;
+    if (target.Type() != type) return Fail(error, "prefab component asset type does not match");
+    handle = database.Acquire(normalized, type, target.GetGuid(), error);
+    if (!handle) return false;
+    try { scene.AppendAssetReference(handle); }
+    catch (...)
+    {
+        database.Release(handle);
+        throw;
+    }
+    return true;
+}
+
+bool ExpandPrefab(Scene& scene, Assets::AssetDatabase& database,
+    const Entities::PrefabEntity& instance, std::string* error)
+{
+    Assets::CAsset prefab;
+    if (!prefab.Load(database.FullPath(instance.prefab), error)) return false;
+    if (prefab.CompositionType() != Assets::CAssetCompositionType::Prefab)
+        return Fail(error, "prefab instance does not reference a prefab composition");
+
+    for (std::uint32_t object_index = 0; object_index < prefab.ObjectCount(); ++object_index)
+    {
+        Assets::CAssetObject object;
+        if (!prefab.Object(object_index, object)) return Fail(error, "prefab object is invalid");
+        if (object.object_type != 1) continue;
+
+        std::vector<Assets::CAssetComponent> meshes;
+        std::vector<Assets::CAssetComponent> materials;
+        for (std::uint32_t component_index = 0; component_index < object.component_count; ++component_index)
+        {
+            Assets::CAssetComponent component;
+            if (!prefab.Component(object, component_index, component))
+                return Fail(error, "prefab object component is invalid");
+            if (component.kind == Assets::CAssetComponentKind::Mesh) meshes.push_back(component);
+            else if (component.kind == Assets::CAssetComponentKind::Material) materials.push_back(component);
+        }
+        if (meshes.empty() || meshes.size() != materials.size())
+            return Fail(error, "prefab mesh and material component counts do not match");
+
+        for (std::size_t part = 0; part < meshes.size(); ++part)
+        {
+            Assets::AssetHandle mesh;
+            Assets::AssetHandle material;
+            if (!AcquirePrefabComponent(scene, database, instance.prefab, meshes[part], mesh, error) ||
+                !AcquirePrefabComponent(scene, database, instance.prefab, materials[part], material, error))
+                return false;
+            const std::string name = instance.Name() + "/" + std::string(object.name) +
+                (meshes.size() == 1 ? "" : ":" + std::to_string(part));
+            auto& prop = static_cast<Entities::PropEntity&>(scene.CreateEntity("prop", name));
+            prop.SetFlags(instance.Flags());
+            if (!CopyComposedTransform(instance.GetTransform(), object.world_from_local,
+                    prop.GetTransform(), error))
+                return false;
+            prop.mesh = mesh;
+            prop.first_material = scene.AppendMaterial(material);
+            prop.material_count = 1;
+        }
+    }
+    return true;
+}
+
+bool ExpandPrefabs(Scene& scene, Assets::AssetDatabase& database, std::string* error)
+{
+    std::vector<const Entities::PrefabEntity*> instances;
+    for (const auto& entity : scene.Entities())
+        if (entity != nullptr && entity->Classname() == "prefab_instance")
+            instances.push_back(static_cast<const Entities::PrefabEntity*>(entity.get()));
+    for (const Entities::PrefabEntity* instance : instances)
+        if (!ExpandPrefab(scene, database, *instance, error)) return false;
+    return true;
+}
 } // namespace
 
 std::unique_ptr<Scene> LoadScene(const std::filesystem::path& path,
@@ -282,6 +398,24 @@ std::unique_ptr<Scene> LoadScene(const std::filesystem::path& path,
     }
     for (bool value : loaded)
         if (!value) { Fail(error, "entity has no class record"); return nullptr; }
+    if (!ExpandPrefabs(*scene, database, error)) return nullptr;
+    SceneSettings settings;
+    const DiskSceneSettings& disk_settings = file.Settings();
+    settings.ambient_color = {disk_settings.ambient_color[0], disk_settings.ambient_color[1],
+        disk_settings.ambient_color[2]};
+    settings.exposure = disk_settings.exposure;
+    settings.gravity = {disk_settings.gravity[0], disk_settings.gravity[1], disk_settings.gravity[2]};
+    if (disk_settings.active_camera_entity != InvalidEntityIndex)
+    {
+        Entity* active_camera = entities[disk_settings.active_camera_entity];
+        if (active_camera->Classname() != "camera")
+        { Fail(error, "scene active camera does not reference a camera entity"); return nullptr; }
+        const auto& camera = static_cast<const Entities::CameraEntity&>(*active_camera);
+        if (!active_camera->Enabled() || !camera.enabled)
+        { Fail(error, "scene active camera is disabled"); return nullptr; }
+        settings.active_camera = active_camera->Id();
+    }
+    scene->SetSettings(settings);
     try
     {
         for (const auto& connection : file.Connections())
@@ -294,17 +428,6 @@ std::unique_ptr<Scene> LoadScene(const std::filesystem::path& path,
     catch (const std::exception& exception)
     {
         if (error != nullptr) *error = exception.what();
-        return nullptr;
-    }
-    try { scene->Activate(); }
-    catch (const std::exception& exception)
-    {
-        if (error != nullptr) *error = exception.what();
-        return nullptr;
-    }
-    catch (...)
-    {
-        Fail(error, "entity lifecycle activation failed");
         return nullptr;
     }
     return scene;

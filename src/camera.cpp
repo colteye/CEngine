@@ -1,5 +1,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <stdio.h>
 
@@ -15,9 +16,10 @@ Camera::Camera()
 
 void Camera::SetAnglesCartesian(const glm::vec3& ang)
 {
+	const glm::vec3 direction = glm::normalize(ang);
 	m_angles = glm::vec2{
-		std::atan2(ang.x, ang.y),
-		std::atan2(std::sqrt((ang.x * ang.x) + (ang.y * ang.y)), ang.z)
+		std::atan2(direction.y, direction.x),
+		std::asin(std::clamp(direction.z, -1.0f, 1.0f))
 	};
 	UpdateMatrices();
 }
@@ -25,21 +27,17 @@ void Camera::SetAnglesCartesian(const glm::vec3& ang)
 void Camera::UpdateMatrices()
 {
 	// Direction : Spherical coordinates to Cartesian coordinates conversion
-	glm::vec3 direction(
+	const glm::vec3 direction(
+		std::cos(m_angles.y) * std::cos(m_angles.x),
 		std::cos(m_angles.y) * std::sin(m_angles.x),
-		std::sin(m_angles.y),
-		std::cos(m_angles.y) * std::cos(m_angles.x)
-	);
+		std::sin(m_angles.y));
 
 	// Right vector
-	glm::vec3 right = glm::vec3(
-		std::sin(m_angles.x - glm::pi<float>() / 2.0f),
-		0,
-		std::cos(m_angles.x - glm::pi<float>() / 2.0f)
-	);
+	const glm::vec3 right = glm::normalize(
+		glm::cross(direction, glm::vec3(0.0f, 0.0f, 1.0f)));
 
 	// Up vector : perpendicular to both direction and right
-	glm::vec3 up = glm::cross(right, direction);
+	const glm::vec3 up = glm::cross(right, direction);
 
 	// Projection matrix : 45 degree Field of View, 4:3 ratio, display range : 0.1 unit <-> 100 units
 	m_projection = glm::perspective(glm::radians(m_field_of_view), 4.0f / 3.0f, 0.1f, 100.0f);

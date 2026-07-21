@@ -1,6 +1,6 @@
 #include "scene/scene_physics_state.h"
 
-#include "entity/dynamic_prop.h"
+#include "entity/prop_entity.h"
 #include "physics/physics_system.h"
 #include "scene/scene.h"
 
@@ -19,14 +19,14 @@ bool ScenePhysicsState::Activate(Scene& scene, PhysicsSystem& physics, std::stri
     Stop();
     scene_ = &scene;
     physics_ = &physics;
-    dynamic_bodies_.reserve(scene.EntityCount());
+    bodies_.reserve(scene.EntityCount());
     for (const auto& entity : scene.Entities())
     {
-        if (entity == nullptr || entity->Classname() != "prop_dynamic") continue;
-        const auto& prop = static_cast<const Entities::DynamicProp&>(*entity);
-        if (!prop.physics_enabled || !prop.Enabled()) continue;
+        if (entity == nullptr || entity->Classname() != "prop") continue;
+        const auto& prop = static_cast<const Entities::PropEntity&>(*entity);
+        if (!prop.collision_enabled || !prop.Enabled()) continue;
         PhysicsBodyDesc desc;
-        desc.motion_type = PhysicsMotionType::Dynamic;
+        desc.motion_type = prop.dynamic ? PhysicsMotionType::Dynamic : PhysicsMotionType::Static;
         desc.shape_type = PhysicsShapeType::Box;
         desc.position = prop.GetTransform().position;
         desc.rotation = prop.GetTransform().rotation;
@@ -35,11 +35,11 @@ bool ScenePhysicsState::Activate(Scene& scene, PhysicsSystem& physics, std::stri
         const PhysicsBodyHandle body = physics.CreateBody(desc);
         if (body == kInvalidPhysicsBodyHandle)
         {
-            if (error != nullptr) *error = "failed to create physics body for dynamic prop: " + prop.Name();
+            if (error != nullptr) *error = "failed to create physics body for prop: " + prop.Name();
             Stop();
             return false;
         }
-        dynamic_bodies_.push_back({prop.Id(), body});
+        bodies_.push_back({prop.Id(), body, prop.dynamic});
     }
     return true;
 }
@@ -48,11 +48,12 @@ void ScenePhysicsState::Step(float delta_seconds)
 {
     if (scene_ == nullptr || physics_ == nullptr) return;
     physics_->Step(delta_seconds);
-    for (const DynamicBody& dynamic : dynamic_bodies_)
+    for (const BodyBinding& binding : bodies_)
     {
-        Entity* entity = scene_->GetEntity(dynamic.entity);
+        if (!binding.dynamic) continue;
+        Entity* entity = scene_->GetEntity(binding.entity);
         if (entity == nullptr) continue;
-        const glm::mat4 world = physics_->GetBodyTransform(dynamic.body);
+        const glm::mat4 world = physics_->GetBodyTransform(binding.body);
         entity->GetTransform().position = glm::vec3(world[3]);
         entity->GetTransform().rotation = glm::quat_cast(world);
         entity->GetTransform().world_matrix = world * glm::scale(glm::mat4(1.0f), entity->GetTransform().scale);
@@ -63,9 +64,9 @@ void ScenePhysicsState::Step(float delta_seconds)
 void ScenePhysicsState::Stop()
 {
     if (physics_ != nullptr)
-        for (auto body = dynamic_bodies_.rbegin(); body != dynamic_bodies_.rend(); ++body)
+        for (auto body = bodies_.rbegin(); body != bodies_.rend(); ++body)
             physics_->DestroyBody(body->body);
-    dynamic_bodies_.clear();
+    bodies_.clear();
     scene_ = nullptr;
     physics_ = nullptr;
 }

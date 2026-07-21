@@ -10,6 +10,8 @@
 #include <string_view>
 #include <vector>
 
+#include <glm/vec3.hpp>
+
 namespace CEngine::Assets { class AssetDatabase; enum class AssetType : std::uint32_t; }
 namespace CEngine::Scene {
 
@@ -19,6 +21,13 @@ struct EntityConnection {
     std::string event;
     std::string action;
     float delay_seconds = 0.0f;
+};
+
+struct SceneSettings {
+    glm::vec3 ambient_color = glm::vec3(0.0f);
+    float exposure = 1.0f;
+    glm::vec3 gravity = glm::vec3(0.0f, 0.0f, -9.81f);
+    EntityId active_camera;
 };
 
 class Scene {
@@ -36,6 +45,8 @@ public:
     std::size_t EntityCount() const { return live_count_; }
     const std::vector<EntityConnection>& Connections() const { return connections_; }
     void AddConnection(EntityConnection connection);
+    const SceneSettings& Settings() const { return settings_; }
+    void SetSettings(SceneSettings settings) { settings_ = settings; }
     bool Active() const { return active_; }
 
     void Activate();
@@ -43,6 +54,7 @@ public:
 
     void AdoptAssetReferences(Assets::AssetDatabase& database,
         std::vector<Assets::AssetHandle> handles);
+    void AppendAssetReference(Assets::AssetHandle handle);
     Assets::AssetHandle AssetReference(std::uint32_t index) const;
     Assets::AssetType ReferencedAssetType(std::uint32_t index) const;
     std::size_t AssetReferenceCount() const { return asset_references_.size(); }
@@ -58,6 +70,7 @@ private:
     std::vector<Assets::AssetHandle> materials_;
     std::vector<Entity*> started_entities_;
     std::vector<EntityConnection> connections_;
+    SceneSettings settings_;
     std::size_t live_count_ = 0;
     bool active_ = false;
 };

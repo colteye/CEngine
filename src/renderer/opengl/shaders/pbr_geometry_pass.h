@@ -34,6 +34,7 @@ private:
 	GLint normal_id = -1;
 	GLint metallic_roughness_ao_id = -1;
 	GLint base_color_factor_id = -1;
+	GLint metallic_roughness_ao_factors_id = -1;
 	GLint alpha_cutoff_id = -1;
 	GLint render_mode_id = -1;
 	GLint receives_shadows_id = -1;

@@ -15,6 +15,7 @@ uniform sampler2D albedo;
 uniform sampler2D normal;
 uniform sampler2D metallic_roughness_ao;
 uniform vec4 base_color_factor;
+uniform vec3 metallic_roughness_ao_factors;
 uniform float alpha_cutoff;
 uniform int render_mode;
 uniform bool receives_shadows;
@@ -48,7 +49,7 @@ void main()
 		}
 	}
 
-	vec3 mra = texture(metallic_roughness_ao, uv).rgb;
+	vec3 mra = texture(metallic_roughness_ao, uv).rgb * metallic_roughness_ao_factors;
 	vec3 world_normal = calculate_normal();
 	float flags = receives_shadows ? 1.0 : 0.0;
 

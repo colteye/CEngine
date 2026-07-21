@@ -186,7 +186,7 @@ void VulkanRenderBackend::Render()
 	current_frame = (current_frame + 1) % kMaxFramesInFlight;
 }
 
-void VulkanRenderBackend::RegisterRenderable(const Renderable& /*renderable*/)
+bool VulkanRenderBackend::RegisterRenderable(std::uint32_t /*slot*/, const Renderable& /*renderable*/)
 {
 	static bool warned = false;
 	if (!warned)
@@ -194,9 +194,10 @@ void VulkanRenderBackend::RegisterRenderable(const Renderable& /*renderable*/)
 		std::cout << "Vulkan backend is active; mesh upload/rendering is not implemented yet.\n";
 		warned = true;
 	}
+	return true;
 }
 
-void VulkanRenderBackend::RemoveRenderable(RenderableHandle /*handle*/)
+void VulkanRenderBackend::RemoveRenderable(std::uint32_t /*slot*/)
 {
 }
 
@@ -213,7 +214,7 @@ void VulkanRenderBackend::RemoveLightmap(const Lightmap* /*lightmap*/)
 {
 }
 
-void VulkanRenderBackend::UpdateRenderableTransform(RenderableHandle /*handle*/, const glm::mat4& /*transform*/,
+void VulkanRenderBackend::UpdateRenderableTransform(std::uint32_t /*slot*/, const glm::mat4& /*transform*/,
 	const Bounds& /*world_bounds*/)
 {
 }
@@ -229,7 +230,7 @@ void VulkanRenderBackend::RenderDepthOnly(const glm::mat4& /*view*/, const glm::
 	}
 }
 
-void VulkanRenderBackend::RegisterMaterial(Material* /*material*/)
+bool VulkanRenderBackend::RegisterMaterial(Material* /*material*/)
 {
 	static bool warned = false;
 	if (!warned)
@@ -237,6 +238,7 @@ void VulkanRenderBackend::RegisterMaterial(Material* /*material*/)
 		std::cout << "Vulkan backend is active; material texture upload is not implemented yet.\n";
 		warned = true;
 	}
+	return true;
 }
 
 bool VulkanRenderBackend::CreateInstance()

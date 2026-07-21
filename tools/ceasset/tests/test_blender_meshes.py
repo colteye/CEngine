@@ -188,16 +188,16 @@ class BlenderMeshesTests(unittest.TestCase):
 
         self.assertEqual(buffers.vertex_count, 3)
         self.assertEqual(buffers.index_count, 3)
-        self.assertEqual(buffers.bounds_min, (0.0, 0.0, -2.0))
-        self.assertEqual(buffers.bounds_max, (1.0, 0.0, -0.0))
+        self.assertEqual(buffers.bounds_min, (0.0, -1.0, 0.0))
+        self.assertEqual(buffers.bounds_max, (2.0, -0.0, 0.0))
         self.assertEqual(buffers.vertex_stride, VERTEX.size)
         self.assertFalse(buffers.skinned)
         self.assertEqual(len(buffers.data), 3 * VERTEX.size + 3 * 4)
         self.assertEqual(VERTEX.unpack_from(buffers.data, 0),
-            (0.0, 0.0, -0.0, 0.0, 1.0, -0.0, 0.0, 0.0, 0.0, 0.0))
+            (0.0, -0.0, 0.0, 0.0, -0.0, 1.0, 0.0, 0.0, 0.0, 0.0))
 
-    def test_blender_to_engine_vector_maps_z_up_to_y_up(self) -> None:
-        self.assertEqual(blender_to_engine_vector((1.0, 2.0, 3.0)), (1.0, 3.0, -2.0))
+    def test_blender_to_engine_vector_maps_to_x_forward_y_left_z_up(self) -> None:
+        self.assertEqual(blender_to_engine_vector((1.0, 2.0, 3.0)), (2.0, -1.0, 3.0))
 
     def test_named_lightmap_uv_layer_is_packed_as_uv1(self) -> None:
         mesh = FakeMesh()
@@ -234,8 +234,8 @@ class BlenderMeshesTests(unittest.TestCase):
 
         self.assertEqual(buffers.vertex_count, 6)
         self.assertEqual(buffers.index_count, 6)
-        self.assertEqual(buffers.bounds_min, (0.0, 0.0, -2.0))
-        self.assertEqual(buffers.bounds_max, (1.0, 0.0, -0.0))
+        self.assertEqual(buffers.bounds_min, (0.0, -1.0, 0.0))
+        self.assertEqual(buffers.bounds_max, (2.0, -0.0, 0.0))
 
     def test_mesh_metadata_payload_is_binary_and_dependency_indexed(self) -> None:
         buffers = mesh_buffers(FakeMesh())

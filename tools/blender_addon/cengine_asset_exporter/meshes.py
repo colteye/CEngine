@@ -23,7 +23,7 @@ SKINNED_VERTEX = struct.Struct("<ffffffffffHHHHHHHH")
 INDEX = struct.Struct("<I")
 MESH_METADATA = struct.Struct("<4sHHIIIIIffffffIIIII")
 MESH_METADATA_MAGIC = b"CEMH"
-MESH_METADATA_VERSION = 1
+MESH_METADATA_VERSION = 2
 MESH_FLAG_SKINNED = 1 << 0
 MESH_FLAG_LIGHTMAP_UV = 1 << 1
 MAX_SKIN_INFLUENCES = 4
@@ -85,7 +85,7 @@ def tuple3(value: object) -> tuple[float, float, float]:
 
 def blender_to_engine_vector(value: object) -> tuple[float, float, float]:
     x, y, z = tuple3(value)
-    return (x, z, -y)
+    return (y, -x, z)
 
 
 def tuple2(value: object) -> tuple[float, float]:

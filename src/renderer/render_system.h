@@ -33,8 +33,7 @@ struct AmbientLighting
 class RenderSystem
 {
 public:
-	static void Initialize(int window_width, int window_height);
-	static bool Initialize(RenderBackendType backend_type, GLFWwindow* window, int window_width, int window_height);
+	static bool Initialize(GLFWwindow* window, int window_width, int window_height);
 	static void Shutdown();
 	
 	static void Render();
@@ -45,7 +44,7 @@ public:
 	static RenderableHandle RegisterRenderable(const Renderable& renderable);
 	static void RemoveRenderable(RenderableHandle handle);
 	static void UpdateRenderableTransform(RenderableHandle handle, const glm::mat4& transform);
-	static void RegisterMaterial(Material* material);
+	static bool RegisterMaterial(Material* material);
 	static void RemoveMaterial(Material* material);
 	static bool RegisterLightmap(const Lightmap* lightmap);
 	static void RemoveLightmap(const Lightmap* lightmap);
@@ -58,6 +57,8 @@ public:
 
 	static const std::vector<Renderable>& GetRenderables();
 	static const std::vector<LightRecord>& GetDirectLights();
+	static const Renderable* ResolveRenderable(RenderableHandle handle);
+	static const LightRecord* ResolveLight(LightHandle handle);
 	static const std::vector<GpuLight>& GetGpuLights();
 	static uint64_t GetLightRevision();
 	static size_t GetMaxGpuLights();
@@ -73,7 +74,11 @@ private:
 	static std::unique_ptr<IRenderBackend> backend;
 
 	static std::vector<Renderable> renderables;
+	static std::vector<std::uint32_t> renderable_generations;
+	static std::vector<std::uint32_t> free_renderables;
 	static std::vector<LightRecord> direct_lights;
+	static std::vector<std::uint32_t> light_generations;
+	static std::vector<std::uint32_t> free_lights;
 	static std::vector<GpuLight> gpu_lights;
 	static std::vector<LightShadowGpuHandle> light_shadow_handles;
 	static RenderFrameConstants frame_constants;

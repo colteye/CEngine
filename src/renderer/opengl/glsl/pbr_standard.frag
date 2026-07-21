@@ -19,6 +19,7 @@ uniform sampler2D lightmap;
 
 uniform vec3 cam_pos_world;
 uniform vec4 base_color_factor;
+uniform vec3 metallic_roughness_ao_factors;
 uniform float alpha_cutoff;
 uniform int render_mode;
 uniform bool receives_shadows;
@@ -256,9 +257,10 @@ void main()
 
     vec3 albedo = albedo_sample.rgb;
 	
-    float metallic = texture(metallic_roughness_ao, uv).r;
-    float roughness = texture(metallic_roughness_ao, uv).g;
-    float ao = texture(metallic_roughness_ao, uv).b;
+    vec3 mra = texture(metallic_roughness_ao, uv).rgb * metallic_roughness_ao_factors;
+    float metallic = mra.r;
+    float roughness = mra.g;
+    float ao = mra.b;
 
     if (render_mode == RENDER_MODE_UNLIT) {
         vec3 unlit_color = albedo / (albedo + vec3(1.0));
@@ -340,7 +342,7 @@ void main()
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * shadow;
     }   
   
-    float sky_weight = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
+    float sky_weight = clamp(N.z * 0.5 + 0.5, 0.0, 1.0);
     vec3 ambient_color = mix(ambient_ground_color, ambient_sky_color, sky_weight);
 	vec3 ambient = ambient_enabled && !has_lightmap ?
 		ambient_color * ambient_intensity * albedo * ao : vec3(0.0);

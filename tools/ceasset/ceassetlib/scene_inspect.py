@@ -8,17 +8,16 @@ from pathlib import Path, PurePosixPath
 from .assetfile import ASSET_HEADER, ASSET_MAGIC, ASSET_VERSION
 from .formats import AssetType
 from .scene_format import (
-    ASSET_REFERENCE, CAMERA_ENTITY, DYNAMIC_PROP, ENTITY_CLASS_BLOCK,
+    ASSET_REFERENCE, CAMERA_ENTITY, ENTITY_CLASS_BLOCK,
     ENTITY_CLASS_VERSION, ENTITY_CONNECTION, LIGHT_ENTITY, PLAYER_START,
-    PREFAB_ENTITY, SCENE_ENTITY, SCENE_HEADER, SCENE_MAGIC, SCENE_SETTINGS,
-    SCENE_VERSION, STATIC_PROP, TRANSFORM, TRIGGER_ENTITY, INVALID_INDEX,
+    PREFAB_ENTITY, PROP, PropFlags, SCENE_ENTITY, SCENE_HEADER,
+    SCENE_MAGIC, SCENE_SETTINGS, SCENE_VERSION, TRANSFORM, TRIGGER_ENTITY, INVALID_INDEX,
 )
 
 
 CLASS_STRIDES = {
     "empty": TRANSFORM.size,
-    "prop_static": STATIC_PROP.size,
-    "prop_dynamic": DYNAMIC_PROP.size,
+    "prop": PROP.size,
     "camera": CAMERA_ENTITY.size,
     "light": LIGHT_ENTITY.size,
     "prefab_instance": PREFAB_ENTITY.size,
@@ -170,9 +169,9 @@ def inspect_scene(path: Path, project_root: Path, validate_assets: bool = False)
                 raise ValueError(f"entity class membership is invalid: {classname}")
             loaded[entity] = True
             record = records[row * record_stride:(row + 1) * record_stride]
-            if classname in ("prop_static", "prop_dynamic"):
-                values = (STATIC_PROP if classname == "prop_static" else DYNAMIC_PROP).unpack(record)
-                require_asset(values[10], AssetType.MESH, f"{classname} mesh")
+            if classname == "prop":
+                values = PROP.unpack(record)
+                require_asset(values[10], AssetType.MESH, "prop mesh")
                 first_material, material_count = values[11:13]
                 available = len(auxiliary) // 4
                 if material_count:
@@ -182,18 +181,22 @@ def inspect_scene(path: Path, project_root: Path, validate_assets: bool = False)
                     for material in range(first_material, first_material + material_count):
                         require_asset(struct.unpack_from("<I", auxiliary, material * 4)[0],
                             AssetType.MATERIAL, f"{classname} material")
-                if classname == "prop_static" and values[13] != INVALID_INDEX:
-                    require_asset(values[13], AssetType.TEXTURE, "prop_static lightmap")
+                if values[13] != INVALID_INDEX:
+                    require_asset(values[13], AssetType.TEXTURE, "prop lightmap")
+                    if values[19] & int(PropFlags.DYNAMIC):
+                        raise ValueError("only a static prop may have a baked lightmap")
                     if (values[14] <= 0.0 or values[15] <= 0.0 or
                             values[16] < 0.0 or values[17] < 0.0 or
                             values[14] + values[16] > 1.0 or
                             values[15] + values[17] > 1.0):
-                        raise ValueError("prop_static lightmap atlas transform is invalid")
+                        raise ValueError("prop lightmap atlas transform is invalid")
                     if values[18] <= 0.0:
-                        raise ValueError("prop_static lightmap RGBM range is invalid")
-                if classname == "prop_dynamic" and values[13] & 2 and (
-                        any(value <= 0.0 for value in values[14:17]) or values[17] <= 0.0):
-                    raise ValueError("prop_dynamic physics record is invalid")
+                        raise ValueError("prop lightmap RGBM range is invalid")
+                if values[19] & int(PropFlags.COLLISION_ENABLED):
+                    if any(value <= 0.0 for value in values[20:23]):
+                        raise ValueError("prop collision dimensions are invalid")
+                    if values[19] & int(PropFlags.DYNAMIC) and values[23] <= 0.0:
+                        raise ValueError("dynamic prop mass is invalid")
             elif classname == "prefab_instance":
                 require_asset(PREFAB_ENTITY.unpack(record)[10], AssetType.ASSET, "prefab")
             elif classname == "camera":

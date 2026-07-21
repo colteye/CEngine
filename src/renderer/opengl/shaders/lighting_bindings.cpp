@@ -13,6 +13,8 @@ namespace CEngine::Renderer {
 namespace {
 constexpr GLuint kDirectLightBindingPoint = 0;
 constexpr GLuint kShadowBindingPoint = 1;
+constexpr GLint kShadowAtlasTextureUnit = 5;
+constexpr GLint kPointShadowFirstTextureUnit = 6;
 }
 
 OpenGLDirectLightBuffer::~OpenGLDirectLightBuffer()
@@ -122,15 +124,15 @@ void OpenGLShadowSamplers::Initialize(GLuint shader_id)
 void OpenGLShadowSamplers::Bind(GLuint atlas_texture,
 	const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_textures) const
 {
-	glActiveTexture(GL_TEXTURE4);
+	glActiveTexture(GL_TEXTURE0 + kShadowAtlasTextureUnit);
 	glBindTexture(GL_TEXTURE_2D, atlas_texture);
-	glUniform1i(atlas, 4);
+	glUniform1i(atlas, kShadowAtlasTextureUnit);
 
 	for (int index = 0; index < OpenGLShadows::kMaxPointShadows; ++index)
 	{
-		glActiveTexture(GL_TEXTURE5 + index);
+		glActiveTexture(GL_TEXTURE0 + kPointShadowFirstTextureUnit + index);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, point_textures[index]);
-		glUniform1i(point_maps[index], 5 + index);
+		glUniform1i(point_maps[index], kPointShadowFirstTextureUnit + index);
 	}
 }
 

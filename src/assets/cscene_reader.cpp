@@ -48,6 +48,19 @@ bool CSceneFile::Validate(std::string* error)
         (header_.connection_count && header_.connection_stride != sizeof(DiskEntityConnection)))
     { SetError(error, "scene table stride is unsupported"); return false; }
     settings_ = reinterpret_cast<const DiskSceneSettings*>(At(header_.settings_offset));
+    if (!std::isfinite(settings_->ambient_color[0]) ||
+        !std::isfinite(settings_->ambient_color[1]) ||
+        !std::isfinite(settings_->ambient_color[2]) ||
+        !std::isfinite(settings_->exposure) || settings_->exposure <= 0.0f ||
+        !std::isfinite(settings_->gravity[0]) ||
+        !std::isfinite(settings_->gravity[1]) ||
+        !std::isfinite(settings_->gravity[2]))
+    { SetError(error, "scene settings are invalid"); return false; }
+    if (settings_->active_camera_entity != InvalidEntityIndex &&
+        settings_->active_camera_entity >= header_.entity_count)
+    { SetError(error, "scene active camera index is invalid"); return false; }
+    for (std::uint32_t value : settings_->reserved)
+        if (value != 0) { SetError(error, "scene settings reserved fields must be zero"); return false; }
     for (const auto& asset : AssetReferences())
         if (asset.path_offset > header_.string_table_size || asset.path_size > header_.string_table_size - asset.path_offset)
         { SetError(error, "scene asset path is outside the string table"); return false; }

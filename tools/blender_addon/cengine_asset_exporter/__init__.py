@@ -10,7 +10,7 @@ from typing import Callable
 bl_info = {
     "name": "CEngine Asset Exporter",
     "author": "CEngine",
-    "version": (0, 1, 5),
+    "version": (0, 1, 9),
     "blender": (4, 5, 0),
     "location": "File > Export > CEngine Assets",
     "description": "Export selected Blender collections and textures to CEngine target assets.",
@@ -52,7 +52,7 @@ from ceassetlib.collection_export import (
     write_collection_asset,
 )
 from ceassetlib.formats import AssetType, asset_type_for_extension
-from ceassetlib.blender_scene import scene_description
+from ceassetlib.blender_scene import blender_scene_settings, scene_description
 from ceassetlib.scene_export import write_scene
 from ceassetlib.ids import fnv1a, guid_from_stable_name, guid_to_string
 from ceassetlib.paths import generic_path, make_project_paths, output_dir_for_source, stored_path
@@ -60,13 +60,13 @@ from ceassetlib.state import AssetRecord, load_registry, save_cache, save_regist
 from ceassetlib.texture import convert_texture_to_dds
 
 from .animations import write_animation_assets
-from .materials import effective_material_names, write_material_assets
+from .materials import effective_material_names, supported_material_images, write_material_assets
 from .lightmaps import bake_scene_lightmaps
 from .meshes import write_mesh_assets
 from .skeletons import write_skeleton_assets
 
 
-SOURCE_TEXTURE_EXTENSIONS = {".png", ".tga"}
+SOURCE_TEXTURE_EXTENSIONS = {".jpeg", ".jpg", ".png", ".tga"}
 DEFAULT_DDS_FORMAT = "DXT5"
 PACKED_IMAGE_EXTENSIONS = {
     "PNG": ".png",
@@ -246,11 +246,6 @@ def asset_path_relative_to(root: Path, output: Path) -> str:
     return generic_path(stored_path(root, output))
 
 
-def fallback_texture_path(project_root: Path) -> Path | None:
-    fallback = project_root / "assets" / "demo" / "missing" / "missing.DDS"
-    return fallback if fallback.exists() else None
-
-
 def material_images(objects: list[object], logger: Callable[[str], None] | None = None) -> list[object]:
     start = time.perf_counter()
     images: list[object] = []
@@ -262,15 +257,8 @@ def material_images(objects: list[object], logger: Callable[[str], None] | None 
             material = getattr(slot, "material", None)
             if material is not None:
                 material_count += 1
-            node_tree = getattr(material, "node_tree", None) if material is not None else None
-            for link in getattr(node_tree, "links", ()) if node_tree is not None else ():
+            for image in supported_material_images(material) if material is not None else ():
                 link_count += 1
-                from_node = getattr(link, "from_node", None)
-                if getattr(from_node, "type", "") != "TEX_IMAGE":
-                    continue
-                image = getattr(from_node, "image", None)
-                if image is None:
-                    continue
                 key = id(image)
                 if key in seen:
                     continue
@@ -279,7 +267,7 @@ def material_images(objects: list[object], logger: Callable[[str], None] | None 
     if logger is not None:
         logger(
             f"Material image scan: {len(images)} image(s) from {material_count} material slot(s) "
-            f"and {link_count} link(s) in {elapsed(start)}"
+            f"and {link_count} supported image input(s) in {elapsed(start)}"
         )
     return images
 
@@ -528,14 +516,14 @@ def object_material_names(obj: object) -> list[str]:
 
 def object_component_assets(
     obj: object,
-    mesh_outputs: dict[str, list[Path]],
+    mesh_outputs: dict[str, list[tuple[Path, str]]],
     material_outputs: dict[str, Path],
     skeleton_outputs: dict[str, Path],
     animation_outputs: dict[str, list[Path]],
     asset_path: Callable[[Path], str],
 ) -> dict[str, object]:
     assets: dict[str, object] = {}
-    meshes = mesh_outputs.get(obj.name, [])
+    meshes = [output for output, _material in mesh_outputs.get(obj.name, [])]
     if meshes:
         assets["mesh"] = [asset_path(mesh) for mesh in meshes]
 
@@ -674,7 +662,7 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         asset_path,
         log,
         source_hash,
-        fallback_texture_path(project_root),
+        dds_format,
     )
     log(f"Material export complete: {len(material_outputs)} .cmat in {elapsed(phase_start)}")
     material_outputs_by_name = {material.source.name: material.output for material in material_outputs}
@@ -720,9 +708,9 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         source_hash,
     )
     log(f"Mesh export complete: {len(mesh_outputs)} .cmesh in {elapsed(phase_start)}")
-    mesh_outputs_by_name: dict[str, list[Path]] = {}
+    mesh_outputs_by_name: dict[str, list[tuple[Path, str]]] = {}
     for mesh in mesh_outputs:
-        mesh_outputs_by_name.setdefault(mesh.source.name, []).append(mesh.output)
+        mesh_outputs_by_name.setdefault(mesh.source.name, []).append((mesh.output, mesh.material_name))
     animation_outputs_by_armature: dict[str, list[Path]] = {}
     for animation in animation_outputs:
         animation_outputs_by_armature.setdefault(animation.armature.name, []).append(animation.output)
@@ -754,8 +742,9 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         scene_output = collection_output_dir / f"{collection_spec.asset_name}.cscene"
         description = scene_description(
             exported_scene_objects(collection), mesh_outputs_by_name,
-            material_outputs_by_name, prefab_outputs, asset_path, object_material_names,
-            lightmap_placements)
+            material_outputs_by_name, prefab_outputs, asset_path, lightmap_placements)
+        description = type(description)(description.entities, blender_scene_settings(blender),
+                                        description.connections)
         write_scene(scene_output, description, asset_path(scene_output), source_hash)
         scene_outputs.append(scene_output)
         log(f"Scene export complete: {scene_output}")
@@ -774,6 +763,8 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         collection_outputs
         + scene_outputs
         + [material.output for material in material_outputs]
+        + [texture for material in material_outputs
+           for texture in getattr(material, "generated_textures", ())]
         + [mesh.output for mesh in mesh_outputs]
         + [skeleton.output for skeleton in skeleton_outputs]
         + [animation.output for animation in animation_outputs]
@@ -792,7 +783,8 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
 
     result = ExportResult(
         len(collection_outputs),
-        len(texture_outputs) + len(lightmap_outputs),
+        len(texture_outputs) + len(lightmap_outputs) +
+        sum(len(getattr(material, "generated_textures", ())) for material in material_outputs),
         len(material_outputs),
         len(skeleton_outputs),
         len(mesh_outputs),

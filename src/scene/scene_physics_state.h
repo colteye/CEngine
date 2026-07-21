@@ -23,14 +23,15 @@ public:
     bool Active() const { return physics_ != nullptr; }
 
 private:
-    struct DynamicBody {
+    struct BodyBinding {
         EntityId entity;
         PhysicsBodyHandle body = kInvalidPhysicsBodyHandle;
+        bool dynamic = false;
     };
 
     Scene* scene_ = nullptr;
     PhysicsSystem* physics_ = nullptr;
-    std::vector<DynamicBody> dynamic_bodies_;
+    std::vector<BodyBinding> bodies_;
 };
 
 } // namespace CEngine::Scene

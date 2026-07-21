@@ -3,11 +3,31 @@
 
 #include <string>
 #include <cstdint>
+#include <limits>
 #include <glm/glm.hpp>
 
 namespace CEngine::Renderer {
 
-using LightHandle = uint32_t;
+struct LightHandle
+{
+	std::uint32_t index = std::numeric_limits<std::uint32_t>::max();
+	std::uint32_t generation = 0;
+
+	constexpr explicit operator bool() const
+	{
+		return index != std::numeric_limits<std::uint32_t>::max();
+	}
+};
+
+constexpr bool operator==(LightHandle left, LightHandle right)
+{
+	return left.index == right.index && left.generation == right.generation;
+}
+
+constexpr bool operator!=(LightHandle left, LightHandle right)
+{
+	return !(left == right);
+}
 
 enum class LightType
 {
@@ -20,7 +40,7 @@ struct LightRecord
 {
 	LightType type = LightType::Point;
 	glm::vec3 position = glm::vec3(0.0f);
-	glm::vec3 direction = glm::vec3(0.0f, -1.0f, 0.0f);
+	glm::vec3 direction = glm::vec3(0.0f, 0.0f, -1.0f);
 	glm::vec3 color = glm::vec3(1.0f);
 	float intensity = 1.0f;
 	float range = 0.0f;
@@ -85,10 +105,10 @@ private:
 	void UpdateRecord();
 
 	// Have to keep track of an ID as the actual data is stored in the render system.
-	LightHandle m_id = 0;
+	LightHandle m_id;
 	LightType m_type = LightType::Point;
 	glm::vec3 m_position = glm::vec3(0.0f);
-	glm::vec3 m_direction = glm::vec3(0.0f, -1.0f, 0.0f);
+	glm::vec3 m_direction = glm::vec3(0.0f, 0.0f, -1.0f);
 	glm::vec3 m_color = glm::vec3(1.0f);
 	float m_intensity = 1.0f;
 	float m_range = 0.0f;

@@ -3,20 +3,24 @@
 #include "assets/asset_io.h"
 
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <limits>
 #include <utility>
+
+#include <glm/geometric.hpp>
 
 namespace CEngine::Assets {
 namespace Renderer = CEngine::Renderer;
 
 namespace {
 
-constexpr std::uint32_t StaticVertexStride = 32;
-constexpr std::uint32_t LightmapVertexStride = 40;
+constexpr std::uint32_t StaticVertexStride = 40;
+constexpr std::uint32_t SkinnedVertexStride = 56;
+constexpr std::uint32_t MeshFlagSkinned = 1u << 0u;
 constexpr std::uint32_t MeshFlagLightmapUv = 1u << 1u;
 constexpr std::array<char, 4> MeshMetadataMagic = {'C', 'E', 'M', 'H'};
-constexpr std::uint16_t MeshMetadataVersion = 1;
+constexpr std::uint16_t MeshMetadataVersion = 2;
 
 #pragma pack(push, 1)
 struct DiskMeshMetadata {
@@ -81,6 +85,26 @@ bool CheckedMul(std::uint32_t left, std::uint32_t right, std::size_t& result)
     }
     result = static_cast<std::size_t>(wide);
     return true;
+}
+
+glm::vec3 TangentForNormal(const glm::vec3& raw_tangent, const glm::vec3& normal)
+{
+    constexpr float Epsilon = 1.0e-12f;
+    const float normal_length_squared = glm::dot(normal, normal);
+    const glm::vec3 unit_normal = normal_length_squared > Epsilon
+        ? normal / std::sqrt(normal_length_squared)
+        : glm::vec3(0.0f, 0.0f, 1.0f);
+    glm::vec3 tangent = raw_tangent - unit_normal * glm::dot(unit_normal, raw_tangent);
+    float tangent_length_squared = glm::dot(tangent, tangent);
+    if (tangent_length_squared <= Epsilon)
+    {
+        const glm::vec3 helper = std::abs(unit_normal.z) < 0.999f
+            ? glm::vec3(0.0f, 0.0f, 1.0f)
+            : glm::vec3(0.0f, 1.0f, 0.0f);
+        tangent = glm::cross(helper, unit_normal);
+        tangent_length_squared = glm::dot(tangent, tangent);
+    }
+    return tangent / std::sqrt(tangent_length_squared);
 }
 
 bool ReadMeshPayloads(const AssetFile& asset, DiskMeshMetadata& metadata,
@@ -154,7 +178,9 @@ bool LoadMeshAsset(const std::filesystem::path& path,
         SetError(error, "mesh loader expects exactly one material slot in this phase");
         return false;
     }
-    if (metadata.vertex_stride < StaticVertexStride || metadata.index_size != sizeof(std::uint32_t))
+    const std::uint32_t expected_vertex_stride =
+        (metadata.flags & MeshFlagSkinned) != 0 ? SkinnedVertexStride : StaticVertexStride;
+    if (metadata.vertex_stride != expected_vertex_stride || metadata.index_size != sizeof(std::uint32_t))
     {
         SetError(error, "mesh loader does not support this vertex/index layout");
         return false;
@@ -172,12 +198,7 @@ bool LoadMeshAsset(const std::filesystem::path& path,
     mesh_data.uvs.reserve(metadata.index_count);
     mesh_data.lightmap_uvs.reserve(metadata.index_count);
     mesh_data.tangents.reserve(metadata.index_count);
-	mesh_data.has_lightmap_uv = (metadata.flags & MeshFlagLightmapUv) != 0;
-	if (mesh_data.has_lightmap_uv && metadata.vertex_stride < LightmapVertexStride)
-	{
-		SetError(error, "mesh declares lightmap UVs but its vertex stride is too small");
-		return false;
-	}
+    mesh_data.has_lightmap_uv = (metadata.flags & MeshFlagLightmapUv) != 0;
     mesh_data.local_bounds.min = glm::vec3(
         metadata.bounds_min[0],
         metadata.bounds_min[1],
@@ -201,9 +222,25 @@ bool LoadMeshAsset(const std::filesystem::path& path,
         mesh_data.vertices.push_back(ReadVec3(vertex));
         mesh_data.normals.push_back(ReadVec3(vertex + 12));
         mesh_data.uvs.push_back(ReadVec2(vertex + 24));
-        mesh_data.lightmap_uvs.push_back(mesh_data.has_lightmap_uv ?
-            ReadVec2(vertex + 32) : glm::vec2(0.0f));
-        mesh_data.tangents.push_back(glm::vec3(1.0f, 0.0f, 0.0f));
+        mesh_data.lightmap_uvs.push_back(ReadVec2(vertex + 32));
+        mesh_data.tangents.push_back(glm::vec3(0.0f));
+    }
+
+    for (std::size_t first = 0; first + 2 < mesh_data.vertices.size(); first += 3)
+    {
+        const glm::vec3 edge1 = mesh_data.vertices[first + 1] - mesh_data.vertices[first];
+        const glm::vec3 edge2 = mesh_data.vertices[first + 2] - mesh_data.vertices[first];
+        const glm::vec2 uv_edge1 = mesh_data.uvs[first + 1] - mesh_data.uvs[first];
+        const glm::vec2 uv_edge2 = mesh_data.uvs[first + 2] - mesh_data.uvs[first];
+        const float determinant = uv_edge1.x * uv_edge2.y - uv_edge1.y * uv_edge2.x;
+        const glm::vec3 raw_tangent = std::abs(determinant) > 1.0e-12f
+            ? (edge1 * uv_edge2.y - edge2 * uv_edge1.y) / determinant
+            : edge1;
+        for (std::size_t corner = 0; corner < 3; ++corner)
+        {
+            mesh_data.tangents[first + corner] =
+                TangentForNormal(raw_tangent, mesh_data.normals[first + corner]);
+        }
     }
 
     Renderer::Mesh loaded;

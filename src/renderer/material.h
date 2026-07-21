@@ -47,6 +47,8 @@ public:
 
 	const glm::vec4& GetBaseColorFactor() const { return base_color_factor; }
 	void SetBaseColorFactor(const glm::vec4& color) { base_color_factor = color; }
+	const glm::vec3& GetMetallicRoughnessAoFactors() const { return metallic_roughness_ao_factors; }
+	void SetMetallicRoughnessAoFactors(const glm::vec3& factors) { metallic_roughness_ao_factors = factors; }
 
 	bool ReceivesShadows() const { return receives_shadows; }
 	void SetReceivesShadows(bool receives) { receives_shadows = receives; }
@@ -63,6 +65,7 @@ private:
 	std::string metallic_roughness_ao_path;
 	MaterialRenderMode render_mode = MaterialRenderMode::OpaqueDeferred;
 	glm::vec4 base_color_factor = glm::vec4(1.0f);
+	glm::vec3 metallic_roughness_ao_factors = glm::vec3(0.0f, 0.5f, 1.0f);
 	float alpha_cutoff = 0.5f;
 	bool receives_shadows = true;
 	bool casts_shadows = true;

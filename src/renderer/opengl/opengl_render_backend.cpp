@@ -306,7 +306,7 @@ void OpenGLRenderBackend::Shutdown()
 	window_height = 0;
 }
 
-void OpenGLRenderBackend::RegisterRenderable(const Renderable& renderable)
+bool OpenGLRenderBackend::RegisterRenderable(std::uint32_t slot, const Renderable& renderable)
 {
 	assert(renderable.mesh != nullptr);
 	assert(renderable.material != nullptr);
@@ -315,7 +315,7 @@ void OpenGLRenderBackend::RegisterRenderable(const Renderable& renderable)
 	const auto mesh_data_it = mesh_data_dict.find(renderable.material);
 	if (mesh_data_it == mesh_data_dict.end())
 	{
-		return;
+		return false;
 	}
 
 	{
@@ -323,7 +323,7 @@ void OpenGLRenderBackend::RegisterRenderable(const Renderable& renderable)
 		const MeshData& current_mesh_data = mesh_data_it->second;
 		if (current_mesh_data.vertices.empty())
 		{
-			return;
+			return false;
 		}
 
 		assert(current_mesh_data.uvs.size() == current_mesh_data.vertices.size());
@@ -341,7 +341,7 @@ void OpenGLRenderBackend::RegisterRenderable(const Renderable& renderable)
 		if (!CanAppendBufferData(*current_buffers, vertex_size, uv_size, normal_size, tangent_size))
 		{
 			std::cerr << "OpenGL mesh buffer capacity exceeded; renderable was not registered.\n";
-			return;
+			return false;
 		}
 
 			glBindBuffer(GL_ARRAY_BUFFER, current_buffers->vertex_buffer);
@@ -381,7 +381,8 @@ void OpenGLRenderBackend::RegisterRenderable(const Renderable& renderable)
 		draw_item.lightmap_scale = renderable.lightmap_scale;
 		draw_item.lightmap_offset = renderable.lightmap_offset;
 		draw_item.lightmap_rgbm_range = renderable.lightmap_rgbm_range;
-		draw_items.push_back(draw_item);
+		if (slot >= draw_items.size()) draw_items.resize(static_cast<std::size_t>(slot) + 1);
+		draw_items[slot] = draw_item;
 
 		current_buffers->vertex_buffer_length += vertex_size;
 		current_buffers->uv_buffer_length += uv_size;
@@ -389,25 +390,26 @@ void OpenGLRenderBackend::RegisterRenderable(const Renderable& renderable)
 		current_buffers->normal_buffer_length += normal_size;
 		current_buffers->tangent_buffer_length += tangent_size;
 	}
+	return true;
 }
 
-void OpenGLRenderBackend::UpdateRenderableTransform(RenderableHandle handle, const glm::mat4& transform,
+void OpenGLRenderBackend::UpdateRenderableTransform(std::uint32_t slot, const glm::mat4& transform,
 	const Bounds& world_bounds)
 {
-	if (handle >= draw_items.size())
+	if (slot >= draw_items.size())
 	{
 		return;
 	}
 
-	draw_items[handle].transform = transform;
-	draw_items[handle].world_bounds = world_bounds;
+	draw_items[slot].transform = transform;
+	draw_items[slot].world_bounds = world_bounds;
 }
 
-void OpenGLRenderBackend::RemoveRenderable(RenderableHandle handle)
+void OpenGLRenderBackend::RemoveRenderable(std::uint32_t slot)
 {
-	if (handle >= draw_items.size()) return;
-	draw_items[handle].material = nullptr;
-	draw_items[handle].count = 0;
+	if (slot >= draw_items.size()) return;
+	draw_items[slot].material = nullptr;
+	draw_items[slot].count = 0;
 }
 
 ShaderBuffers OpenGLRenderBackend::InitShaderBuffers()
@@ -455,7 +457,7 @@ ShaderBuffers OpenGLRenderBackend::InitShaderBuffers()
 	return buffers;
 }
 
-void OpenGLRenderBackend::RegisterMaterial(Material* material)
+bool OpenGLRenderBackend::RegisterMaterial(Material* material)
 {
 	assert(material != nullptr);
 
@@ -464,10 +466,21 @@ void OpenGLRenderBackend::RegisterMaterial(Material* material)
 		shader_buffer_dict[material->shader_type] = InitShaderBuffers();
 	}
 
-	OpenGLMaterialResources& resources = material_resources[material];
-	resources.albedo_tex = OpenGLTexture::LoadDDS(material->GetAlbedoPath());
-	resources.normal_tex = OpenGLTexture::LoadDDS(material->GetNormalPath());
-	resources.metallic_roughness_ao_tex = OpenGLTexture::LoadDDS(material->GetMetallicRoughnessAoPath());
+	OpenGLMaterialResources resources;
+	resources.albedo_tex = material->GetAlbedoPath().empty() ?
+		OpenGLTexture::CreateSolid(255, 255, 255) : OpenGLTexture::LoadDDS(material->GetAlbedoPath());
+	resources.normal_tex = material->GetNormalPath().empty() ?
+		OpenGLTexture::CreateSolid(128, 128, 255) : OpenGLTexture::LoadDDS(material->GetNormalPath());
+	resources.metallic_roughness_ao_tex = material->GetMetallicRoughnessAoPath().empty() ?
+		OpenGLTexture::CreateSolid(255, 255, 255) :
+		OpenGLTexture::LoadDDS(material->GetMetallicRoughnessAoPath());
+	if (resources.albedo_tex == 0 || resources.normal_tex == 0 || resources.metallic_roughness_ao_tex == 0)
+	{
+		resources.Destroy();
+		return false;
+	}
+	material_resources.emplace(material, std::move(resources));
+	return true;
 }
 
 void OpenGLRenderBackend::RemoveMaterial(Material* material)

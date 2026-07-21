@@ -6,12 +6,32 @@
 
 #include <array>
 #include <cstdint>
+#include <limits>
 
 #include <glm/glm.hpp>
 
 namespace CEngine::Renderer {
 
-using RenderableHandle = uint32_t;
+struct RenderableHandle
+{
+	std::uint32_t index = std::numeric_limits<std::uint32_t>::max();
+	std::uint32_t generation = 0;
+
+	constexpr explicit operator bool() const
+	{
+		return index != std::numeric_limits<std::uint32_t>::max();
+	}
+};
+
+constexpr bool operator==(RenderableHandle left, RenderableHandle right)
+{
+	return left.index == right.index && left.generation == right.generation;
+}
+
+constexpr bool operator!=(RenderableHandle left, RenderableHandle right)
+{
+	return !(left == right);
+}
 
 enum RenderableFlags : uint32_t
 {

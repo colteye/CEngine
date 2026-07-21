@@ -10,14 +10,19 @@
 namespace CEngine::Assets::CSceneFormat {
 
 constexpr std::array<char, 4> SceneMagic = {'C', 'S', 'C', 'N'};
-constexpr std::uint16_t SceneContainerVersion = 1;
+constexpr std::uint16_t SceneContainerVersion = 3;
 constexpr std::uint16_t SceneEntityClassVersion = 1;
 constexpr std::uint32_t InvalidEntityIndex = 0xffffffffu;
 constexpr std::uint32_t InvalidAssetIndex = 0xffffffffu;
 
 enum EntityFlags : std::uint32_t {
     EntityEnabled = 1u << 0u,
-    EntityStatic = 1u << 1u,
+};
+
+enum PropFlags : std::uint32_t {
+    PropVisible = 1u << 0u,
+    PropCollisionEnabled = 1u << 1u,
+    PropDynamic = 1u << 2u,
 };
 
 enum EntityClassBlockFlags : std::uint32_t {
@@ -53,10 +58,9 @@ struct DiskSceneHeader {
 struct DiskSceneSettings {
     float ambient_color[3] = {};
     float exposure = 1.0f;
-    float gravity[3] = {0.0f, -9.81f, 0.0f};
+    float gravity[3] = {0.0f, 0.0f, -9.81f};
     std::uint32_t active_camera_entity = InvalidEntityIndex;
-    std::uint32_t flags = 0;
-    std::uint32_t reserved[3] = {};
+    std::uint32_t reserved[4] = {};
 };
 
 struct DiskAssetReference {
@@ -104,7 +108,7 @@ struct DiskTransform {
     float scale[3] = {1.0f, 1.0f, 1.0f};
 };
 
-struct DiskStaticProp {
+struct DiskProp {
     DiskTransform transform;
     std::uint32_t mesh_asset = InvalidAssetIndex;
     std::uint32_t first_material_asset = InvalidAssetIndex;
@@ -113,15 +117,7 @@ struct DiskStaticProp {
     float lightmap_scale[2] = {1.0f, 1.0f};
     float lightmap_offset[2] = {};
     float lightmap_rgbm_range = 8.0f;
-    std::uint32_t visible = 1;
-};
-
-struct DiskDynamicProp {
-    DiskTransform transform;
-    std::uint32_t mesh_asset = InvalidAssetIndex;
-    std::uint32_t first_material_asset = InvalidAssetIndex;
-    std::uint32_t material_count = 0;
-    std::uint32_t flags = 1;
+    std::uint32_t flags = PropVisible;
     float collision_half_extents[3] = {0.5f, 0.5f, 0.5f};
     float mass = 1.0f;
 };
@@ -174,8 +170,7 @@ static_assert(sizeof(DiskSceneEntity) == 20);
 static_assert(sizeof(DiskEntityClassBlock) == 52);
 static_assert(sizeof(DiskEntityConnection) == 28);
 static_assert(sizeof(DiskTransform) == 40);
-static_assert(sizeof(DiskStaticProp) == 80);
-static_assert(sizeof(DiskDynamicProp) == 72);
+static_assert(sizeof(DiskProp) == 96);
 static_assert(sizeof(DiskCameraEntity) == 64);
 static_assert(sizeof(DiskLightEntity) == 88);
 static_assert(sizeof(DiskPrefabEntity) == 48);

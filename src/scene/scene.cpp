@@ -133,6 +133,13 @@ void Scene::AdoptAssetReferences(Assets::AssetDatabase& database,
     asset_references_ = std::move(handles);
 }
 
+void Scene::AppendAssetReference(Assets::AssetHandle handle)
+{
+    if (asset_database_ == nullptr || !handle)
+        throw std::invalid_argument("scene asset reference is invalid");
+    asset_references_.push_back(handle);
+}
+
 Assets::AssetHandle Scene::AssetReference(std::uint32_t index) const
 { return index < asset_references_.size() ? asset_references_[index] : Assets::AssetHandle{}; }
 

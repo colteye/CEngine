@@ -9,7 +9,6 @@
 #endif
 
 #include <algorithm>
-#include <iostream>
 
 namespace {
 constexpr size_t kMaxGpuLights = 64;
@@ -22,7 +21,11 @@ static_assert(sizeof(GpuLight) == sizeof(glm::vec4) * 4, "GpuLight must stay tig
 std::unique_ptr<IRenderBackend> RenderSystem::backend;
 
 std::vector<Renderable> RenderSystem::renderables;
+std::vector<std::uint32_t> RenderSystem::renderable_generations;
+std::vector<std::uint32_t> RenderSystem::free_renderables;
 std::vector<LightRecord> RenderSystem::direct_lights;
+std::vector<std::uint32_t> RenderSystem::light_generations;
+std::vector<std::uint32_t> RenderSystem::free_lights;
 std::vector<GpuLight> RenderSystem::gpu_lights;
 std::vector<LightShadowGpuHandle> RenderSystem::light_shadow_handles;
 RenderFrameConstants RenderSystem::frame_constants;
@@ -30,42 +33,17 @@ AmbientLighting RenderSystem::ambient_lighting;
 uint64_t RenderSystem::light_revision = 1;
 bool RenderSystem::lights_dirty = true;
 
-void RenderSystem::Initialize(int window_width, int window_height)
-{
-#if defined(CENGINE_ENABLE_OPENGL)
-	(void)Initialize(RenderBackendType::OpenGL, nullptr, window_width, window_height);
-#elif defined(CENGINE_ENABLE_VULKAN)
-	(void)Initialize(RenderBackendType::Vulkan, nullptr, window_width, window_height);
-#else
-	std::cout << "No render backend is enabled for this build.\n";
-#endif
-}
-
-bool RenderSystem::Initialize(RenderBackendType backend_type, GLFWwindow* window, int window_width, int window_height)
+bool RenderSystem::Initialize(GLFWwindow* window, int window_width, int window_height)
 {
 	Shutdown();
 
-	switch (backend_type)
-	{
-	case RenderBackendType::OpenGL:
 #if defined(CENGINE_ENABLE_OPENGL)
-		backend = std::make_unique<OpenGLRenderBackend>();
-#else
-		std::cout << "OpenGL backend was requested, but this build was compiled without OpenGL support.\n";
-		return false;
+	backend = std::make_unique<OpenGLRenderBackend>();
+#elif defined(CENGINE_ENABLE_VULKAN)
+	backend = std::make_unique<VulkanRenderBackend>();
 #endif
-		break;
-	case RenderBackendType::Vulkan:
-#if defined(CENGINE_ENABLE_VULKAN)
-		backend = std::make_unique<VulkanRenderBackend>();
-#else
-		std::cout << "Vulkan backend was requested, but this build was compiled without Vulkan support.\n";
-		return false;
-#endif
-		break;
-	}
 
-	if (backend == nullptr || !backend->Initialize(window, window_width, window_height))
+	if (!backend->Initialize(window, window_width, window_height))
 	{
 		backend.reset();
 		return false;
@@ -84,7 +62,11 @@ void RenderSystem::Shutdown()
 	}
 
 	renderables.clear();
+	renderable_generations.clear();
+	free_renderables.clear();
 	direct_lights.clear();
+	light_generations.clear();
+	free_lights.clear();
 	gpu_lights.clear();
 	light_shadow_handles.clear();
 	light_revision = 1;
@@ -136,46 +118,59 @@ RenderableHandle RenderSystem::RegisterRenderable(const Renderable& renderable)
 	}
 	stored.world_bounds = TransformBounds(stored.local_bounds, stored.transform);
 
-	const size_t id = renderables.size();
-	renderables.push_back(stored);
-
-	if (backend != nullptr)
+	RenderableHandle handle;
+	if (free_renderables.empty())
 	{
-		backend->RegisterRenderable(renderables.back());
+		handle = {static_cast<std::uint32_t>(renderables.size()), 1};
+		renderables.push_back(stored);
+		renderable_generations.push_back(handle.generation);
+	}
+	else
+	{
+		handle.index = free_renderables.back();
+		free_renderables.pop_back();
+		handle.generation = renderable_generations[handle.index];
+		renderables[handle.index] = stored;
 	}
 
-	return static_cast<RenderableHandle>(id);
+	if (backend != nullptr && !backend->RegisterRenderable(handle.index, stored))
+	{
+		renderables[handle.index] = {};
+		++renderable_generations[handle.index];
+		if (renderable_generations[handle.index] == 0) ++renderable_generations[handle.index];
+		free_renderables.push_back(handle.index);
+		return {};
+	}
+
+	return handle;
 }
 
 void RenderSystem::RemoveRenderable(RenderableHandle handle)
 {
-	if (handle >= renderables.size()) return;
-	renderables[handle] = {};
-	if (backend != nullptr) backend->RemoveRenderable(handle);
+	if (ResolveRenderable(handle) == nullptr) return;
+	if (backend != nullptr) backend->RemoveRenderable(handle.index);
+	renderables[handle.index] = {};
+	++renderable_generations[handle.index];
+	if (renderable_generations[handle.index] == 0) ++renderable_generations[handle.index];
+	free_renderables.push_back(handle.index);
 }
 
 void RenderSystem::UpdateRenderableTransform(RenderableHandle handle, const glm::mat4& transform)
 {
-	if (handle >= renderables.size())
-	{
-		return;
-	}
+	if (ResolveRenderable(handle) == nullptr) return;
 
-	Renderable& renderable = renderables[handle];
+	Renderable& renderable = renderables[handle.index];
 	renderable.transform = transform;
 	renderable.world_bounds = TransformBounds(renderable.local_bounds, renderable.transform);
 	if (backend != nullptr)
 	{
-		backend->UpdateRenderableTransform(handle, renderable.transform, renderable.world_bounds);
+		backend->UpdateRenderableTransform(handle.index, renderable.transform, renderable.world_bounds);
 	}
 }
 
-void RenderSystem::RegisterMaterial(Material* material)
+bool RenderSystem::RegisterMaterial(Material* material)
 {
-	if (backend != nullptr)
-	{
-		backend->RegisterMaterial(material);
-	}
+	return backend == nullptr || backend->RegisterMaterial(material);
 }
 
 void RenderSystem::RemoveMaterial(Material* material)
@@ -215,30 +210,45 @@ void RenderSystem::UpdateLight(LightHandle id, const glm::vec3& light_pos, const
 
 LightHandle RenderSystem::RegisterLight(const LightRecord& light)
 {
-	const size_t id = direct_lights.size();
-	direct_lights.push_back(light);
-	light_shadow_handles.emplace_back();
+	LightHandle handle;
+	if (free_lights.empty())
+	{
+		handle = {static_cast<std::uint32_t>(direct_lights.size()), 1};
+		direct_lights.push_back(light);
+		light_shadow_handles.emplace_back();
+		light_generations.push_back(handle.generation);
+	}
+	else
+	{
+		handle.index = free_lights.back();
+		free_lights.pop_back();
+		handle.generation = light_generations[handle.index];
+		direct_lights[handle.index] = light;
+		light_shadow_handles[handle.index] = {};
+	}
 	lights_dirty = true;
 	++light_revision;
-	return static_cast<LightHandle>(id);
+	return handle;
 }
 
 void RenderSystem::RemoveLight(LightHandle id)
 {
-	if (id >= direct_lights.size()) return;
-	direct_lights[id].enabled = false;
+	if (ResolveLight(id) == nullptr) return;
+	direct_lights[id.index].enabled = false;
+	light_shadow_handles[id.index] = {};
+	++light_generations[id.index];
+	if (light_generations[id.index] == 0) ++light_generations[id.index];
+	free_lights.push_back(id.index);
 	lights_dirty = true;
 	++light_revision;
 }
 
 void RenderSystem::UpdateLight(LightHandle id, const LightRecord& light)
 {
-	if (id < direct_lights.size())
-	{
-		direct_lights[id] = light;
-		lights_dirty = true;
-		++light_revision;
-	}
+	if (ResolveLight(id) == nullptr) return;
+	direct_lights[id.index] = light;
+	lights_dirty = true;
+	++light_revision;
 }
 
 const std::vector<Renderable>& RenderSystem::GetRenderables()
@@ -249,6 +259,18 @@ const std::vector<Renderable>& RenderSystem::GetRenderables()
 const std::vector<LightRecord>& RenderSystem::GetDirectLights()
 {
 	return direct_lights;
+}
+
+const Renderable* RenderSystem::ResolveRenderable(RenderableHandle handle)
+{
+	return handle.index < renderables.size() &&
+		renderable_generations[handle.index] == handle.generation ? &renderables[handle.index] : nullptr;
+}
+
+const LightRecord* RenderSystem::ResolveLight(LightHandle handle)
+{
+	return handle.index < direct_lights.size() &&
+		light_generations[handle.index] == handle.generation ? &direct_lights[handle.index] : nullptr;
 }
 
 const std::vector<GpuLight>& RenderSystem::GetGpuLights()

@@ -66,6 +66,7 @@ void PBRStandard::InitializeParameters()
     normal_id = glGetUniformLocation(shader_id, "normal");
     metallic_roughness_ao_id = glGetUniformLocation(shader_id, "metallic_roughness_ao");
     base_color_factor_id = glGetUniformLocation(shader_id, "base_color_factor");
+	metallic_roughness_ao_factors_id = glGetUniformLocation(shader_id, "metallic_roughness_ao_factors");
     alpha_cutoff_id = glGetUniformLocation(shader_id, "alpha_cutoff");
     render_mode_id = glGetUniformLocation(shader_id, "render_mode");
 	receives_shadows_id = glGetUniformLocation(shader_id, "receives_shadows");
@@ -98,7 +99,7 @@ void PBRStandard::SetParametersStatic()
 	glUniform1i(metallic_roughness_ao_id, 2);
 
 	glActiveTexture(GL_TEXTURE3);
-	glBindTexture(GL_TEXTURE_2D, lightmap_tex);
+	glBindTexture(GL_TEXTURE_2D, lightmap_tex != 0 ? lightmap_tex : albedo_tex);
 	glUniform1i(lightmap_id, 3);
 }
 
@@ -106,6 +107,8 @@ void PBRStandard::SetMaterialParameters(const Material& material)
 {
     const glm::vec4& base_color = material.GetBaseColorFactor();
     glUniform4fv(base_color_factor_id, 1, glm::value_ptr(base_color));
+	glUniform3fv(metallic_roughness_ao_factors_id, 1,
+		glm::value_ptr(material.GetMetallicRoughnessAoFactors()));
     glUniform1f(alpha_cutoff_id, material.GetAlphaCutoff());
     glUniform1i(render_mode_id, static_cast<int>(material.GetRenderMode()));
     glUniform1i(receives_shadows_id, material.ReceivesShadows() ? 1 : 0);

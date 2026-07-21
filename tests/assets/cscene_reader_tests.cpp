@@ -97,8 +97,8 @@ int main(int argc, char** argv)
         CSceneFile file;
         std::string error;
         return Expect(file.Load(argv[1], &error), error.c_str()) &&
-            Expect(file.Entities().size == 2, "Python fixture should contain two entities") &&
-            Expect(file.ClassBlocks().size == 2, "Python fixture should contain two class blocks") &&
+            Expect(file.Entities().size == 3, "Python fixture should contain three entities") &&
+            Expect(file.ClassBlocks().size == 3, "Python fixture should contain three class blocks") &&
             Expect(file.Connections().size == 1, "Python fixture should contain one connection") &&
             Expect(file.String(file.Entities()[0].classname_offset,
                        file.Entities()[0].classname_size) == "prefab_instance",

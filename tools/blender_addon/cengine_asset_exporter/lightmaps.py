@@ -81,7 +81,6 @@ def encode_rgbm(pixels: Iterable[float], rgbm_range: float) -> bytes:
 def _static_meshes(objects: Iterable[object]) -> list[object]:
     return sorted((obj for obj in objects
                    if getattr(obj, "type", "") == "MESH"
-                   and str(getattr(obj, "get", lambda *_: "")("ce_classname", "")) != "prop_dynamic"
                    and not bool(getattr(obj, "get", lambda *_: False)("ce_dynamic", False))),
                   key=lambda obj: obj.name)
 
@@ -152,6 +151,13 @@ def bake_scene_lightmaps(
     scene_name: str,
     logger: Callable[[str], None] | None = None,
 ) -> tuple[dict[str, LightmapPlacement], list[Path]]:
+    has_baked_lights = any(
+        getattr(obj, "type", "") == "LIGHT" and
+        str(getattr(obj, "get", lambda *_: "realtime")(
+            "ce_light_mode", "realtime")).lower() in {"baked", "mixed"}
+        for obj in objects)
+    if not has_baked_lights:
+        return {}, []
     static_meshes = _static_meshes(objects)
     if not static_meshes:
         return {}, []

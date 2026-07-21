@@ -112,14 +112,14 @@ class CollectionExportTests(unittest.TestCase):
         component = CASSET_COMPONENT.unpack_from(payload, header[7])
         self.assertEqual(strings[first_object[0] : first_object[0] + first_object[1]], b"ARM_Hero")
         self.assertEqual(first_object[2], 3)
-        self.assertEqual(first_object[11], 10.0)
-        self.assertEqual(first_object[15], 30.0)
-        self.assertEqual(first_object[19], -20.0)
+        self.assertEqual(first_object[11], 20.0)
+        self.assertEqual(first_object[15], -10.0)
+        self.assertEqual(first_object[19], 30.0)
         self.assertEqual(strings[third_object[4] : third_object[4] + third_object[5]], b"ARM_Hero")
         self.assertEqual(component[0], 1)
         self.assertEqual(strings[component[1] : component[1] + component[2]], b"compiled/hero/meshes/SM_Body.cmesh")
 
-    def test_blender_to_engine_matrix_rows_maps_z_up_to_y_up(self) -> None:
+    def test_blender_to_engine_matrix_rows_maps_to_x_forward_y_left_z_up(self) -> None:
         rows = blender_to_engine_matrix_rows(
             [
                 [1.0, 0.0, 0.0, 10.0],
@@ -129,22 +129,22 @@ class CollectionExportTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(rows[3], 10.0)
-        self.assertEqual(rows[7], 30.0)
-        self.assertEqual(rows[11], -20.0)
+        self.assertEqual(rows[3], 20.0)
+        self.assertEqual(rows[7], -10.0)
+        self.assertEqual(rows[11], 30.0)
 
     def test_bundle_relative_path_removes_casset_directory_prefix(self) -> None:
-        bundle = Path("/repo/assets/compiled/barrel")
+        bundle = Path("/repo/assets/compiled/statue")
 
         self.assertEqual(
-            bundle_relative_path("/repo/assets/compiled/barrel/meshes/Sphere.cmesh", bundle),
-            "meshes/Sphere.cmesh",
+            bundle_relative_path("/repo/assets/compiled/statue/meshes/Statue.cmesh", bundle),
+            "meshes/Statue.cmesh",
         )
         self.assertEqual(
-            bundle_relative_path("assets/compiled/barrel/materials/barrel.004.cmat", bundle),
-            "materials/barrel.004.cmat",
+            bundle_relative_path("assets/compiled/statue/materials/stone.cmat", bundle),
+            "materials/stone.cmat",
         )
-        self.assertEqual(bundle_relative_path("meshes/Sphere.cmesh", bundle), "meshes/Sphere.cmesh")
+        self.assertEqual(bundle_relative_path("meshes/Statue.cmesh", bundle), "meshes/Statue.cmesh")
 
     def test_collection_export_writes_common_prefab_asset_directly(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

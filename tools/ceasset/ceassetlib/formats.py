@@ -6,7 +6,7 @@ from enum import IntEnum
 TARGET_TEXTURE_EXTENSIONS = {".dds"}
 TARGET_AUDIO_EXTENSIONS = {".ogg", ".opus"}
 PASSTHROUGH_TARGET_EXTENSIONS = {*TARGET_TEXTURE_EXTENSIONS, *TARGET_AUDIO_EXTENSIONS}
-SOURCE_TEXTURE_EXTENSIONS = {".png", ".tga"}
+SOURCE_TEXTURE_EXTENSIONS = {".jpeg", ".jpg", ".png", ".tga"}
 
 
 class AssetType(IntEnum):

@@ -1,6 +1,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
 #include <stdio.h>
 #include "controls.h"
 
@@ -29,20 +30,17 @@ void Controls::Update(Camera* cam, float delta_time)
 
 	angles.x += mouseSpeed * static_cast<float>(center_x - xpos) * delta_time;
 	angles.y += mouseSpeed * static_cast<float>(center_y - ypos) * delta_time;
+	angles.y = std::clamp(angles.y, -1.55f, 1.55f);
 
 	// Direction : Spherical coordinates to Cartesian coordinates conversion
-	glm::vec3 direction(
+	const glm::vec3 direction(
+		cos(angles.y) * cos(angles.x),
 		cos(angles.y) * sin(angles.x),
-		sin(angles.y),
-		cos(angles.y) * cos(angles.x)
-	);
+		sin(angles.y));
 
 	// Right vector
-	glm::vec3 right = glm::vec3(
-		sin(angles.x - glm::pi<float>() / 2.0f),
-		0,
-		cos(angles.x - glm::pi<float>() / 2.0f)
-	);
+	const glm::vec3 right = glm::normalize(
+		glm::cross(direction, glm::vec3(0.0f, 0.0f, 1.0f)));
 
 
 	float sprint_multiplier = 3.0f;

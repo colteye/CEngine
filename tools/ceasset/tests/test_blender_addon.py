@@ -169,7 +169,7 @@ class BlenderAddonTests(unittest.TestCase):
     def test_unsaved_file_can_export_selected_collection_casset(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             body = FakeObject("SM_Body")
-            collection = FakeCollection("PREFAB_Barrel", [body])
+            collection = FakeCollection("PREFAB_Statue", [body])
             addon.bpy = types.SimpleNamespace(
                 data=types.SimpleNamespace(filepath="", collections=[collection]),
                 context=types.SimpleNamespace(collection=collection, selected_objects=[]),
@@ -178,12 +178,12 @@ class BlenderAddonTests(unittest.TestCase):
             result = addon.export_current_file(Path(tmp))
 
             self.assertEqual(result.collections, 1)
-            self.assertTrue((Path(tmp) / "Barrel.casset").exists())
+            self.assertTrue((Path(tmp) / "Statue.casset").exists())
 
     def test_collection_only_export_does_not_require_saved_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             body = FakeObject("SM_Body")
-            collection = FakeCollection("PREFAB_Barrel", [body])
+            collection = FakeCollection("PREFAB_Statue", [body])
             addon.bpy = types.SimpleNamespace(
                 data=types.SimpleNamespace(filepath="", collections=[collection]),
                 context=types.SimpleNamespace(collection=collection, selected_objects=[]),
@@ -192,16 +192,16 @@ class BlenderAddonTests(unittest.TestCase):
             result = addon.run_export(Path(tmp), collection_only=True)
 
             self.assertEqual(result.collections, 1)
-            self.assertTrue((Path(tmp) / "Barrel.casset").exists())
+            self.assertTrue((Path(tmp) / "Statue.casset").exists())
 
     def test_collection_only_export_uses_default_compiled_root_for_saved_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source = root / "assets" / "source" / "barrel" / "Barrel.blend"
+            source = root / "assets" / "source" / "statue" / "Statue.blend"
             source.parent.mkdir(parents=True)
             source.write_bytes(b"blend")
             body = FakeObject("SM_Body")
-            collection = FakeCollection("PREFAB_Barrel", [body])
+            collection = FakeCollection("PREFAB_Statue", [body])
             addon.bpy = types.SimpleNamespace(
                 data=types.SimpleNamespace(filepath=str(source), collections=[collection]),
                 context=types.SimpleNamespace(collection=collection, selected_objects=[]),
@@ -210,7 +210,7 @@ class BlenderAddonTests(unittest.TestCase):
             result = addon.run_export(None, collection_only=True)
 
             self.assertEqual(result.collections, 1)
-            self.assertTrue((root / "assets" / "compiled" / "barrel" / "Barrel.casset").exists())
+            self.assertTrue((root / "assets" / "compiled" / "statue" / "Statue.casset").exists())
 
     def test_selected_plain_collection_exports_as_prefab_asset(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -262,7 +262,7 @@ class BlenderAddonTests(unittest.TestCase):
         self.assertEqual([obj.name for obj in objects], ["EMPTY_Container", "SM_Instanced"])
 
     def test_collection_only_export_needs_output_root_for_unsaved_files(self) -> None:
-        collection = FakeCollection("PREFAB_Barrel", [FakeObject("SM_Body")])
+        collection = FakeCollection("PREFAB_Statue", [FakeObject("SM_Body")])
         addon.bpy = types.SimpleNamespace(
             data=types.SimpleNamespace(filepath="", collections=[collection]),
             context=types.SimpleNamespace(collection=collection, selected_objects=[]),
@@ -411,6 +411,7 @@ class BlenderAddonTests(unittest.TestCase):
                     types.SimpleNamespace(
                         source=body,
                         output=root / "assets" / "compiled" / "hero" / "Hero" / "meshes" / "SM_Body.cmesh",
+                        material_name="HeroSkin",
                     )
                 ]
 
@@ -461,8 +462,12 @@ class BlenderAddonTests(unittest.TestCase):
                         output=compiled / "maps" / "materials" / "SM_Door_DefaultMaterial.cmat"),
                 ]
                 write_meshes.return_value = [
-                    types.SimpleNamespace(source=placed_mesh, output=compiled / "maps" / "meshes" / "SM_Floor.cmesh"),
-                    types.SimpleNamespace(source=prefab_mesh, output=compiled / "maps" / "meshes" / "SM_Door.cmesh"),
+                    types.SimpleNamespace(source=placed_mesh,
+                        output=compiled / "maps" / "meshes" / "SM_Floor.cmesh",
+                        material_name="SM_Floor_DefaultMaterial"),
+                    types.SimpleNamespace(source=prefab_mesh,
+                        output=compiled / "maps" / "meshes" / "SM_Door.cmesh",
+                        material_name="SM_Door_DefaultMaterial"),
                 ]
                 result = addon.export_current_file(compiled)
 
@@ -482,7 +487,7 @@ class BlenderAddonTests(unittest.TestCase):
 
         assets = addon.object_component_assets(
             obj,
-            {"SM_Body": [mesh]},
+            {"SM_Body": [(mesh, "HeroSkin")]},
             {"HeroSkin": material},
             {},
             {},

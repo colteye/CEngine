@@ -27,7 +27,7 @@ Light::Light(const glm::vec3& pos, const glm::vec3& col, float pow)
 	: Light(LightRecord {
 		LightType::Point,
 		pos,
-		glm::vec3(0.0f, -1.0f, 0.0f),
+		glm::vec3(0.0f, 0.0f, -1.0f),
 		col,
 		pow,
 		0.0f,
@@ -42,7 +42,7 @@ Light::Light(const LightRecord& record)
 	: m_id(RenderSystem::RegisterLight(record)),
 	  m_type(record.type),
 	  m_position(record.position),
-	  m_direction(NormalizeOrDefault(record.direction, glm::vec3(0.0f, -1.0f, 0.0f))),
+	  m_direction(NormalizeOrDefault(record.direction, glm::vec3(0.0f, 0.0f, -1.0f))),
 	  m_color(record.color),
 	  m_intensity(record.intensity),
 	  m_range(record.range),
@@ -148,7 +148,7 @@ DirectionalLight::DirectionalLight(const glm::vec3& direction, const glm::vec3& 
 	: Light(LightRecord {
 		LightType::Directional,
 		glm::vec3(0.0f),
-		NormalizeOrDefault(direction, glm::vec3(0.0f, -1.0f, 0.0f)),
+		NormalizeOrDefault(direction, glm::vec3(0.0f, 0.0f, -1.0f)),
 		color,
 		intensity,
 		0.0f,
@@ -163,7 +163,7 @@ PointLight::PointLight(const glm::vec3& position, const glm::vec3& color, float 
 	: Light(LightRecord {
 		LightType::Point,
 		position,
-		glm::vec3(0.0f, -1.0f, 0.0f),
+		glm::vec3(0.0f, 0.0f, -1.0f),
 		color,
 		intensity,
 		range,
@@ -179,7 +179,7 @@ SpotLight::SpotLight(const glm::vec3& position, const glm::vec3& direction, cons
 	: Light(LightRecord {
 		LightType::Spot,
 		position,
-		NormalizeOrDefault(direction, glm::vec3(0.0f, -1.0f, 0.0f)),
+		NormalizeOrDefault(direction, glm::vec3(0.0f, 0.0f, -1.0f)),
 		color,
 		intensity,
 		range,

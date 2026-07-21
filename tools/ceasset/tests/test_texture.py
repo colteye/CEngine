@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ceassetlib.texture import normalize_pillow_dds_format, write_rgba_dxt5
+from ceassetlib.texture import convert_texture_to_dds, normalize_pillow_dds_format, write_rgba_dxt5
 
 
 class TextureTests(unittest.TestCase):
@@ -28,6 +28,21 @@ class TextureTests(unittest.TestCase):
             self.assertEqual(data[:4], b"DDS ")
             self.assertEqual(data[84:88], b"DXT5")
             self.assertEqual(len(data), 128 + 16)
+
+    def test_pillow_conversion_accepts_one_bit_source_images(self) -> None:
+        try:
+            from PIL import Image
+        except ImportError as error:
+            self.skipTest(str(error))
+
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "mask.png"
+            output = Path(temporary) / "mask.dds"
+            Image.new("1", (4, 4), 1).save(source)
+
+            convert_texture_to_dds(source, output, "DXT5")
+
+            self.assertEqual(output.read_bytes()[:4], b"DDS ")
 
 
 if __name__ == "__main__":

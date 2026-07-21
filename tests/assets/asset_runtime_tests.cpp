@@ -19,12 +19,11 @@ using namespace CEngine::Assets;
 namespace Renderer = CEngine::Renderer;
 
 constexpr std::array<char, 4> MeshMetadataMagic = {'C', 'E', 'M', 'H'};
-constexpr std::uint16_t MeshMetadataVersion = 1;
+constexpr std::uint16_t MeshMetadataVersion = 2;
 constexpr std::uint32_t MeshFlagSkinned = 1u << 0u;
 constexpr std::uint32_t MeshFlagLightmapUv = 1u << 1u;
 constexpr std::array<char, 4> MaterialPayloadMagic = {'C', 'E', 'M', 'A'};
-constexpr std::uint16_t MaterialPayloadVersion = 1;
-constexpr std::string_view DefaultTexturePath = "assets/missing/missing.DDS";
+constexpr std::uint16_t MaterialPayloadVersion = 3;
 
 #pragma pack(push, 1)
 struct DiskMaterialHeader {
@@ -38,6 +37,10 @@ struct DiskMaterialHeader {
     std::uint32_t string_table_size = 0;
     std::uint32_t name_offset = 0;
     std::uint32_t name_size = 0;
+    float base_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    float metallic_factor = 0.0f;
+    float roughness_factor = 0.5f;
+    float ao_factor = 1.0f;
 };
 
 struct DiskMaterialTexture {
@@ -111,6 +114,13 @@ void AppendU32(std::vector<std::uint8_t>& bytes, std::uint32_t value)
     AppendStruct(bytes, value);
 }
 
+void WriteDdsStub(const std::filesystem::path& path)
+{
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream stream(path, std::ios::binary);
+    stream.write("DDS ", 4);
+}
+
 void AppendStaticVertex(std::vector<std::uint8_t>& bytes,
     float x, float y, float z, float nx, float ny, float nz, float u, float v)
 {
@@ -128,6 +138,8 @@ void AppendSkinnedStaticVertex(std::vector<std::uint8_t>& bytes,
     float x, float y, float z, float nx, float ny, float nz, float u, float v)
 {
     AppendStaticVertex(bytes, x, y, z, nx, ny, nz, u, v);
+    AppendF32(bytes, 0.0f);
+    AppendF32(bytes, 0.0f);
     for (int index = 0; index < 8; ++index)
     {
         const std::uint16_t value = 0;
@@ -147,10 +159,10 @@ void AppendLightmappedVertex(std::vector<std::uint8_t>& bytes,
 std::vector<std::uint8_t> StaticTriangleGeometry()
 {
     std::vector<std::uint8_t> geometry;
-    geometry.reserve(3 * 32 + 3 * 4);
-    AppendStaticVertex(geometry, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
-    AppendStaticVertex(geometry, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f);
-    AppendStaticVertex(geometry, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f);
+    geometry.reserve(3 * 40 + 3 * 4);
+    AppendLightmappedVertex(geometry, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    AppendLightmappedVertex(geometry, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f);
+    AppendLightmappedVertex(geometry, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f);
     AppendU32(geometry, 0);
     AppendU32(geometry, 1);
     AppendU32(geometry, 2);
@@ -160,7 +172,7 @@ std::vector<std::uint8_t> StaticTriangleGeometry()
 std::vector<std::uint8_t> SkinnedTriangleGeometry()
 {
     std::vector<std::uint8_t> geometry;
-    geometry.reserve(3 * 48 + 3 * 4);
+    geometry.reserve(3 * 56 + 3 * 4);
     AppendSkinnedStaticVertex(geometry, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
     AppendSkinnedStaticVertex(geometry, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f);
     AppendSkinnedStaticVertex(geometry, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f);
@@ -183,7 +195,7 @@ std::vector<std::uint8_t> LightmappedTriangleGeometry()
     return geometry;
 }
 
-std::vector<std::uint8_t> StaticMeshPayload(std::uint32_t flags = 0, std::uint32_t vertex_stride = 32)
+std::vector<std::uint8_t> StaticMeshPayload(std::uint32_t flags = 0, std::uint32_t vertex_stride = 40)
 {
     DiskMeshMetadata mesh_metadata;
     mesh_metadata.header_size = sizeof(DiskMeshMetadata);
@@ -199,8 +211,8 @@ std::vector<std::uint8_t> StaticMeshPayload(std::uint32_t flags = 0, std::uint32
 
     std::vector<std::uint8_t> payload;
     AppendStruct(payload, mesh_metadata);
-    const std::vector<std::uint8_t> geometry = vertex_stride == 48 ? SkinnedTriangleGeometry() :
-        (vertex_stride == 40 ? LightmappedTriangleGeometry() : StaticTriangleGeometry());
+    const std::vector<std::uint8_t> geometry = vertex_stride == 56 ? SkinnedTriangleGeometry() :
+        ((flags & MeshFlagLightmapUv) != 0 ? LightmappedTriangleGeometry() : StaticTriangleGeometry());
     payload.insert(payload.end(), geometry.begin(), geometry.end());
     return payload;
 }
@@ -307,7 +319,7 @@ bool MeshLoaderTreatsSkinnedMeshesAsStaticGeometry()
     mesh_asset.type = AssetType::Mesh;
     mesh_asset.guid = GuidFromStableName(mesh_key);
     mesh_asset.source_hash = 13;
-    mesh_asset.payload = StaticMeshPayload(MeshFlagSkinned, 48);
+    mesh_asset.payload = StaticMeshPayload(MeshFlagSkinned, 56);
 
     std::string error;
     if (!Expect(WriteBinaryAsset(mesh_path, mesh_asset, &error), error.c_str()))
@@ -355,7 +367,7 @@ bool MeshLoaderReadsLightmapUvStream()
     return result;
 }
 
-bool MaterialLoaderFillsMissingTextureSlots()
+bool MaterialLoaderAllowsNeutralSurfaceSlots()
 {
     const std::filesystem::path root = TestRoot();
     const std::filesystem::path material_path = root / "assets" / "compiled" / "hero" / "materials" / "Empty.cmat";
@@ -374,6 +386,12 @@ bool MaterialLoaderFillsMissingTextureSlots()
     material_header.string_table_size = static_cast<std::uint32_t>(strings.size());
     material_header.name_offset = name_offset;
     material_header.name_size = static_cast<std::uint32_t>(material_name.size());
+    material_header.base_color[0] = 0.25f;
+    material_header.base_color[1] = 0.5f;
+    material_header.base_color[2] = 0.75f;
+    material_header.metallic_factor = 0.1f;
+    material_header.roughness_factor = 0.8f;
+    material_header.ao_factor = 0.9f;
 
     std::vector<std::uint8_t> payload;
     AppendStruct(payload, material_header);
@@ -396,18 +414,28 @@ bool MaterialLoaderFillsMissingTextureSlots()
     {
         return false;
     }
-    if (!Expect(material.GetAlbedoPath() == DefaultTexturePath,
-            "material loader should fallback empty albedo texture paths"))
+    if (!Expect(material.GetAlbedoPath().empty(),
+            "material loader should preserve an empty albedo slot for a neutral GPU fallback"))
     {
         return false;
     }
-    if (!Expect(material.GetNormalPath() == DefaultTexturePath,
-            "material loader should fallback empty normal texture paths"))
+    if (!Expect(material.GetNormalPath().empty(),
+            "material loader should preserve an empty normal slot for a flat GPU fallback"))
     {
         return false;
     }
-    if (!Expect(material.GetMetallicRoughnessAoPath() == DefaultTexturePath,
-            "material loader should fallback empty metallic roughness ao texture paths"))
+    if (!Expect(material.GetMetallicRoughnessAoPath().empty(),
+            "material loader should preserve an empty MRA slot when constants are authored"))
+    {
+        return false;
+    }
+    if (!Expect(material.GetBaseColorFactor() == glm::vec4(0.25f, 0.5f, 0.75f, 1.0f),
+            "material loader should preserve an authored base-color constant"))
+    {
+        return false;
+    }
+    if (!Expect(material.GetMetallicRoughnessAoFactors() == glm::vec3(0.1f, 0.8f, 0.9f),
+            "material loader should preserve authored metallic, roughness, and AO constants"))
     {
         return false;
     }
@@ -416,22 +444,21 @@ bool MaterialLoaderFillsMissingTextureSlots()
     return true;
 }
 
-bool MaterialLoaderResolvesLegacyCompiledTexturePaths()
+bool MaterialLoaderResolvesProjectTexturePaths()
 {
     const std::filesystem::path root = TestRoot();
-    const std::filesystem::path material_path = root / "assets" / "barrel" / "materials" / "Barrel.cmat";
-    const std::filesystem::path texture_path = root / "assets" / "barrel" / "textures" / "Albedo.dds";
-    const std::string material_key = "assets/barrel/materials/Barrel.cmat";
-    const std::string material_name = "Barrel";
-    const std::string old_texture_path = "assets/compiled/barrel/textures/Albedo.dds";
-    const std::string expected_texture_path = "assets/barrel/textures/Albedo.dds";
+    const std::filesystem::path material_path = root / "assets" / "compiled" / "gallery" / "materials" / "Stone.cmat";
+    const std::filesystem::path texture_path = root / "assets" / "compiled" / "gallery" / "textures" / "Stone.dds";
+    const std::string material_key = "assets/compiled/gallery/materials/Stone.cmat";
+    const std::string material_name = "Stone";
+    const std::string stored_texture_path = "assets/compiled/gallery/textures/Stone.dds";
+    const std::string expected_texture_path = texture_path.lexically_normal().generic_string();
 
-    std::filesystem::create_directories(texture_path.parent_path());
-    std::ofstream(texture_path, std::ios::binary).put('\0');
+    WriteDdsStub(texture_path);
 
     std::vector<std::uint8_t> strings;
     const std::uint32_t name_offset = AppendString(strings, material_name);
-    const std::uint32_t texture_offset = AppendString(strings, old_texture_path);
+    const std::uint32_t texture_offset = AppendString(strings, stored_texture_path);
 
     DiskMaterialHeader material_header;
     material_header.header_size = sizeof(DiskMaterialHeader);
@@ -446,8 +473,7 @@ bool MaterialLoaderResolvesLegacyCompiledTexturePaths()
     DiskMaterialTexture texture;
     texture.slot = 1;
     texture.path_offset = texture_offset;
-    texture.path_size = static_cast<std::uint32_t>(old_texture_path.size());
-
+    texture.path_size = static_cast<std::uint32_t>(stored_texture_path.size());
     std::vector<std::uint8_t> payload;
     AppendStruct(payload, material_header);
     AppendStruct(payload, texture);
@@ -465,18 +491,13 @@ bool MaterialLoaderResolvesLegacyCompiledTexturePaths()
         return false;
     }
 
-    const std::filesystem::path previous_path = std::filesystem::current_path();
-    std::filesystem::current_path(root);
     Renderer::Material material;
-    const bool loaded = LoadMaterialAsset("assets/barrel/materials/Barrel.cmat", material, &error);
-    std::filesystem::current_path(previous_path);
-
-    if (!Expect(loaded, error.c_str()))
+    if (!Expect(LoadMaterialAsset(material_path, material, &error), error.c_str()))
     {
         return false;
     }
     if (!Expect(material.GetAlbedoPath() == expected_texture_path,
-            "material loader should remap assets/compiled texture paths into the flat assets folder"))
+            "material loader should resolve project-relative DDS paths from the project root"))
     {
         return false;
     }
@@ -488,12 +509,12 @@ bool MaterialLoaderResolvesLegacyCompiledTexturePaths()
 bool CAssetLoaderReadsBinaryComposition()
 {
     const std::filesystem::path root = TestRoot();
-    const std::filesystem::path casset_path = root / "assets" / "compiled" / "barrel" / "Barrel.casset";
-    const std::string casset_key = "assets/compiled/barrel/Barrel.casset";
-    const std::string source_path = "assets/source/barrel.blend";
-    const std::string collection_name = "PREFAB_Barrel";
-    const std::string object_name = "SM_Barrel";
-    const std::string mesh_path = "assets/compiled/barrel/meshes/SM_Barrel.cmesh";
+    const std::filesystem::path casset_path = root / "assets" / "compiled" / "statue" / "Statue.casset";
+    const std::string casset_key = "assets/compiled/statue/Statue.casset";
+    const std::string source_path = "assets/source/statue.blend";
+    const std::string collection_name = "PREFAB_Statue";
+    const std::string object_name = "SM_Statue";
+    const std::string mesh_path = "assets/compiled/statue/meshes/SM_Statue.cmesh";
 
     std::vector<std::uint8_t> strings;
     const std::uint32_t source_offset = AppendString(strings, source_path);
@@ -699,8 +720,8 @@ int main()
         !MeshLoaderBuildsRendererMeshFromTargetAsset() ||
         !MeshLoaderTreatsSkinnedMeshesAsStaticGeometry() ||
 		!MeshLoaderReadsLightmapUvStream() ||
-        !MaterialLoaderFillsMissingTextureSlots() ||
-        !MaterialLoaderResolvesLegacyCompiledTexturePaths() ||
+        !MaterialLoaderAllowsNeutralSurfaceSlots() ||
+        !MaterialLoaderResolvesProjectTexturePaths() ||
         !CAssetLoaderReadsBinaryComposition() ||
         !SkeletonViewReadsBinaryBonesAndNames())
     {

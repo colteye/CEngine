@@ -32,7 +32,6 @@ struct EntityContext {
 
 enum EntityFlags : std::uint32_t {
     EntityEnabled = 1u << 0u,
-    EntityStatic = 1u << 1u,
 };
 
 struct Transform {

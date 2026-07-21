@@ -13,6 +13,13 @@ option(CENGINE_ENABLE_VULKAN "Build the Vulkan render backend when the Vulkan SD
 option(CENGINE_ENABLE_JOLT_PHYSICS "Build the Jolt Physics backend." ON)
 option(CENGINE_BUILD_TESTS "Build lightweight CEngine test executables." ON)
 
+if(CENGINE_ENABLE_OPENGL AND CENGINE_ENABLE_VULKAN)
+    message(FATAL_ERROR "Select exactly one render backend per build; OpenGL and Vulkan cannot both be enabled.")
+endif()
+if(NOT CENGINE_ENABLE_OPENGL AND NOT CENGINE_ENABLE_VULKAN)
+    message(FATAL_ERROR "Select exactly one render backend per build; enable OpenGL or Vulkan.")
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -97,7 +104,8 @@ function(ce_setup_glfw out_target)
     FetchContent_Declare(
         glfw
         GIT_REPOSITORY https://github.com/glfw/glfw.git
-        GIT_TAG 3.4
+        # GLFW 3.4, pinned to an immutable revision.
+        GIT_TAG 7b6aead9fb88b3623e3b3725ebb42670cbe4c579
     )
     FetchContent_MakeAvailable(glfw)
     set(${out_target} glfw PARENT_SCOPE)
@@ -129,7 +137,8 @@ if(CENGINE_ENABLE_JOLT_PHYSICS)
     FetchContent_Declare(
         JoltPhysics
         GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
-        GIT_TAG v5.6.0
+        # Jolt 5.6.0, pinned to an immutable revision.
+        GIT_TAG e77f175595e64cb44218cc9d9d56fc365ad0e36a
         SOURCE_SUBDIR Build
     )
     FetchContent_MakeAvailable(JoltPhysics)
@@ -168,14 +177,13 @@ add_library(CEngineAssets STATIC ${CENGINE_ASSET_SOURCES})
 
 add_library(CEngineScene STATIC
     src/entity/camera_entity.cpp
-    src/entity/dynamic_prop.cpp
     src/entity/empty_entity.cpp
     src/entity/entity.cpp
     src/entity/entity_factory.cpp
     src/entity/light_entity.cpp
     src/entity/player_start.cpp
     src/entity/prefab_entity.cpp
-    src/entity/static_prop.cpp
+    src/entity/prop_entity.cpp
     src/entity/trigger_entity.cpp
     src/scene/scene.cpp
     src/scene/scene_loader.cpp
@@ -301,15 +309,10 @@ if(CENGINE_ENABLE_OPENGL)
 endif()
 
 if(CENGINE_ENABLE_VULKAN)
-    find_package(Vulkan QUIET)
-
-    if(Vulkan_FOUND)
-        list(APPEND CENGINE_CORE_SOURCES
-            src/renderer/vulkan/vulkan_render_backend.cpp
-        )
-    else()
-        message(WARNING "CENGINE_ENABLE_VULKAN is ON, but Vulkan was not found. Building without the Vulkan backend.")
-    endif()
+    find_package(Vulkan REQUIRED)
+    list(APPEND CENGINE_CORE_SOURCES
+        src/renderer/vulkan/vulkan_render_backend.cpp
+    )
 endif()
 
 add_library(CEngineCore STATIC ${CENGINE_CORE_SOURCES})
@@ -345,7 +348,7 @@ if(CENGINE_ENABLE_JOLT_PHYSICS)
     endif()
 endif()
 
-if(CENGINE_ENABLE_VULKAN AND Vulkan_FOUND)
+if(CENGINE_ENABLE_VULKAN)
     target_link_libraries(CEngineCore PUBLIC Vulkan::Vulkan)
     target_compile_definitions(CEngineCore PUBLIC CENGINE_ENABLE_VULKAN)
 endif()
@@ -404,7 +407,7 @@ if(CENGINE_BUILD_VIEWER)
 
     set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT CEngine)
     set_target_properties(CEngine PROPERTIES
-        VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:CEngine>"
+        VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
 
     if(MSVC)
@@ -412,12 +415,6 @@ if(CENGINE_BUILD_VIEWER)
     else()
         target_compile_options(CEngine PRIVATE -Wall -Wextra -Wpedantic)
     endif()
-
-    add_custom_command(TARGET CEngine POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory
-                "${CMAKE_CURRENT_SOURCE_DIR}/assets"
-                "$<TARGET_FILE_DIR:CEngine>/assets"
-    )
 
     if(CENGINE_ENABLE_OPENGL)
         add_custom_command(TARGET CEngine POST_BUILD

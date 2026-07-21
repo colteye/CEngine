@@ -39,6 +39,7 @@ private:
 	GLuint m_id, v_id, p_id;
 	GLuint albedo_id, normal_id, metallic_roughness_ao_id;
 	GLuint base_color_factor_id;
+	GLuint metallic_roughness_ao_factors_id;
 	GLuint alpha_cutoff_id;
 	GLuint render_mode_id;
 	GLuint receives_shadows_id;

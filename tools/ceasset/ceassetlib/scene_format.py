@@ -4,14 +4,19 @@ import struct
 from enum import IntEnum, IntFlag
 
 SCENE_MAGIC = b"CSCN"
-SCENE_VERSION = 1
+SCENE_VERSION = 3
 ENTITY_CLASS_VERSION = 1
 INVALID_INDEX = 0xFFFFFFFF
 
 
 class EntityFlags(IntFlag):
     ENABLED = 1 << 0
-    STATIC = 1 << 1
+
+
+class PropFlags(IntFlag):
+    VISIBLE = 1 << 0
+    COLLISION_ENABLED = 1 << 1
+    DYNAMIC = 1 << 2
 
 
 class EntityClassBlockFlags(IntFlag):
@@ -27,8 +32,7 @@ SCENE_ENTITY = struct.Struct("<IIIII")
 ENTITY_CLASS_BLOCK = struct.Struct("<IIHHIIQQQQ")
 ENTITY_CONNECTION = struct.Struct("<IIIIIIf")
 TRANSFORM = struct.Struct("<3f4f3f")
-STATIC_PROP = struct.Struct("<3f4f3fIIII2f2ffI")
-DYNAMIC_PROP = struct.Struct("<3f4f3fIIII3ff")
+PROP = struct.Struct("<3f4f3fIIII2f2ffI3ff")
 CAMERA_ENTITY = struct.Struct("<3f4f3fIffffI")
 LIGHT_ENTITY = struct.Struct("<3f4f3fII3f4f2fI")
 PREFAB_ENTITY = struct.Struct("<3f4f3fII")
@@ -43,8 +47,7 @@ FIXED_STRUCTURE_SIZES = {
     "DiskEntityClassBlock": ENTITY_CLASS_BLOCK.size,
     "DiskEntityConnection": ENTITY_CONNECTION.size,
     "DiskTransform": TRANSFORM.size,
-    "DiskStaticProp": STATIC_PROP.size,
-    "DiskDynamicProp": DYNAMIC_PROP.size,
+    "DiskProp": PROP.size,
     "DiskCameraEntity": CAMERA_ENTITY.size,
     "DiskLightEntity": LIGHT_ENTITY.size,
     "DiskPrefabEntity": PREFAB_ENTITY.size,

@@ -7,9 +7,28 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-using PhysicsBodyHandle = uint32_t;
+struct PhysicsBodyHandle
+{
+	std::uint32_t index = std::numeric_limits<std::uint32_t>::max();
+	std::uint32_t generation = 0;
 
-constexpr PhysicsBodyHandle kInvalidPhysicsBodyHandle = std::numeric_limits<PhysicsBodyHandle>::max();
+	constexpr explicit operator bool() const
+	{
+		return index != std::numeric_limits<std::uint32_t>::max();
+	}
+};
+
+constexpr bool operator==(PhysicsBodyHandle left, PhysicsBodyHandle right)
+{
+	return left.index == right.index && left.generation == right.generation;
+}
+
+constexpr bool operator!=(PhysicsBodyHandle left, PhysicsBodyHandle right)
+{
+	return !(left == right);
+}
+
+constexpr PhysicsBodyHandle kInvalidPhysicsBodyHandle;
 
 enum class PhysicsMotionType
 {
@@ -26,7 +45,7 @@ enum class PhysicsShapeType
 
 struct PhysicsSystemDesc
 {
-	glm::vec3 gravity = glm::vec3(0.0f, -9.81f, 0.0f);
+	glm::vec3 gravity = glm::vec3(0.0f, 0.0f, -9.81f);
 	float fixed_time_step = 1.0f / 60.0f;
 	uint32_t max_sub_steps = 4;
 	uint32_t max_bodies = 65536;

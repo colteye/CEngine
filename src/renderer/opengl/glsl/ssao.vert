@@ -41,7 +41,7 @@ void main(){
 	// Convert normal basis vectors into world space.
 	normal_pos_view = vec3(view * model * vec4(i_normal_pos, 1.0));
 	tangent_pos_view = vec3(view * model * vec4(i_tangent_pos, 1.0));
-	bitangent_pos_view = cross(tangent_pos_view, normal_pos_view);
+	bitangent_pos_view = cross(normal_pos_view, tangent_pos_view);
 
     // UV of the vertex.
     uv = i_vertex_uv;

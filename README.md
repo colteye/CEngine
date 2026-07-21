@@ -66,34 +66,41 @@ Build products live under `build/`, which is ignored by git.
 - OpenGL
 - GLFW 3
 
-By default, CMake downloads and builds GLFW 3.4 with `FetchContent`, so Visual
-Studio project files or prebuilt GLFW libraries are not required. To use an
-installed GLFW package instead, configure with `-DCENGINE_USE_SYSTEM_GLFW=ON`.
+By default, CMake downloads and builds an immutable revision of GLFW 3.4 with
+`FetchContent`, so Visual Studio project files or prebuilt GLFW libraries are not
+required. To use an installed GLFW package instead, configure with
+`-DCENGINE_USE_SYSTEM_GLFW=ON`.
 
 On Linux, fetched GLFW still needs the development packages for the selected
 desktop backend. The default fetched backend is X11; use
 `-DCENGINE_FETCH_GLFW_WAYLAND=ON -DCENGINE_FETCH_GLFW_X11=OFF` for Wayland, or
 use the `debug-headless` preset for a compile/link check on minimal images.
 
-The viewer copies the full `assets/` tree beside the executable after each build.
+With no arguments, the viewer loads the checked-in Sponza sample at
+`assets/compiled/sponza/Sponza.cscene`. An alternate cooked `.cscene` path may
+be supplied as the first argument. Target-asset references resolve against the
+project containing the scene's `assets/` directory, while renderer shaders are
+loaded beside the executable. There is one graphics backend per build; OpenGL
+is enabled by the checked-in presets.
 
-## Asset pipeline
+## Architecture and asset pipeline
 
-The target scene/entity model is documented in
-[`docs/scene_architecture.md`](docs/scene_architecture.md). CEngine presents
-flat classnamed entities implemented as one shallow `Entity` base and direct
-`final` classes with fixed fields. Mesh objects remain first-class scene entities;
-BSP world geometry and mandatory scene-tree traversal are not part of the design.
-The dependency-ordered delivery plan is in
-[`docs/cscene_implementation_plan.md`](docs/cscene_implementation_plan.md).
+Implementation work starts at
+[`docs/arch/STATUS.md`](docs/arch/STATUS.md), followed by
+[`docs/arch/IMPLEMENTATION.md`](docs/arch/IMPLEMENTATION.md). They identify the
+next vertical step, small active architecture, milestone gates, stable extension
+seams, and routing for agents. The remaining four consolidated references cover
+[delivery and performance](docs/arch/DELIVERY.md),
+[core runtime design](docs/arch/CORE.md),
+[runtime systems](docs/arch/SYSTEMS.md), and
+[networking](docs/arch/NETWORK.md).
 
 The engine runtime should load target assets only. Source formats from tools such
 as Blender and Photoshop are converted by Python tooling before they become
 runtime files.
 
 ```sh
-python3 tools/ceasset/ceasset.py convert assets/demo/barrel/results/barrel_albedo.DDS
-python3 tools/ceasset/ceasset.py convert assets/source/barrel_test/barrel_low_barrel_BaseColor.png
+python3 tools/ceasset/ceasset.py inspect assets/compiled/sponza/Sponza.cscene
 ```
 
 `ceasset` keeps a compact binary GUID registry and build cache in
@@ -110,13 +117,20 @@ orchestration are separate modules.
 
 Blender source processing lives only in the Blender add-on at
 `tools/blender_addon/cengine_asset_exporter/`. The add-on reads the open
-`.blend` through `bpy`, converts tracked PNG/TGA image datablocks to `.dds`,
+`.blend` through `bpy`, converts tracked PNG/JPEG/TGA image datablocks to `.dds`,
 exports material datablocks used by the selected collection to `.cmat`, exports
 selected armature bone hierarchies to `.cskel`, exports selected armature actions
 to `.canim`, triangulates selected mesh polygons into `.cmesh` triangle buffers
 at export time, and writes one tagged collection target asset directly under
 `assets/compiled/<blend-name>/`. Orphan datablocks and unrelated scene
 collections are ignored.
+
+PBR materials use one required packed MRA DDS: red is metalness, green is
+roughness, and blue is ambient occlusion. When Blender authors those inputs as
+separate images, the add-on packs them during export; missing channels come from
+the Principled BSDF values (AO defaults to one). Base-color and normal images
+remain optional and use neutral white and flat-normal runtime textures when
+absent, so a missing optional map never becomes a checkerboard material.
 
 - `PREFAB_Hero` writes `Hero.casset`.
 - `SCENE_TestRoom` writes `TestRoom.cscene`.
@@ -135,6 +149,13 @@ RGBM BC3 DDS. `.cmesh` owns UV1; `.cscene` stores only the atlas DDS reference,
 scale/offset, and RGBM range for each static placement. Optional scene custom
 properties `ce_lightmap_resolution`, `ce_lightmap_padding`, and
 `ce_lightmap_rgbm_range` override the 1024, 4-pixel, and 8.0 defaults.
+
+Every exported mesh placement is a `prop` entity. The `ce_dynamic` object
+property selects dynamic behavior; when absent or false the prop is static.
+`ce_collision` enables its collision binding independently of visibility.
+Scene exports also preserve the Blender World background as environment light
+and import each supported light's complete world transform. Sun direction is
+the transformed local negative-Z axis, matching Blender's light convention.
 
 The current Blender phase exports hierarchy/placement payloads, static and
 skinned mesh geometry buffers, material payloads, skeleton metadata, animation
@@ -157,8 +178,9 @@ Runtime-side asset support lives in `src/assets/`. `AssetFile` reads the common
 asset header and exposes the single payload. `LoadMeshAsset` builds the
 renderer's in-memory `Mesh` from `.cmesh` using explicit material slots supplied
 by the caller. `SkeletonAsset` validates `.cskel` and exposes bone rows/names
-without allocations. `.cscene` loading constructs the fixed entity classes and
-retains referenced `.casset` and other asset handles transactionally.
+without allocations. `.cscene` loading constructs the fixed entity classes,
+including the unified static/dynamic `prop` class, and retains referenced
+`.casset` and other asset handles transactionally.
 
 Install the Python tool dependency with:
 
