@@ -9,7 +9,9 @@ ADDON = ROOT.parent / "blender_addon"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ADDON))
 
-from cengine_asset_exporter.lightmaps import _combine_light_passes, encode_rgbm, plan_atlas
+from cengine_asset_exporter.lightmaps import (
+    _combine_light_passes, _maximum_rgb, encode_rgbm, plan_atlas,
+)
 
 
 class LightmapTests(unittest.TestCase):
@@ -38,6 +40,9 @@ class LightmapTests(unittest.TestCase):
         )
 
         self.assertEqual(combined, [1.5, 0.5, 0.125, 1.0])
+
+    def test_maximum_rgb_ignores_alpha(self) -> None:
+        self.assertEqual(_maximum_rgb((0.25, 0.5, 0.125, 1.0, 2.0, 1.0, 0.0, 0.0)), 2.0)
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@ BAKE_UV = "CEngineBake"
 DEFAULT_RESOLUTION = 1024
 DEFAULT_PADDING = 4
 DEFAULT_RGBM_RANGE = 8.0
+MINIMUM_LIGHTMAP_ENERGY = 1.0e-5
 
 
 @dataclass(frozen=True)
@@ -189,6 +190,14 @@ def _combine_light_passes(indirect: Iterable[float], direct: Iterable[float]) ->
     return result
 
 
+def _maximum_rgb(pixels: Iterable[float]) -> float:
+    values = list(pixels)
+    if len(values) % 4 != 0:
+        raise RuntimeError("Blender lightmap pixels must be RGBA")
+    return max((max(values[index:index + 3])
+                for index in range(0, len(values), 4)), default=0.0)
+
+
 def bake_scene_lightmaps(
     blender: object,
     source: Path,
@@ -241,9 +250,8 @@ def bake_scene_lightmaps(
     temporary_meshes: list[object] = []
     temporary_nodes: list[tuple[object, object]] = []
     temporary_materials: list[object] = []
-    material_states: list[tuple[object, bool, object | None, tuple[object, ...]]] = []
     prepared_materials: set[int] = set()
-    hidden_lights: list[tuple[object, bool]] = []
+    bake_materials: dict[int, object] = {}
     hidden_objects: list[tuple[object, bool]] = []
     hidden_object_keys: set[int] = set()
 
@@ -286,15 +294,24 @@ def bake_scene_lightmaps(
     try:
         scene.render.engine = "CYCLES"
         scene.render.bake.use_clear = True
+        # Build a closed bake stage. Blender collections used as prefab
+        # prototypes can also be linked into the scene, and collection instances
+        # may evaluate the same source mesh again. Hiding every original scene
+        # object before adding the concrete bake copies guarantees that exactly
+        # one copy of each static surface can cast and receive baked light. It
+        # also prevents unrelated objects or lights outside the exported scene
+        # collection from affecting the result.
+        for obj in tuple(getattr(scene, "objects", ())):
+            hide_object(obj)
         for obj in object_list:
-            if getattr(obj, "type", "") != "LIGHT":
-                continue
-            hidden_lights.append((obj, bool(obj.hide_render)))
-        for obj in object_list:
-            if getattr(obj, "instance_collection", None) is not None:
-                hide_object(obj)
+            hide_object(obj)
         for source in source_meshes:
             hide_object(source)
+
+        if logger is not None:
+            logger(
+                f"Lightmap bake stage: hid {len(hidden_objects)} original object(s); "
+                f"creating {len(targets)} unique static surface copy/copies")
 
         for bake_index, target in enumerate(targets):
             obj = target.source.copy()
@@ -312,21 +329,24 @@ def bake_scene_lightmaps(
                 obj.data.materials.append(material)
                 temporary_materials.append(material)
             for slot in obj.material_slots:
-                material = slot.material
-                if material is None:
+                source_material = slot.material
+                if source_material is None:
                     material = blender.data.materials.new(f"CEngineBake_{obj.name}")
                     material.use_nodes = True
                     slot.material = material
                     temporary_materials.append(material)
+                else:
+                    source_key = int(source_material.as_pointer())
+                    material = bake_materials.get(source_key)
+                    if material is None:
+                        material = source_material.copy()
+                        bake_materials[source_key] = material
+                        temporary_materials.append(material)
+                    slot.material = material
                 key = int(material.as_pointer())
                 if key in prepared_materials:
                     continue
                 prepared_materials.add(key)
-                previous_active_node = material.node_tree.nodes.active if material.use_nodes else None
-                previous_selection = tuple(
-                    node for node in material.node_tree.nodes if node.select) if material.use_nodes else ()
-                material_states.append(
-                    (material, bool(material.use_nodes), previous_active_node, previous_selection))
                 material.use_nodes = True
                 for existing in material.node_tree.nodes:
                     existing.select = False
@@ -343,17 +363,24 @@ def bake_scene_lightmaps(
         # environment illumination is captured without baking mixed direct light twice.
         bake_pass(direct_image, use_direct=True, use_indirect=False,
                   visible_modes={"baked"})
-        _save_rgbm(_combine_light_passes(indirect_image.pixels[:], direct_image.pixels[:]),
-                   resolution, rgbm_range, output)
+        indirect_pixels = indirect_image.pixels[:]
+        direct_pixels = direct_image.pixels[:]
+        combined_pixels = _combine_light_passes(indirect_pixels, direct_pixels)
+        indirect_max = _maximum_rgb(indirect_pixels)
+        direct_max = _maximum_rgb(direct_pixels)
+        combined_max = _maximum_rgb(combined_pixels)
+        if logger is not None:
+            logger(
+                f"Lightmap bake energy: indirect={indirect_max:.6g}, "
+                f"static-direct={direct_max:.6g}, combined={combined_max:.6g}")
+        if combined_max <= MINIMUM_LIGHTMAP_ENERGY:
+            raise RuntimeError(
+                "Cycles produced an empty lightmap; check light modes, render visibility, "
+                "light linking, and overlapping prototype/instance geometry")
+        _save_rgbm(combined_pixels, resolution, rgbm_range, output)
     finally:
         for material, node in reversed(temporary_nodes):
             material.node_tree.nodes.remove(node)
-        for material, used_nodes, active_node, selected_nodes in reversed(material_states):
-            if used_nodes:
-                for node in material.node_tree.nodes:
-                    node.select = node in selected_nodes
-                material.node_tree.nodes.active = active_node
-            material.use_nodes = used_nodes
         for obj in reversed(temporary_objects):
             blender.data.objects.remove(obj, do_unlink=True)
         for mesh in reversed(temporary_meshes):
@@ -362,8 +389,6 @@ def bake_scene_lightmaps(
         for material in temporary_materials:
             if material.users == 0:
                 blender.data.materials.remove(material)
-        for light, hidden in hidden_lights:
-            light.hide_render = hidden
         for obj, hidden in hidden_objects:
             obj.hide_render = hidden
         blender.data.images.remove(indirect_image)
