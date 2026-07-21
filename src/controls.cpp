@@ -7,8 +7,11 @@
 
 Controls::Controls(GLFWwindow* window)
 {
-	//glfwSetMouseButtonCallback(window, Controls::mouse_button_callback);
 	glfw_window = window;
+	if (glfw_window == nullptr) return;
+	glfwSetInputMode(glfw_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	if (glfwRawMouseMotionSupported() == GLFW_TRUE)
+		glfwSetInputMode(glfw_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 }
 
 void Controls::Update(Camera* cam, float delta_time)
@@ -16,20 +19,28 @@ void Controls::Update(Camera* cam, float delta_time)
 	glm::vec3 position = cam->GetPosition();
 	glm::vec2 angles = cam->GetAngles();
 
-	float speed = 5.0f; // 3 units / second
-	float mouseSpeed = 0.3f;
-	double xpos, ypos;
-	int window_width = 0;
-	int window_height = 0;
-	glfwGetWindowSize(glfw_window, &window_width, &window_height);
-
-	const double center_x = window_width * 0.5;
-	const double center_y = window_height * 0.5;
-	glfwGetCursorPos(glfw_window, &xpos, &ypos);
-	glfwSetCursorPos(glfw_window, center_x, center_y);
-
-	angles.x += mouseSpeed * static_cast<float>(center_x - xpos) * delta_time;
-	angles.y += mouseSpeed * static_cast<float>(center_y - ypos) * delta_time;
+	const float speed = 5.0f;
+	const float mouse_sensitivity = 0.003f;
+	const bool focused = glfwGetWindowAttrib(glfw_window, GLFW_FOCUSED) == GLFW_TRUE;
+	double cursor_x = 0.0;
+	double cursor_y = 0.0;
+	glfwGetCursorPos(glfw_window, &cursor_x, &cursor_y);
+	if (!focused || !was_focused || !has_cursor_sample)
+	{
+		previous_cursor_x = cursor_x;
+		previous_cursor_y = cursor_y;
+		has_cursor_sample = focused;
+	}
+	else
+	{
+		const float mouse_x = static_cast<float>(cursor_x - previous_cursor_x);
+		const float mouse_y = static_cast<float>(cursor_y - previous_cursor_y);
+		angles.x -= mouse_sensitivity * mouse_x;
+		angles.y -= mouse_sensitivity * mouse_y;
+		previous_cursor_x = cursor_x;
+		previous_cursor_y = cursor_y;
+	}
+	was_focused = focused;
 	angles.y = std::clamp(angles.y, -1.55f, 1.55f);
 
 	// Direction : Spherical coordinates to Cartesian coordinates conversion
@@ -43,7 +54,7 @@ void Controls::Update(Camera* cam, float delta_time)
 		glm::cross(direction, glm::vec3(0.0f, 0.0f, 1.0f)));
 
 
-	float sprint_multiplier = 3.0f;
+	const float sprint_multiplier = 3.0f;
 
 	float sprint = 1.0f;
 	if (glfwGetKey(glfw_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) sprint = sprint_multiplier;
@@ -66,13 +77,3 @@ void Controls::Update(Camera* cam, float delta_time)
 
 	cam->SetPositionAngles(position, angles);
 }
-
-/*void Controls::mouse_button_callback(GLFWwindow * window, int button, int action, int mods)
-{
-	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
-	{
-		double xpos, ypos;
-		glfwGetCursorPos(window, &xpos, &ypos);
-		// [...]
-	}
-}*/

@@ -268,7 +268,6 @@ int main(int argc, char** argv)
 
 	GLFWwindow* window = CreateWindow();
 	if (window == nullptr) return 1;
-	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 
 	int width = 0;
 	int height = 0;

@@ -84,20 +84,37 @@ bool ValidateCookedScene(const std::filesystem::path& scene_path,
     CEngine::Scene::SceneRenderState render_state;
     if (!Expect(render_state.Activate(*scene, assets, &error), error.c_str())) return false;
     std::size_t prop_count = 0;
-    glm::vec3 expected_light_direction(0.0f);
-    bool found_realtime_light = false;
+    std::size_t lightmapped_prop_count = 0;
+    bool lightmapped_props_are_static = true;
+    std::size_t expected_realtime_lights = 0;
+    glm::vec3 expected_sun_direction(0.0f);
+    bool found_realtime_sun = false;
     for (const auto& entity : scene->Entities())
     {
         if (entity == nullptr) continue;
-        if (entity->Classname() == "prop") ++prop_count;
-        if (!found_realtime_light && entity->Classname() == "light")
+        if (entity->Classname() == "prop")
+        {
+            ++prop_count;
+            const auto& prop = static_cast<const CEngine::Entities::PropEntity&>(*entity);
+            if (prop.lightmap)
+            {
+                ++lightmapped_prop_count;
+                lightmapped_props_are_static = lightmapped_props_are_static && !prop.dynamic &&
+                    prop.lightmap_rgbm_range > 0.0f;
+            }
+        }
+        if (entity->Classname() == "light")
         {
             const auto& light = static_cast<const CEngine::Entities::LightEntity&>(*entity);
             if (light.Enabled() && light.mode != CEngine::Entities::LightMode::Baked)
             {
-                expected_light_direction = glm::normalize(glm::vec3(
-                    light.GetTransform().world_matrix * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)));
-                found_realtime_light = true;
+                ++expected_realtime_lights;
+                if (light.type == CEngine::Entities::LightType::Sun)
+                {
+                    expected_sun_direction = glm::normalize(glm::vec3(
+                        light.GetTransform().world_matrix * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)));
+                    found_realtime_sun = true;
+                }
             }
         }
     }
@@ -111,20 +128,36 @@ bool ValidateCookedScene(const std::filesystem::path& scene_path,
     }
     const auto& ambient = CEngine::Renderer::RenderSystem::GetAmbientLighting();
     const auto& lights = CEngine::Renderer::RenderSystem::GetDirectLights();
+    std::size_t directional_count = 0;
+    std::size_t point_count = 0;
+    const CEngine::Renderer::LightRecord* sun = nullptr;
+    for (const auto& light : lights)
+    {
+        if (light.type == CEngine::Renderer::LightType::Directional)
+        {
+            ++directional_count;
+            sun = &light;
+        }
+        else if (light.type == CEngine::Renderer::LightType::Point) ++point_count;
+    }
     return Expect(scene->EntityCount() > 0, "cooked scene should contain entities") &&
         Expect(prop_count > 0, "cooked scene should contain prop entities") &&
+        Expect(lightmapped_prop_count == prop_count && lightmapped_props_are_static,
+            "every expanded Sponza prop should have a valid static lightmap binding") &&
         Expect(scene->AssetReferenceCount() > 0, "cooked scene should reference target assets") &&
         Expect(render_state.Active(), "cooked scene render bindings should activate") &&
         Expect(ambient.enabled && ambient.sky_color == scene->Settings().ambient_color,
             "scene environment lighting should reach the renderer") &&
-        Expect(!lights.empty(), "cooked scene should bind its direct lights") &&
-        Expect(lights[0].type == CEngine::Renderer::LightType::Directional,
-            "Sponza Sun should bind as a directional light") &&
-        Expect(lights[0].casts_shadows,
+        Expect(lights.size() == expected_realtime_lights,
+            "cooked scene should bind every realtime and mixed light") &&
+        Expect(directional_count == 1 && point_count == 4,
+            "Sponza should bind one directional light and four point lights") &&
+        Expect(sun != nullptr && sun->casts_shadows,
             "Sponza Sun should bind as a shadow-casting directional light") &&
-        Expect(std::abs(glm::length(lights[0].direction) - 1.0f) < 0.0001f,
+        Expect(sun != nullptr && std::abs(glm::length(sun->direction) - 1.0f) < 0.0001f,
             "light world transform should produce a normalized renderer direction") &&
-        Expect(found_realtime_light && glm::length(lights[0].direction - expected_light_direction) < 0.0001f,
+        Expect(found_realtime_sun && sun != nullptr &&
+                glm::length(sun->direction - expected_sun_direction) < 0.0001f,
             "renderer light direction should match the imported entity world transform");
 }
 }

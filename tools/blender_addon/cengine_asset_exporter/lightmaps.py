@@ -103,7 +103,12 @@ def _select_only(blender: object, obj: object) -> None:
     blender.context.view_layer.objects.active = obj
 
 
-def ensure_lightmap_uvs(blender: object, objects: Iterable[object]) -> None:
+def ensure_lightmap_uvs(
+    blender: object,
+    objects: Iterable[object],
+    resolution: int = DEFAULT_RESOLUTION,
+    padding: int = DEFAULT_PADDING,
+) -> None:
     previous_active = getattr(blender.context.view_layer.objects, "active", None)
     previous_selected = tuple(getattr(blender.context, "selected_objects", ()))
     previous_mode = str(getattr(blender.context, "mode", "OBJECT"))
@@ -115,13 +120,54 @@ def ensure_lightmap_uvs(blender: object, objects: Iterable[object]) -> None:
             layer = layers.get(LIGHTMAP_UV)
             if layer is not None:
                 continue
+            previous_uv = getattr(layers, "active", None)
+            previous_uv_name = str(getattr(previous_uv, "name", ""))
+            previous_render_uvs = [
+                (str(getattr(existing, "name", "")), bool(getattr(existing, "active_render", False)))
+                for existing in layers
+            ]
             layer = layers.new(name=LIGHTMAP_UV)
-            layers.active = layer
-            _select_only(blender, obj)
-            blender.ops.object.mode_set(mode="EDIT")
-            blender.ops.mesh.select_all(action="SELECT")
-            blender.ops.uv.lightmap_pack(PREF_CONTEXT="ALL_FACES", PREF_MARGIN_DIV=0.1)
-            blender.ops.object.mode_set(mode="OBJECT")
+            try:
+                layers.active = layer
+                _select_only(blender, obj)
+                blender.ops.object.mode_set(mode="EDIT")
+                blender.ops.mesh.select_all(action="SELECT")
+                # Generate connected angle-based charts instead of separating
+                # every polygon as lightmap_pack does. Equalizing the chart
+                # scale before the final pack gives all surfaces a consistent
+                # texel density while smart projection limits distortion.
+                blender.ops.uv.smart_project(
+                    angle_limit=math.radians(66.0),
+                    margin_method="ADD",
+                    rotate_method="AXIS_ALIGNED",
+                    island_margin=0.0,
+                    area_weight=0.0,
+                    correct_aspect=True,
+                    scale_to_bounds=False,
+                )
+                blender.ops.uv.average_islands_scale(scale_uv=False, shear=True)
+                blender.ops.uv.pack_islands(
+                    udim_source="CLOSEST_UDIM",
+                    rotate=True,
+                    rotate_method="ANY",
+                    scale=True,
+                    merge_overlap=False,
+                    margin_method="ADD",
+                    margin=max(1, padding) / max(1, resolution),
+                    pin=False,
+                    shape_method="CONCAVE",
+                )
+                blender.ops.object.mode_set(mode="OBJECT")
+            finally:
+                if str(getattr(blender.context, "mode", "OBJECT")) != "OBJECT":
+                    blender.ops.object.mode_set(mode="OBJECT")
+                for existing_name, active_render in previous_render_uvs:
+                    existing = layers.get(existing_name)
+                    if existing is not None:
+                        existing.active_render = active_render
+                restored_uv = layers.get(previous_uv_name) if previous_uv_name else None
+                if restored_uv is not None:
+                    layers.active = restored_uv
     finally:
         if str(getattr(blender.context, "mode", "OBJECT")) != "OBJECT":
             blender.ops.object.mode_set(mode="OBJECT")
@@ -229,7 +275,7 @@ def bake_scene_lightmaps(
         "ce_lightmap_rgbm_range", DEFAULT_RGBM_RANGE))
     tiles = plan_atlas((target.key for target in targets), resolution, padding)
     source_meshes = list({int(target.source.as_pointer()): target.source for target in targets}.values())
-    ensure_lightmap_uvs(blender, source_meshes)
+    ensure_lightmap_uvs(blender, source_meshes, resolution, padding)
 
     output_dir = output_dir_for_source(source, output_root) / "lightmaps"
     output = output_dir / f"{clean_asset_name(scene_name)}_0.dds"

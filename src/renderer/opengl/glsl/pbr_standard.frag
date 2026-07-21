@@ -13,7 +13,7 @@ in vec3 bitangent_pos_world;
 uniform sampler2D albedo;
 uniform sampler2D normal;
 uniform sampler2D metallic_roughness_ao;
-uniform sampler2D shadow_atlas;
+uniform sampler2DShadow shadow_atlas;
 uniform samplerCube point_shadow_maps[8];
 uniform sampler2D lightmap;
 
@@ -124,7 +124,8 @@ vec3 CalculateNormals()
 
 float AtlasShadow(mat4 light_matrix, vec4 rect, vec4 params, vec3 world_pos, vec3 N, vec3 L)
 {
-    vec4 clip_pos = light_matrix * vec4(world_pos, 1.0);
+    vec3 receiver_pos = world_pos + L * params.y;
+    vec4 clip_pos = light_matrix * vec4(receiver_pos, 1.0);
     vec3 projected = clip_pos.xyz / clip_pos.w;
     vec2 shadow_uv = projected.xy * 0.5 + 0.5;
     float current_depth = projected.z * 0.5 + 0.5;
@@ -134,19 +135,20 @@ float AtlasShadow(mat4 light_matrix, vec4 rect, vec4 params, vec3 world_pos, vec
     }
 
     vec2 atlas_uv = rect.xy + shadow_uv * rect.zw;
-    vec2 atlas_min = rect.xy;
-    vec2 atlas_max = rect.xy + rect.zw;
-    float bias = max(params.x * (1.0 - dot(N, L)), params.x * 0.25) + params.y * 0.0001;
+    float bias = max(params.x * (1.0 - clamp(dot(N, L), 0.0, 1.0)), params.x * 0.25);
     float atlas_texel = 1.0 / shadow_counts.w;
+    vec2 atlas_min = rect.xy + vec2(atlas_texel);
+    vec2 atlas_max = rect.xy + rect.zw - vec2(atlas_texel);
+    vec2 offsets[4] = vec2[](
+        vec2(-0.75, -0.75), vec2(0.75, -0.75),
+        vec2(-0.75, 0.75), vec2(0.75, 0.75)
+    );
     float lit = 0.0;
-    for (int y = -1; y <= 1; ++y) {
-        for (int x = -1; x <= 1; ++x) {
-            vec2 sample_uv = clamp(atlas_uv + vec2(x, y) * atlas_texel, atlas_min, atlas_max);
-            float closest_depth = texture(shadow_atlas, sample_uv).r;
-            lit += current_depth - bias <= closest_depth ? 1.0 : 0.0;
-        }
+    for (int sample_index = 0; sample_index < 4; ++sample_index) {
+        vec2 sample_uv = clamp(atlas_uv + offsets[sample_index] * atlas_texel, atlas_min, atlas_max);
+        lit += texture(shadow_atlas, vec3(sample_uv, current_depth - bias));
     }
-    return lit / 9.0;
+    return lit * 0.25;
 }
 
 float SamplePointMap(int index, vec3 direction)

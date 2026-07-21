@@ -157,10 +157,24 @@ def skin_influences(obj: object | None, vertex: object, bone_lookup: dict[str, i
     return indices, weights
 
 
-def active_uv_data(mesh: object):
+MATERIAL_UV_EXCLUDED = {"CEngineLightmap", "CEngineBake"}
+
+
+def material_uv_data(mesh: object):
     uv_layers = getattr(mesh, "uv_layers", None)
-    active = getattr(uv_layers, "active", None) if uv_layers is not None else None
-    return getattr(active, "data", ()) if active is not None else ()
+    if uv_layers is None:
+        return ()
+
+    layers = list(uv_layers)
+    active = getattr(uv_layers, "active", None)
+    candidates = [active]
+    candidates.extend(layer for layer in layers if bool(getattr(layer, "active_render", False)))
+    candidates.extend(layers)
+    for layer in candidates:
+        if layer is None or str(getattr(layer, "name", "")) in MATERIAL_UV_EXCLUDED:
+            continue
+        return getattr(layer, "data", ())
+    return ()
 
 
 def lightmap_uv_data(mesh: object):
@@ -202,7 +216,7 @@ def mesh_buffers(
     vertices = getattr(mesh, "vertices", ())
     loops = getattr(mesh, "loops", ())
     polygons = getattr(mesh, "polygons", ())
-    uv_data = active_uv_data(mesh)
+    uv_data = material_uv_data(mesh)
     uv1_data = lightmap_uv_data(mesh)
 
     packed_vertices = bytearray()

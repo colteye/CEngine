@@ -59,17 +59,18 @@ class FakeUv:
 
 
 class FakeUvLayer:
-    def __init__(self, data: list[FakeUv]) -> None:
+    def __init__(self, data: list[FakeUv], name: str = "UVMap", active_render: bool = False) -> None:
         self.data = data
+        self.name = name
+        self.active_render = active_render
 
 
 class FakeUvLayers:
     def __init__(self, data: list[FakeUv], lightmap: list[FakeUv] | None = None) -> None:
-        self.active = FakeUvLayer(data)
+        self.active = FakeUvLayer(data, active_render=True)
         self.layers = [self.active]
         if lightmap is not None:
-            layer = FakeUvLayer(lightmap)
-            layer.name = "CEngineLightmap"
+            layer = FakeUvLayer(lightmap, "CEngineLightmap")
             self.layers.append(layer)
 
     def get(self, name: str):
@@ -80,6 +81,9 @@ class FakeUvLayers:
 
     def __getitem__(self, index: int):
         return self.layers[index]
+
+    def __iter__(self):
+        return iter(self.layers)
 
 
 class FakeMesh:
@@ -208,6 +212,23 @@ class BlenderMeshesTests(unittest.TestCase):
 
         self.assertTrue(buffers.lightmap_uv)
         self.assertEqual(VERTEX.unpack_from(buffers.data, 0)[8:10], (0.25, 0.5))
+
+    def test_lightmap_active_layer_is_never_exported_as_material_uv0(self) -> None:
+        mesh = FakeMesh()
+        material_uvs = mesh.uv_layers.active.data
+        lightmap_uvs = [
+            FakeUv((0.25, 0.5)), FakeUv((0.75, 0.5)), FakeUv((0.25, 1.0))]
+        mesh.uv_layers = FakeUvLayers(material_uvs, lightmap_uvs)
+        mesh.uv_layers.active = mesh.uv_layers.get("CEngineLightmap")
+
+        buffers = mesh_buffers(mesh)
+
+        first = VERTEX.unpack_from(buffers.data, 0)
+        second = VERTEX.unpack_from(buffers.data, VERTEX.size)
+        self.assertEqual(first[6:8], (0.0, 0.0))
+        self.assertEqual(second[6:8], (1.0, 0.0))
+        self.assertEqual(first[8:10], (0.25, 0.5))
+        self.assertEqual(second[8:10], (0.75, 0.5))
 
     def test_mesh_buffers_pack_skin_indices_and_weights(self) -> None:
         armature = FakeArmature()
