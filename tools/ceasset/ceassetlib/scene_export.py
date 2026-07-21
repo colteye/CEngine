@@ -11,8 +11,8 @@ from .assetfile import align_up, make_asset_desc, write_binary_asset
 from .formats import AssetType
 from .scene_format import (
     ASSET_REFERENCE, CAMERA_ENTITY, ENTITY_CLASS_BLOCK,
-    ENTITY_CLASS_VERSION, ENTITY_CONNECTION, EntityClassBlockFlags, LIGHT_ENTITY, PLAYER_START,
-    PREFAB_ENTITY, PROP, PropFlags, SCENE_ENTITY, SCENE_HEADER, SCENE_MAGIC,
+    ENTITY_CLASS_VERSION, ENTITY_CONNECTION, EntityClassBlockFlags, LIGHT_ENTITY, LightFlags, PLAYER_START,
+    PREFAB_ENTITY, PREFAB_LIGHTMAP, PROP, PropFlags, SCENE_ENTITY, SCENE_HEADER, SCENE_MAGIC,
     SCENE_SETTINGS, SCENE_VERSION, TRANSFORM, TRIGGER_ENTITY, INVALID_INDEX,
 )
 
@@ -91,12 +91,23 @@ class LightEntity:
     outer_angle_radians: float = 0.7853982
     area_size: tuple[float, float] = (1.0, 1.0)
     enabled: bool = True
+    casts_shadows: bool = True
+
+
+@dataclass(frozen=True)
+class PrefabLightmap:
+    object_index: int
+    lightmap: AssetReference
+    scale: tuple[float, float] = (1.0, 1.0)
+    offset: tuple[float, float] = (0.0, 0.0)
+    rgbm_range: float = 8.0
 
 
 @dataclass(frozen=True)
 class PrefabEntity:
     prefab: AssetReference
     transform: Transform = field(default_factory=Transform)
+    lightmaps: tuple[PrefabLightmap, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -192,7 +203,7 @@ def _references(value: EntityData) -> tuple[AssetReference, ...]:
             result += (value.lightmap,)
         return result
     if isinstance(value, PrefabEntity):
-        return (value.prefab,)
+        return (value.prefab, *(binding.lightmap for binding in value.lightmaps))
     return ()
 
 
@@ -213,7 +224,16 @@ def _asset_index(reference: AssetReference, indices: dict[AssetReference, int]) 
     return indices[reference.normalized()]
 
 
-def _pack_entity(value: EntityData, assets: dict[AssetReference, int], materials: list[int]) -> bytes:
+def _valid_lightmap_binding(scale: tuple[float, float], offset: tuple[float, float],
+                            rgbm_range: float) -> bool:
+    return (scale[0] > 0.0 and scale[1] > 0.0 and
+            offset[0] >= 0.0 and offset[1] >= 0.0 and
+            offset[0] + scale[0] <= 1.0 and
+            offset[1] + scale[1] <= 1.0 and rgbm_range > 0.0)
+
+
+def _pack_entity(value: EntityData, assets: dict[AssetReference, int], materials: list[int],
+                 prefab_lightmaps: bytearray) -> bytes:
     transform = _transform_values(value.transform)
     if isinstance(value, EmptyEntity):
         return TRANSFORM.pack(*transform)
@@ -225,11 +245,8 @@ def _pack_entity(value: EntityData, assets: dict[AssetReference, int], materials
             raise ValueError("only a static prop may have a baked lightmap")
         if value.lightmap_rgbm_range <= 0.0:
             raise ValueError("lightmap RGBM range must be positive")
-        if (value.lightmap is not None and
-                (value.lightmap_scale[0] <= 0.0 or value.lightmap_scale[1] <= 0.0 or
-                 value.lightmap_offset[0] < 0.0 or value.lightmap_offset[1] < 0.0 or
-                 value.lightmap_offset[0] + value.lightmap_scale[0] > 1.0 or
-                 value.lightmap_offset[1] + value.lightmap_scale[1] > 1.0)):
+        if value.lightmap is not None and not _valid_lightmap_binding(
+                value.lightmap_scale, value.lightmap_offset, value.lightmap_rgbm_range):
             raise ValueError("lightmap atlas transform must stay inside zero-to-one UV space")
         if value.collision_enabled and any(size <= 0.0 for size in value.collision_half_extents):
             raise ValueError("prop collision dimensions must be positive")
@@ -252,11 +269,27 @@ def _pack_entity(value: EntityData, assets: dict[AssetReference, int], materials
     if isinstance(value, LightEntity):
         if value.intensity < 0.0 or value.range < 0.0:
             raise ValueError("light intensity and range must be nonnegative")
+        flags = (int(LightFlags.ENABLED) if value.enabled else 0) | \
+            (int(LightFlags.CASTS_SHADOW) if value.casts_shadows else 0)
         return LIGHT_ENTITY.pack(*transform, value.light_type, value.mode, *value.color,
                                  value.intensity, value.range, value.inner_angle_radians,
-                                 value.outer_angle_radians, *value.area_size, int(value.enabled))
+                                 value.outer_angle_radians, *value.area_size, flags)
     if isinstance(value, PrefabEntity):
-        return PREFAB_ENTITY.pack(*transform, _asset_index(value.prefab, assets), 0)
+        first = len(prefab_lightmaps) // PREFAB_LIGHTMAP.size if value.lightmaps else INVALID_INDEX
+        previous_index = -1
+        for binding in sorted(value.lightmaps, key=lambda item: item.object_index):
+            if binding.object_index < 0 or binding.object_index > 0xffffffff:
+                raise ValueError("prefab lightmap object index is invalid")
+            if binding.object_index == previous_index:
+                raise ValueError("prefab lightmap object index is duplicated")
+            if not _valid_lightmap_binding(binding.scale, binding.offset, binding.rgbm_range):
+                raise ValueError("prefab lightmap binding is invalid")
+            prefab_lightmaps.extend(PREFAB_LIGHTMAP.pack(
+                binding.object_index, _asset_index(binding.lightmap, assets),
+                *binding.scale, *binding.offset, binding.rgbm_range))
+            previous_index = binding.object_index
+        return PREFAB_ENTITY.pack(
+            *transform, _asset_index(value.prefab, assets), first, len(value.lightmaps))
     if isinstance(value, TriggerEntity):
         flags = int(value.enabled) | (int(value.trigger_once) << 1)
         return TRIGGER_ENTITY.pack(*transform, *value.half_extents, flags)
@@ -315,9 +348,14 @@ def build_scene_payload(scene: SceneDescription) -> bytes:
         indices = struct.pack(f"<{len(rows)}I", *(row[0] for row in rows))
         indices_offset = _append_aligned(output, indices)
         materials: list[int] = []
-        records = b"".join(_pack_entity(row[1].data, asset_indices, materials) for row in rows)
+        prefab_lightmaps = bytearray()
+        records = b"".join(_pack_entity(
+            row[1].data, asset_indices, materials, prefab_lightmaps) for row in rows)
         records_offset = _append_aligned(output, records)
-        auxiliary = struct.pack(f"<{len(materials)}I", *materials) if materials else b""
+        if materials and prefab_lightmaps:
+            raise ValueError("entity class auxiliary data has conflicting layouts")
+        auxiliary = (struct.pack(f"<{len(materials)}I", *materials) if materials
+                     else bytes(prefab_lightmaps))
         auxiliary_offset = _append_aligned(output, auxiliary) if auxiliary else 0
         class_rows.extend(ENTITY_CLASS_BLOCK.pack(classname_offset, classname_size,
             ENTITY_CLASS_VERSION, int(EntityClassBlockFlags.REQUIRED), len(rows), record_struct.size,

@@ -16,6 +16,7 @@ public:
 
 	virtual bool Initialize(GLFWwindow* window, int window_width, int window_height) = 0;
 	virtual void Shutdown() = 0;
+	virtual bool Resize(int window_width, int window_height) = 0;
 	virtual void Render() = 0;
 	virtual void RenderDepthOnly(const glm::mat4& view, const glm::mat4& projection,
 		uint32_t native_depth_texture, int texture_width, int texture_height) = 0;

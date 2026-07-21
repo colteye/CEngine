@@ -9,8 +9,8 @@ from .assetfile import ASSET_HEADER, ASSET_MAGIC, ASSET_VERSION
 from .formats import AssetType
 from .scene_format import (
     ASSET_REFERENCE, CAMERA_ENTITY, ENTITY_CLASS_BLOCK,
-    ENTITY_CLASS_VERSION, ENTITY_CONNECTION, LIGHT_ENTITY, PLAYER_START,
-    PREFAB_ENTITY, PROP, PropFlags, SCENE_ENTITY, SCENE_HEADER,
+    ENTITY_CLASS_VERSION, ENTITY_CONNECTION, LIGHT_ENTITY, LightFlags, PLAYER_START,
+    PREFAB_ENTITY, PREFAB_LIGHTMAP, PROP, PropFlags, SCENE_ENTITY, SCENE_HEADER,
     SCENE_MAGIC, SCENE_SETTINGS, SCENE_VERSION, TRANSFORM, TRIGGER_ENTITY, INVALID_INDEX,
 )
 
@@ -198,7 +198,29 @@ def inspect_scene(path: Path, project_root: Path, validate_assets: bool = False)
                     if values[19] & int(PropFlags.DYNAMIC) and values[23] <= 0.0:
                         raise ValueError("dynamic prop mass is invalid")
             elif classname == "prefab_instance":
-                require_asset(PREFAB_ENTITY.unpack(record)[10], AssetType.ASSET, "prefab")
+                values = PREFAB_ENTITY.unpack(record)
+                require_asset(values[10], AssetType.ASSET, "prefab")
+                first_lightmap, lightmap_count = values[11:13]
+                if len(auxiliary) % PREFAB_LIGHTMAP.size:
+                    raise ValueError("prefab lightmap table is invalid")
+                available = len(auxiliary) // PREFAB_LIGHTMAP.size
+                if lightmap_count == 0:
+                    if first_lightmap != INVALID_INDEX:
+                        raise ValueError("empty prefab lightmap range is invalid")
+                elif first_lightmap == INVALID_INDEX or first_lightmap > available or \
+                        lightmap_count > available - first_lightmap:
+                    raise ValueError("prefab lightmap range is invalid")
+                previous_object = -1
+                for lightmap in range(first_lightmap, first_lightmap + lightmap_count):
+                    binding = PREFAB_LIGHTMAP.unpack_from(
+                        auxiliary, lightmap * PREFAB_LIGHTMAP.size)
+                    require_asset(binding[1], AssetType.TEXTURE, "prefab lightmap")
+                    if (binding[0] <= previous_object or binding[2] <= 0.0 or binding[3] <= 0.0 or
+                            binding[4] < 0.0 or binding[5] < 0.0 or
+                            binding[2] + binding[4] > 1.0 or
+                            binding[3] + binding[5] > 1.0 or binding[6] <= 0.0):
+                        raise ValueError("prefab lightmap binding is invalid")
+                    previous_object = binding[0]
             elif classname == "camera":
                 values = CAMERA_ENTITY.unpack(record)
                 if values[10] > 1 or values[13] <= 0.0 or values[14] <= values[13]:
@@ -207,6 +229,8 @@ def inspect_scene(path: Path, project_root: Path, validate_assets: bool = False)
                 values = LIGHT_ENTITY.unpack(record)
                 if values[10] > 3 or values[11] > 2 or values[15] < 0.0 or values[16] < 0.0:
                     raise ValueError("light record is invalid")
+                if values[-1] & ~int(LightFlags.ENABLED | LightFlags.CASTS_SHADOW):
+                    raise ValueError("light flags are invalid")
         classes.append((classname, count))
     if not all(loaded):
         raise ValueError("one or more entities have no class record")

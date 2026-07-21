@@ -73,6 +73,11 @@ void RenderSystem::Shutdown()
 	lights_dirty = true;
 }
 
+bool RenderSystem::Resize(int window_width, int window_height)
+{
+	return backend != nullptr && backend->Resize(window_width, window_height);
+}
+
 void RenderSystem::Render()
 {
 	if (backend != nullptr)

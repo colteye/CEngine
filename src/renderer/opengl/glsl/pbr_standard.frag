@@ -321,7 +321,7 @@ void main()
         }
 
         vec3 H = normalize(V + L);
-        vec3 radiance = light.color_intensity.rgb * attenuation * 100.0 * light.color_intensity.a * spot_factor;        
+        vec3 radiance = light.color_intensity.rgb * attenuation * light.color_intensity.a * spot_factor;
         float shadow = receives_shadows ? LightShadow(light, vertex_pos_world, N, L) : 1.0;
         
         // cook-torrance brdf
@@ -352,7 +352,7 @@ void main()
 		vec4 rgbm = texture(lightmap, atlas_uv);
 		baked_light = rgbm.rgb * (rgbm.a * lightmap_rgbm_range);
 	}
-    vec3 color = ambient + baked_light + Lo;
+    vec3 color = ambient + albedo * baked_light + Lo;
 	
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));  

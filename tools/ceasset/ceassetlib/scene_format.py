@@ -4,7 +4,7 @@ import struct
 from enum import IntEnum, IntFlag
 
 SCENE_MAGIC = b"CSCN"
-SCENE_VERSION = 3
+SCENE_VERSION = 4
 ENTITY_CLASS_VERSION = 1
 INVALID_INDEX = 0xFFFFFFFF
 
@@ -17,6 +17,11 @@ class PropFlags(IntFlag):
     VISIBLE = 1 << 0
     COLLISION_ENABLED = 1 << 1
     DYNAMIC = 1 << 2
+
+
+class LightFlags(IntFlag):
+    ENABLED = 1 << 0
+    CASTS_SHADOW = 1 << 1
 
 
 class EntityClassBlockFlags(IntFlag):
@@ -35,7 +40,8 @@ TRANSFORM = struct.Struct("<3f4f3f")
 PROP = struct.Struct("<3f4f3fIIII2f2ffI3ff")
 CAMERA_ENTITY = struct.Struct("<3f4f3fIffffI")
 LIGHT_ENTITY = struct.Struct("<3f4f3fII3f4f2fI")
-PREFAB_ENTITY = struct.Struct("<3f4f3fII")
+PREFAB_ENTITY = struct.Struct("<3f4f3fIII")
+PREFAB_LIGHTMAP = struct.Struct("<II2f2ff")
 TRIGGER_ENTITY = struct.Struct("<3f4f3f3fI")
 PLAYER_START = struct.Struct("<3f4f3fI")
 
@@ -51,6 +57,7 @@ FIXED_STRUCTURE_SIZES = {
     "DiskCameraEntity": CAMERA_ENTITY.size,
     "DiskLightEntity": LIGHT_ENTITY.size,
     "DiskPrefabEntity": PREFAB_ENTITY.size,
+    "DiskPrefabLightmap": PREFAB_LIGHTMAP.size,
     "DiskTriggerEntity": TRIGGER_ENTITY.size,
     "DiskPlayerStart": PLAYER_START.size,
 }

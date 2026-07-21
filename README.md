@@ -76,7 +76,9 @@ desktop backend. The default fetched backend is X11; use
 `-DCENGINE_FETCH_GLFW_WAYLAND=ON -DCENGINE_FETCH_GLFW_X11=OFF` for Wayland, or
 use the `debug-headless` preset for a compile/link check on minimal images.
 
-With no arguments, the viewer loads the checked-in Sponza sample at
+The viewer opens as a maximized, bordered window and keeps its camera projection
+and render targets matched to the framebuffer at any window resolution. With no arguments, it loads
+the checked-in Sponza sample at
 `assets/compiled/sponza/Sponza.cscene`. An alternate cooked `.cscene` path may
 be supplied as the first argument. Target-asset references resolve against the
 project containing the scene's `assets/` directory, while renderer shaders are
@@ -125,12 +127,16 @@ at export time, and writes one tagged collection target asset directly under
 `assets/compiled/<blend-name>/`. Orphan datablocks and unrelated scene
 collections are ignored.
 
-PBR materials use one required packed MRA DDS: red is metalness, green is
-roughness, and blue is ambient occlusion. When Blender authors those inputs as
-separate images, the add-on packs them during export; missing channels come from
-the Principled BSDF values (AO defaults to one). Base-color and normal images
-remain optional and use neutral white and flat-normal runtime textures when
-absent, so a missing optional map never becomes a checkerboard material.
+PBR material export is deliberately limited to the inputs used by the current
+shader: base color, normal, metalness, roughness, and ambient occlusion. Each
+input may be a supported image or a constant. If any metalness, roughness, or AO
+image is connected, the add-on packs the authored images into one MRA DDS (R/G/B)
+and keeps constants for the missing channels. Constant-only materials do not get
+an invented MRA texture. A grayscale image reaching Principled Normal through a
+Blender Bump or Normal Map node is treated as height data, cooked into a
+tangent-space normal DDS, and bound to the normal slot.
+Unconnected images and unsupported Principled inputs are not exported. Runtime
+fallbacks remain neutral white and flat normal, never a checkerboard.
 
 - `PREFAB_Hero` writes `Hero.casset`.
 - `SCENE_TestRoom` writes `TestRoom.cscene`.
@@ -139,14 +145,23 @@ absent, so a missing optional map never becomes a checkerboard material.
 
 Select the top-level collection you want to export before running
 `File > Export > CEngine Assets`. `PREFAB_` collections produce reusable
-`.casset` roots. `SCENE_` collections produce flat `.cscene` maps and generate
-referenced `.casset` files before publishing the scene.
+`.casset` roots. `SCENE_` collections keep collection instances as
+`prefab_instance` references, generate their `.casset` files, and publish the
+`.cscene` only after those dependencies exist. Scene loading realizes each
+`.casset` mesh/material pair once as an ordinary `prop`; it does not create a
+general mutable runtime prefab graph.
 
 Scene exports also build baked lighting automatically. Static meshes retain an
 existing `CEngineLightmap` UV layer or receive a generated UV1, placements are
-packed into a deterministic padded atlas, and Cycles bakes `baked` lights into
-RGBM BC3 DDS. `.cmesh` owns UV1; `.cscene` stores only the atlas DDS reference,
-scale/offset, and RGBM range for each static placement. Optional scene custom
+packed into a deterministic padded atlas, and Cycles writes scene-linear
+irradiance to RGBM BC3 DDS. The bake adds indirect light from `baked` and `mixed`
+lights to direct light from `baked` lights; realtime direct lighting and mixed
+direct lighting remain runtime work. Surface albedo is not stored in the
+lightmap and is multiplied by the irradiance in the shader. `.cmesh` owns UV1;
+`.cscene` stores the atlas DDS reference, scale/offset, and RGBM range for each
+static placement. Collection-instance bindings are stored per casset object on
+the `prefab_instance` and copied to every material-split prop during expansion;
+the reusable `.casset` contains no scene lighting. Optional scene custom
 properties `ce_lightmap_resolution`, `ce_lightmap_padding`, and
 `ce_lightmap_rgbm_range` override the 1024, 4-pixel, and 8.0 defaults.
 
@@ -156,6 +171,10 @@ property selects dynamic behavior; when absent or false the prop is static.
 Scene exports also preserve the Blender World background as environment light
 and import each supported light's complete world transform. Sun direction is
 the transformed local negative-Z axis, matching Blender's light convention.
+Blender light energy is passed to the PBR shader without a hidden renderer
+multiplier, so a Sun energy of `1.0` remains scene-linear intensity `1.0`.
+Blender's per-light shadow setting is cooked into `.cscene`; a shadow-casting
+Sun drives the renderer's cascaded directional shadows.
 
 The current Blender phase exports hierarchy/placement payloads, static and
 skinned mesh geometry buffers, material payloads, skeleton metadata, animation

@@ -10,7 +10,7 @@
 namespace CEngine::Assets::CSceneFormat {
 
 constexpr std::array<char, 4> SceneMagic = {'C', 'S', 'C', 'N'};
-constexpr std::uint16_t SceneContainerVersion = 3;
+constexpr std::uint16_t SceneContainerVersion = 4;
 constexpr std::uint16_t SceneEntityClassVersion = 1;
 constexpr std::uint32_t InvalidEntityIndex = 0xffffffffu;
 constexpr std::uint32_t InvalidAssetIndex = 0xffffffffu;
@@ -23,6 +23,11 @@ enum PropFlags : std::uint32_t {
     PropVisible = 1u << 0u,
     PropCollisionEnabled = 1u << 1u,
     PropDynamic = 1u << 2u,
+};
+
+enum LightFlags : std::uint32_t {
+    LightEnabled = 1u << 0u,
+    LightCastsShadow = 1u << 1u,
 };
 
 enum EntityClassBlockFlags : std::uint32_t {
@@ -142,13 +147,22 @@ struct DiskLightEntity {
     float inner_angle_radians = 0.0f;
     float outer_angle_radians = 0.7853982f;
     float area_size[2] = {1.0f, 1.0f};
-    std::uint32_t enabled = 1;
+    std::uint32_t flags = LightEnabled | LightCastsShadow;
 };
 
 struct DiskPrefabEntity {
     DiskTransform transform;
     std::uint32_t prefab_asset = InvalidAssetIndex;
-    std::uint32_t reserved = 0;
+    std::uint32_t first_lightmap = InvalidAssetIndex;
+    std::uint32_t lightmap_count = 0;
+};
+
+struct DiskPrefabLightmap {
+    std::uint32_t object_index = 0;
+    std::uint32_t lightmap_asset = InvalidAssetIndex;
+    float scale[2] = {1.0f, 1.0f};
+    float offset[2] = {};
+    float rgbm_range = 8.0f;
 };
 
 struct DiskTriggerEntity {
@@ -173,7 +187,8 @@ static_assert(sizeof(DiskTransform) == 40);
 static_assert(sizeof(DiskProp) == 96);
 static_assert(sizeof(DiskCameraEntity) == 64);
 static_assert(sizeof(DiskLightEntity) == 88);
-static_assert(sizeof(DiskPrefabEntity) == 48);
+static_assert(sizeof(DiskPrefabEntity) == 52);
+static_assert(sizeof(DiskPrefabLightmap) == 28);
 static_assert(sizeof(DiskTriggerEntity) == 56);
 static_assert(sizeof(DiskPlayerStart) == 44);
 

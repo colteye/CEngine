@@ -109,20 +109,37 @@ The initial `.casset` payload is binary composition data. It stores a fixed
 header, sorted object rows, component rows, and a UTF-8 string table. Object rows
 contain object name, role id, Blender object type id, parent name, first
 component row, component count, and a row-major `world_from_local` matrix.
-Component rows store component kind ids and project-relative target paths such
-as `assets/compiled/hero/meshes/SM_Body.cmesh`. Heavy mesh, material, skeleton,
-animation, and texture data stays in those component target assets.
+Component rows store component kind ids and paths relative to the `.casset`
+bundle, such as `meshes/SM_Body.cmesh`. Heavy mesh, material, skeleton,
+animation, and texture data stays in those component target assets. A scene
+loader resolves a `prefab_instance` once into ordinary entity records; the
+runtime does not retain a mutable prefab hierarchy.
 
-The current `.cmat` v2 payload is binary material data. It stores a fixed header,
-texture binding rows, and a UTF-8 string table. The shader is an explicit id
-mapped to `MaterialShaderType`; the format is not hardcoded to PBR. Texture rows
-store engine slot ids and exported `.dds` target paths. PBR requires one packed
-metalness/roughness/AO DDS in slot 3, with metalness in red, roughness in green,
-and ambient occlusion in blue. The Blender exporter packs separately authored
-inputs into that target texture and fills absent channels from Principled BSDF
-values (AO defaults to one). Base color and normal are optional typed inputs;
-their renderer fallbacks are neutral white and a flat normal, never a generic
-checkerboard. The runtime intentionally rejects older `.cmat` payload versions.
+The current `.cmat` v3 payload is binary material data. It stores a fixed header,
+texture binding rows, and a UTF-8 string table. The header carries base-color,
+metalness, roughness, and ambient-occlusion constants. The shader is an explicit
+id mapped to `MaterialShaderType`; the format is not hardcoded to PBR. Texture
+rows store engine slot ids and exported `.dds` target paths.
+
+The active PBR cooker reads only the inputs used by the current shader: base
+color, normal, metalness, roughness, and ambient occlusion. Base color and normal
+are optional slots. If any metalness, roughness, or AO image is connected, the
+cooker builds one packed slot-3 MRA DDS with metalness in red, roughness in green,
+and ambient occlusion in blue. Missing packed channels are white and are
+multiplied by their stored constants. With no authored M/R/AO image, no MRA DDS
+is emitted and all three values come from constants. A grayscale image that
+reaches Principled Normal through a Blender Bump or Normal Map node is treated
+as height data and converted to a tangent-space normal DDS at cook time. A
+non-grayscale Normal Map image is used directly. Specular, transmission,
+emission, alpha, and arbitrary node
+graphs are outside this basic shader contract and are not serialized. Runtime
+fallbacks are neutral white and flat normal, never a generic checkerboard. The
+runtime intentionally rejects older `.cmat` payload versions.
+
+Blender light energy is serialized directly. The PBR shader consumes that value
+as scene-linear intensity; there is no legacy renderer-side brightness
+multiplier. Non-directional lights retain inverse-square distance attenuation
+and the authored cutoff range.
 
 The initial `.cskel` payload contains a fixed skeleton header, fixed bone rows,
 and a UTF-8 string table for armature and bone names. Bone rows contain parent
@@ -169,7 +186,7 @@ Preferred dependencies and formats:
 Avoid dependencies whose runtime behavior depends on unavailable proprietary
 source, opaque build steps, or undocumented binary formats.
 
-## `.cscene` v3 Contract
+## `.cscene` v4 Contract
 
 `.cscene` is a complete world; `.casset` remains a reusable prefab hierarchy.
 Runtime code never interprets Blender object types. A scene uses the common
@@ -193,6 +210,20 @@ and mass. Prop flag bit `1` is visible, bit `2` enables collision, and bit `4`
 makes the prop dynamic; an unset dynamic bit means static. Only static props may
 carry baked lightmaps.
 
+A `prefab_instance` record owns a range into its class auxiliary lightmap table.
+Each row identifies a deterministically sorted `.casset` object index and stores
+the scene lightmap texture reference, UV scale/offset, and RGBM range. The scene
+loader copies that binding to every material-split `prop` realized from the
+object. Lighting is therefore placement-owned; reusable `.casset` files retain
+UV1 but never contain a scene bake.
+
+Blender/Cycles bakes two albedo-independent diffuse passes into the lightmap:
+indirect illumination from `baked` and `mixed` lights, plus direct illumination
+from fully `baked` lights. Mixed lights remain active for realtime direct light
+and shadows; baked lights are omitted from the runtime light list. The shader
+multiplies decoded lightmap irradiance by material albedo before adding realtime
+direct lighting.
+
 Entity flag bit `1` is enabled. Class-block flag bit `1` marks a required block.
 The current runtime rejects unknown classnames and unsupported class record
 versions. References use zero-based indices and `0xffffffff` for no reference.
@@ -200,6 +231,11 @@ UUIDs/GUIDs are raw 16-byte values. Deterministic writers sort normalized asset
 references and class blocks, sort connections by their stable fields, use
 deterministic entity order supplied by the normalized scene, and zero alignment
 padding.
+
+The final word of a `light` record is a flag mask: bit `1` enables the light and
+bit `2` makes realtime and mixed lights cast shadows. The Blender exporter maps
+the light datablock's shadow setting to the cast-shadow bit. A shadow-casting Sun
+is rendered through the directional-light cascade path.
 
 ## Sources
 

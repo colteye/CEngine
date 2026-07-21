@@ -20,6 +20,8 @@ public:
 
 	float GetFOV() const { return m_field_of_view; };
 	void SetFOV(float fov) { m_field_of_view = fov; UpdateMatrices(); };
+	float GetAspectRatio() const { return m_aspect_ratio; };
+	void SetAspectRatio(float aspect_ratio);
 	
 private:
 
@@ -32,6 +34,7 @@ private:
 	glm::mat4 m_projection;
 
 	float m_field_of_view = 45.0f;
+	float m_aspect_ratio = 4.0f / 3.0f;
 };
 
 #endif

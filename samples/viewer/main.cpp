@@ -92,6 +92,8 @@ GLFWwindow* CreateWindow()
 		std::cerr << "Failed to initialize GLFW.\n";
 		return nullptr;
 	}
+	glfwWindowHint(GLFW_DECORATED, GLFW_TRUE);
+	glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
 
 #if defined(CENGINE_ENABLE_VULKAN)
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -190,12 +192,44 @@ int RunScene(GLFWwindow* window, const std::filesystem::path& scene_path,
 	}
 
 	Camera camera;
+	int framebuffer_width = 0;
+	int framebuffer_height = 0;
+	glfwGetFramebufferSize(window, &framebuffer_width, &framebuffer_height);
+	if (framebuffer_width <= 0 || framebuffer_height <= 0 ||
+		!Renderer::RenderSystem::Resize(framebuffer_width, framebuffer_height))
+	{
+		std::cerr << "Failed to size the renderer for the window.\n";
+		return 1;
+	}
+	camera.SetAspectRatio(static_cast<float>(framebuffer_width) /
+		static_cast<float>(framebuffer_height));
 	ApplyActiveCamera(*scene, camera);
 	Controls controls(window);
 	double previous_time = glfwGetTime();
 	while (glfwWindowShouldClose(window) == GLFW_FALSE &&
 		glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS)
 	{
+		int current_width = 0;
+		int current_height = 0;
+		glfwGetFramebufferSize(window, &current_width, &current_height);
+		if (current_width <= 0 || current_height <= 0)
+		{
+			glfwWaitEvents();
+			previous_time = glfwGetTime();
+			continue;
+		}
+		if (current_width != framebuffer_width || current_height != framebuffer_height)
+		{
+			if (!Renderer::RenderSystem::Resize(current_width, current_height))
+			{
+				std::cerr << "Failed to resize the renderer.\n";
+				return 1;
+			}
+			framebuffer_width = current_width;
+			framebuffer_height = current_height;
+			camera.SetAspectRatio(static_cast<float>(framebuffer_width) /
+				static_cast<float>(framebuffer_height));
+		}
 		const double current_time = glfwGetTime();
 		const float delta_seconds = static_cast<float>(current_time - previous_time);
 		previous_time = current_time;

@@ -24,6 +24,16 @@ void Camera::SetAnglesCartesian(const glm::vec3& ang)
 	UpdateMatrices();
 }
 
+void Camera::SetAspectRatio(float aspect_ratio)
+{
+	if (!std::isfinite(aspect_ratio) || aspect_ratio <= 0.0f)
+	{
+		return;
+	}
+	m_aspect_ratio = aspect_ratio;
+	UpdateMatrices();
+}
+
 void Camera::UpdateMatrices()
 {
 	// Direction : Spherical coordinates to Cartesian coordinates conversion
@@ -39,8 +49,8 @@ void Camera::UpdateMatrices()
 	// Up vector : perpendicular to both direction and right
 	const glm::vec3 up = glm::cross(right, direction);
 
-	// Projection matrix : 45 degree Field of View, 4:3 ratio, display range : 0.1 unit <-> 100 units
-	m_projection = glm::perspective(glm::radians(m_field_of_view), 4.0f / 3.0f, 0.1f, 100.0f);
+	// Projection matrix uses the current framebuffer aspect ratio.
+	m_projection = glm::perspective(glm::radians(m_field_of_view), m_aspect_ratio, 0.1f, 100.0f);
 	// Camera matrix
 	m_view = glm::lookAt(
 		m_position,           // Camera is here

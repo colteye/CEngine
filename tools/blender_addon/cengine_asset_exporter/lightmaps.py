@@ -24,6 +24,16 @@ class AtlasTile:
     offset: tuple[float, float]
 
 
+@dataclass(frozen=True)
+class BakeTarget:
+    key: str
+    source: object
+    world_matrix: object
+    prop_name: str | None = None
+    prefab_instance: str | None = None
+    prefab_object_index: int | None = None
+
+
 def plan_atlas(names: Iterable[str], resolution: int, padding: int) -> dict[str, AtlasTile]:
     ordered = sorted(set(names))
     if not ordered:
@@ -143,24 +153,63 @@ def _save_rgbm(pixels: Iterable[float], resolution: int, rgbm_range: float,
     write_rgba_dxt5(dds_path, resolution, resolution, encode_rgbm(pixels, rgbm_range))
 
 
+def _bake_targets(objects: Iterable[object],
+                  prefab_objects: dict[str, list[object]]) -> list[BakeTarget]:
+    targets: list[BakeTarget] = []
+    for obj in sorted(objects, key=lambda value: str(getattr(value, "name", ""))):
+        if (getattr(obj, "type", "") == "MESH" and
+                not bool(getattr(obj, "get", lambda *_: False)("ce_dynamic", False))):
+            targets.append(BakeTarget(f"prop:{obj.name}", obj, obj.matrix_world, prop_name=obj.name))
+            continue
+        sources = prefab_objects.get(str(getattr(obj, "name", "")))
+        if sources is None:
+            continue
+        for object_index, source in enumerate(sorted(sources, key=lambda value: value.name)):
+            if (getattr(source, "type", "") != "MESH" or
+                    bool(getattr(source, "get", lambda *_: False)("ce_dynamic", False))):
+                continue
+            targets.append(BakeTarget(
+                f"prefab:{obj.name}:{object_index}:{source.name}", source,
+                obj.matrix_world @ source.matrix_world,
+                prefab_instance=obj.name, prefab_object_index=object_index))
+    return targets
+
+
+def _combine_light_passes(indirect: Iterable[float], direct: Iterable[float]) -> list[float]:
+    indirect_values = list(indirect)
+    direct_values = list(direct)
+    if len(indirect_values) != len(direct_values) or len(indirect_values) % 4 != 0:
+        raise RuntimeError("Blender lightmap pass sizes do not match")
+    result = [0.0] * len(indirect_values)
+    for index in range(0, len(result), 4):
+        result[index] = max(0.0, indirect_values[index] + direct_values[index])
+        result[index + 1] = max(0.0, indirect_values[index + 1] + direct_values[index + 1])
+        result[index + 2] = max(0.0, indirect_values[index + 2] + direct_values[index + 2])
+        result[index + 3] = 1.0
+    return result
+
+
 def bake_scene_lightmaps(
     blender: object,
     source: Path,
     output_root: Path,
     objects: Iterable[object],
     scene_name: str,
+    prefab_objects: dict[str, list[object]] | None = None,
     logger: Callable[[str], None] | None = None,
-) -> tuple[dict[str, LightmapPlacement], list[Path]]:
+) -> tuple[dict[str, LightmapPlacement],
+           dict[str, tuple[tuple[int, LightmapPlacement], ...]], list[Path]]:
+    object_list = list(objects)
     has_baked_lights = any(
         getattr(obj, "type", "") == "LIGHT" and
         str(getattr(obj, "get", lambda *_: "realtime")(
             "ce_light_mode", "realtime")).lower() in {"baked", "mixed"}
-        for obj in objects)
+        for obj in object_list)
     if not has_baked_lights:
-        return {}, []
-    static_meshes = _static_meshes(objects)
-    if not static_meshes:
-        return {}, []
+        return {}, {}, []
+    targets = _bake_targets(object_list, prefab_objects or {})
+    if not targets:
+        return {}, {}, []
 
     scene = blender.context.scene
     resolution = int(getattr(scene, "get", lambda *_: DEFAULT_RESOLUTION)(
@@ -169,42 +218,96 @@ def bake_scene_lightmaps(
         "ce_lightmap_padding", DEFAULT_PADDING))
     rgbm_range = float(getattr(scene, "get", lambda *_: DEFAULT_RGBM_RANGE)(
         "ce_lightmap_rgbm_range", DEFAULT_RGBM_RANGE))
-    tiles = plan_atlas((obj.name for obj in static_meshes), resolution, padding)
-    ensure_lightmap_uvs(blender, static_meshes)
+    tiles = plan_atlas((target.key for target in targets), resolution, padding)
+    source_meshes = list({int(target.source.as_pointer()): target.source for target in targets}.values())
+    ensure_lightmap_uvs(blender, source_meshes)
 
     output_dir = output_dir_for_source(source, output_root) / "lightmaps"
     output = output_dir / f"{clean_asset_name(scene_name)}_0.dds"
-    image = blender.data.images.new(
-        f"CEngine_{scene_name}_Lightmap", width=resolution, height=resolution,
+    indirect_image = blender.data.images.new(
+        f"CEngine_{scene_name}_Indirect", width=resolution, height=resolution,
+        alpha=True, float_buffer=True)
+    direct_image = blender.data.images.new(
+        f"CEngine_{scene_name}_StaticDirect", width=resolution, height=resolution,
         alpha=True, float_buffer=True)
     previous_engine = scene.render.engine
     previous_bake_clear = scene.render.bake.use_clear
+    previous_pass_color = scene.render.bake.use_pass_color
+    previous_pass_direct = scene.render.bake.use_pass_direct
+    previous_pass_indirect = scene.render.bake.use_pass_indirect
     previous_active = getattr(blender.context.view_layer.objects, "active", None)
     previous_selected = tuple(getattr(blender.context, "selected_objects", ()))
-    original_meshes: dict[object, object] = {}
+    temporary_objects: list[object] = []
+    temporary_meshes: list[object] = []
     temporary_nodes: list[tuple[object, object]] = []
     temporary_materials: list[object] = []
-    replaced_slots: list[object] = []
     material_states: list[tuple[object, bool, object | None, tuple[object, ...]]] = []
     prepared_materials: set[int] = set()
     hidden_lights: list[tuple[object, bool]] = []
-    try:
-        scene.render.engine = "CYCLES"
-        scene.render.bake.use_clear = True
-        for obj in objects:
+    hidden_objects: list[tuple[object, bool]] = []
+    hidden_object_keys: set[int] = set()
+
+    def hide_object(obj: object) -> None:
+        key = int(obj.as_pointer())
+        if key in hidden_object_keys:
+            return
+        hidden_object_keys.add(key)
+        hidden_objects.append((obj, bool(obj.hide_render)))
+        obj.hide_render = True
+
+    def set_light_visibility(visible_modes: set[str]) -> None:
+        for obj in object_list:
             if getattr(obj, "type", "") != "LIGHT":
                 continue
             mode = str(getattr(obj, "get", lambda *_: "realtime")(
                 "ce_light_mode", "realtime")).lower()
-            hidden_lights.append((obj, bool(obj.hide_render)))
-            obj.hide_render = mode != "baked"
+            obj.hide_render = mode not in visible_modes
 
-        for obj in static_meshes:
-            original_meshes[obj] = obj.data
-            obj.data = obj.data.copy()
-            _copy_bake_uv(obj.data, tiles[obj.name])
+    def target_image(image: object) -> None:
+        for material, node in temporary_nodes:
+            node.image = image
+            for existing in material.node_tree.nodes:
+                existing.select = False
+            material.node_tree.nodes.active = node
+            node.select = True
+
+    def bake_pass(image: object, use_direct: bool, use_indirect: bool,
+                  visible_modes: set[str]) -> None:
+        target_image(image)
+        set_light_visibility(visible_modes)
+        scene.render.bake.use_pass_color = False
+        scene.render.bake.use_pass_direct = use_direct
+        scene.render.bake.use_pass_indirect = use_indirect
+        for index, target in enumerate(temporary_objects):
+            _select_only(blender, target)
+            scene.render.bake.use_clear = index == 0
+            blender.ops.object.bake(type="DIFFUSE", margin=padding, use_selected_to_active=False)
+
+    try:
+        scene.render.engine = "CYCLES"
+        scene.render.bake.use_clear = True
+        for obj in object_list:
+            if getattr(obj, "type", "") != "LIGHT":
+                continue
+            hidden_lights.append((obj, bool(obj.hide_render)))
+        for obj in object_list:
+            if getattr(obj, "instance_collection", None) is not None:
+                hide_object(obj)
+        for source in source_meshes:
+            hide_object(source)
+
+        for bake_index, target in enumerate(targets):
+            obj = target.source.copy()
+            obj.data = target.source.data.copy()
+            obj.name = f"CEngineBake_{bake_index}_{target.source.name}"
+            obj.matrix_world = target.world_matrix
+            obj.hide_render = False
+            blender.context.scene.collection.objects.link(obj)
+            temporary_objects.append(obj)
+            temporary_meshes.append(obj.data)
+            _copy_bake_uv(obj.data, tiles[target.key])
             if not obj.material_slots:
-                material = blender.data.materials.new(f"CEngineBake_{obj.name}")
+                material = blender.data.materials.new(f"CEngineBake_{target.source.name}")
                 material.use_nodes = True
                 obj.data.materials.append(material)
                 temporary_materials.append(material)
@@ -215,7 +318,6 @@ def bake_scene_lightmaps(
                     material.use_nodes = True
                     slot.material = material
                     temporary_materials.append(material)
-                    replaced_slots.append(slot)
                 key = int(material.as_pointer())
                 if key in prepared_materials:
                     continue
@@ -229,17 +331,20 @@ def bake_scene_lightmaps(
                 for existing in material.node_tree.nodes:
                     existing.select = False
                 node = material.node_tree.nodes.new("ShaderNodeTexImage")
-                node.image = image
+                node.image = indirect_image
                 material.node_tree.nodes.active = node
                 node.select = True
                 temporary_nodes.append((material, node))
 
-        for index, obj in enumerate(static_meshes):
-            _select_only(blender, obj)
-            scene.render.bake.use_clear = index == 0
-            blender.ops.object.bake(type="COMBINED", margin=padding, use_selected_to_active=False)
-
-        _save_rgbm(image.pixels[:], resolution, rgbm_range, output)
+        # Mixed lights contribute bounced light here but retain realtime direct light.
+        bake_pass(indirect_image, use_direct=False, use_indirect=True,
+                  visible_modes={"baked", "mixed"})
+        # Fully baked lights contribute direct light. The world remains visible, so
+        # environment illumination is captured without baking mixed direct light twice.
+        bake_pass(direct_image, use_direct=True, use_indirect=False,
+                  visible_modes={"baked"})
+        _save_rgbm(_combine_light_passes(indirect_image.pixels[:], direct_image.pixels[:]),
+                   resolution, rgbm_range, output)
     finally:
         for material, node in reversed(temporary_nodes):
             material.node_tree.nodes.remove(node)
@@ -249,19 +354,25 @@ def bake_scene_lightmaps(
                     node.select = node in selected_nodes
                 material.node_tree.nodes.active = active_node
             material.use_nodes = used_nodes
-        for slot in replaced_slots:
-            slot.material = None
-        for obj, mesh in original_meshes.items():
-            temporary = obj.data
-            obj.data = mesh
-            blender.data.meshes.remove(temporary)
+        for obj in reversed(temporary_objects):
+            blender.data.objects.remove(obj, do_unlink=True)
+        for mesh in reversed(temporary_meshes):
+            if mesh.users == 0:
+                blender.data.meshes.remove(mesh)
         for material in temporary_materials:
-            blender.data.materials.remove(material)
+            if material.users == 0:
+                blender.data.materials.remove(material)
         for light, hidden in hidden_lights:
             light.hide_render = hidden
-        blender.data.images.remove(image)
+        for obj, hidden in hidden_objects:
+            obj.hide_render = hidden
+        blender.data.images.remove(indirect_image)
+        blender.data.images.remove(direct_image)
         scene.render.engine = previous_engine
         scene.render.bake.use_clear = previous_bake_clear
+        scene.render.bake.use_pass_color = previous_pass_color
+        scene.render.bake.use_pass_direct = previous_pass_direct
+        scene.render.bake.use_pass_indirect = previous_pass_indirect
         for selected in tuple(getattr(blender.context, "selected_objects", ())):
             selected.select_set(False)
         for selected in previous_selected:
@@ -269,9 +380,17 @@ def bake_scene_lightmaps(
         blender.context.view_layer.objects.active = previous_active
 
     if logger is not None:
-        logger(f"Lightmap bake: wrote {output.name} ({resolution}x{resolution}, {len(static_meshes)} placement(s))")
-    placements = {
-        name: LightmapPlacement(output, tile.scale, tile.offset, rgbm_range)
-        for name, tile in tiles.items()
-    }
-    return placements, [output]
+        logger(f"Lightmap bake: wrote {output.name} ({resolution}x{resolution}, {len(targets)} placement(s))")
+    prop_placements: dict[str, LightmapPlacement] = {}
+    prefab_placements: dict[str, list[tuple[int, LightmapPlacement]]] = {}
+    for target in targets:
+        tile = tiles[target.key]
+        placement = LightmapPlacement(output, tile.scale, tile.offset, rgbm_range)
+        if target.prop_name is not None:
+            prop_placements[target.prop_name] = placement
+        elif target.prefab_instance is not None and target.prefab_object_index is not None:
+            prefab_placements.setdefault(target.prefab_instance, []).append(
+                (target.prefab_object_index, placement))
+    return (prop_placements,
+            {name: tuple(sorted(values)) for name, values in prefab_placements.items()},
+            [output])

@@ -35,6 +35,7 @@ class RenderSystem
 public:
 	static bool Initialize(GLFWwindow* window, int window_width, int window_height);
 	static void Shutdown();
+	static bool Resize(int window_width, int window_height);
 	
 	static void Render();
 	static void RenderDepthOnly(const glm::mat4& view, const glm::mat4& projection,

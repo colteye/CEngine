@@ -81,6 +81,12 @@ int main(int argc, char** argv)
                 "loaded prop should preserve its collision flag") &&
             Expect(scene->Entities()[3]->Classname() == "prop",
                 "prefab composition should become an ordinary runtime prop") &&
+            Expect(static_cast<bool>(static_cast<CEngine::Entities::PropEntity*>(
+                    scene->Entities()[3].get())->lightmap),
+                "prefab lightmap should reach the realized prop") &&
+            Expect(Near(static_cast<CEngine::Entities::PropEntity*>(
+                    scene->Entities()[3].get())->lightmap_scale.x, 0.5f),
+                "prefab lightmap atlas transform should reach the realized prop") &&
             Expect(Near(scene->Entities()[3]->GetTransform().position.x, 1.0f),
                 "prefab placement transform should apply to realized props") ? 0 : 1;
     }

@@ -397,7 +397,7 @@ class BlenderAddonTests(unittest.TestCase):
                 patch.object(addon, "write_material_assets") as write_materials,
                 patch.object(addon, "write_skeleton_assets", return_value=[]),
                 patch.object(addon, "write_animation_assets", return_value=[]),
-                patch.object(addon, "bake_scene_lightmaps", return_value=({}, [])),
+                patch.object(addon, "bake_scene_lightmaps", return_value=({}, {}, [])),
                 patch.object(addon, "write_mesh_assets") as write_meshes,
                 patch.object(addon, "register_outputs"),
             ):
@@ -450,7 +450,7 @@ class BlenderAddonTests(unittest.TestCase):
                 patch.object(addon, "write_material_assets") as write_materials,
                 patch.object(addon, "write_skeleton_assets", return_value=[]),
                 patch.object(addon, "write_animation_assets", return_value=[]),
-                patch.object(addon, "bake_scene_lightmaps", return_value=({}, [])),
+                patch.object(addon, "bake_scene_lightmaps", return_value=({}, {}, [])),
                 patch.object(addon, "write_mesh_assets") as write_meshes,
             ):
                 write_materials.return_value = [

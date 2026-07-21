@@ -254,7 +254,7 @@ vec3 evaluate_direct_lights(vec3 world_pos, vec3 normal, vec3 view_dir, vec3 alb
 		}
 
 		vec3 half_vector = normalize(view_dir + light_dir);
-		vec3 radiance = light.color_intensity.rgb * attenuation * 100.0 * light.color_intensity.a * spot_factor;
+		vec3 radiance = light.color_intensity.rgb * attenuation * light.color_intensity.a * spot_factor;
 		float shadow = receives_shadows ? light_shadow(light, world_pos, normal, light_dir) : 1.0;
 		float ndf = distribution_ggx(normal, half_vector, roughness);
 		float geometry = geometry_smith(normal, view_dir, light_dir, roughness);
@@ -295,7 +295,7 @@ void main()
 	vec3 ambient_color = mix(ambient_ground_color, ambient_sky_color, sky_weight);
 	vec3 ambient = ambient_enabled && !has_lightmap ?
 		ambient_color * ambient_intensity * albedo * ao : vec3(0.0);
-	vec3 color = ambient + texture(g_baked_light, uv).rgb +
+	vec3 color = ambient + albedo * texture(g_baked_light, uv).rgb +
 		evaluate_direct_lights(world_pos, normal, view_dir, albedo, metallic, roughness,
 		receives_shadows);
 

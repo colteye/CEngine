@@ -12,7 +12,7 @@ from ceassetlib.collection_export import CollectionExportSpec, collection_payloa
 from ceassetlib.formats import AssetType
 from ceassetlib.scene_export import (
     AssetReference, EmptyEntity, EntityConnection, EntityDescription,
-    PrefabEntity, Prop, SceneDescription, Transform, write_scene,
+    PrefabEntity, PrefabLightmap, Prop, SceneDescription, Transform, write_scene,
 )
 
 
@@ -24,6 +24,8 @@ def main() -> int:
     write_binary_asset(args.output.parent / "python_fixture.cmesh", mesh_desc)
     material_desc = make_asset_desc(AssetType.MATERIAL, "tests/python_fixture.cmat", 0, b"fixture")
     write_binary_asset(args.output.parent / "python_fixture.cmat", material_desc)
+    lightmap_desc = make_asset_desc(AssetType.TEXTURE, "tests/python_fixture_lightmap.dds", 0, b"fixture")
+    write_binary_asset(args.output.parent / "python_fixture_lightmap.dds", lightmap_desc)
 
     class FixtureObject:
         name = "PrefabMesh"
@@ -47,7 +49,10 @@ def main() -> int:
     entity = EntityDescription(
         data=PrefabEntity(AssetReference(
             AssetType.ASSET, "python_fixture.casset", prefab_desc.guid),
-            Transform(position=(1.0, 2.0, 3.0))),
+            Transform(position=(1.0, 2.0, 3.0)),
+            (PrefabLightmap(0, AssetReference(
+                AssetType.TEXTURE, "python_fixture_lightmap.dds", lightmap_desc.guid),
+                (0.5, 0.5), (0.25, 0.25), 12.0),)),
         name="PythonFixture",
     )
     target = EntityDescription(data=EmptyEntity(), name="Target")

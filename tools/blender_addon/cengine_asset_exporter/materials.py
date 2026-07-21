@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import struct
 import time
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
@@ -47,6 +48,9 @@ class TextureBinding:
     slot: str
     source: Path
     output: Path
+    bump_strength: float = 1.0
+    bump_distance: float = 1.0
+    bump_invert: bool = False
 
 
 @dataclass(frozen=True)
@@ -104,6 +108,11 @@ def material_output_path(blend_source: Path, output_root: Path, material_name: s
 
 def material_mra_output_path(blend_source: Path, output_root: Path, material_name: str) -> Path:
     return output_dir_for_source(blend_source, output_root) / "textures" / f"{clean_asset_name(material_name)}_mra.dds"
+
+
+def material_bump_normal_output_path(blend_source: Path, output_root: Path, material_name: str) -> Path:
+    return output_dir_for_source(blend_source, output_root) / "textures" / \
+        f"{clean_asset_name(material_name)}_bump_normal.dds"
 
 
 def principled_value(material: object, socket_name: str, fallback: float) -> float:
@@ -207,6 +216,52 @@ def write_mra_texture(bindings: list[TextureBinding], output: Path) -> None:
             image.close()
 
 
+def write_bump_normal_texture(binding: TextureBinding, output: Path, dds_format: str) -> None:
+    try:
+        from PIL import Image, ImageFilter
+    except ImportError as error:
+        raise RuntimeError("Pillow is required to convert bump maps to normal maps") from error
+
+    slope = max(0.0, binding.bump_strength) * max(0.0, binding.bump_distance)
+    sign = -1.0 if binding.bump_invert else 1.0
+    # Sobel's kernel already sums eight weighted samples. Dividing by eight
+    # makes ordinary height gradients so small that BC3 quantizes whole maps to
+    # a flat normal. Keep the authored strength as the slope scale instead.
+    divisor = 1.0 / max(slope, 1.0e-6)
+    horizontal = tuple(sign * value for value in (1, 0, -1, 2, 0, -2, 1, 0, -1))
+    vertical = tuple(sign * value for value in (-1, -2, -1, 0, 0, 0, 1, 2, 1))
+    with Image.open(binding.source) as source:
+        height = source.convert("L")
+        try:
+            if slope == 0.0:
+                red = Image.new("L", height.size, 128)
+                green = Image.new("L", height.size, 128)
+            else:
+                red = height.filter(ImageFilter.Kernel((3, 3), horizontal, scale=divisor, offset=128))
+                green = height.filter(ImageFilter.Kernel((3, 3), vertical, scale=divisor, offset=128))
+            blue = Image.new("L", height.size, 255)
+            alpha = Image.new("L", height.size, 255)
+            try:
+                normal = Image.merge("RGBA", (red, green, blue, alpha))
+                output.parent.mkdir(parents=True, exist_ok=True)
+                temporary = output.with_name(output.name + ".tmp")
+                try:
+                    normal.save(temporary, format="DDS",
+                                pixel_format=normalize_pillow_dds_format(dds_format))
+                    temporary.replace(output)
+                finally:
+                    normal.close()
+                    if temporary.exists():
+                        temporary.unlink()
+            finally:
+                red.close()
+                green.close()
+                blue.close()
+                alpha.close()
+        finally:
+            height.close()
+
+
 def object_materials(objects: Iterable[object]) -> list[object]:
     materials: list[object] = []
     seen: set[int] = set()
@@ -237,6 +292,68 @@ def texture_slot_name(socket_name: str, node_type: str = "") -> str:
     return MATERIAL_TEXTURE_SLOTS.get(socket_name.strip().lower(), "")
 
 
+def same_node(left: object, right: object) -> bool:
+    return left is right or (left is not None and right is not None and left == right)
+
+
+def image_pixels_are_grayscale(image: object) -> bool | None:
+    pixels = getattr(image, "pixels", None)
+    if pixels is None:
+        return None
+    try:
+        pixel_count = len(pixels) // 4
+        if pixel_count == 0:
+            return None
+        step = max(1, pixel_count // 64)
+        for pixel in range(0, pixel_count, step):
+            offset = pixel * 4
+            red, green, blue = float(pixels[offset]), float(pixels[offset + 1]), float(pixels[offset + 2])
+            if max(abs(red - green), abs(red - blue), abs(green - blue)) > 1.0e-4:
+                return False
+        return True
+    except (IndexError, RuntimeError, TypeError):
+        return None
+
+
+def source_is_grayscale(source: Path) -> bool:
+    try:
+        from PIL import Image, ImageChops
+    except ImportError:
+        return False
+    try:
+        with Image.open(source) as image:
+            if image.mode in {"1", "L", "LA", "I", "I;16", "F"}:
+                return True
+            rgb = image.convert("RGB")
+            red, green, blue = rgb.split()
+            try:
+                return ImageChops.difference(red, green).getbbox() is None and \
+                    ImageChops.difference(red, blue).getbbox() is None
+            finally:
+                red.close()
+                green.close()
+                blue.close()
+                rgb.close()
+    except (OSError, ValueError):
+        return False
+
+
+def image_is_bump_source(image: object, source: Path | None = None) -> bool:
+    names = [
+        str(getattr(image, "name", "") or ""),
+        str(getattr(image, "filepath", "") or ""),
+        str(source or ""),
+    ]
+    for name in names:
+        tokens = set(re.split(r"[^a-z0-9]+", Path(name).stem.lower()))
+        if tokens & {"bump", "height", "disp", "displacement"}:
+            return True
+    sampled = image_pixels_are_grayscale(image)
+    if sampled is not None:
+        return sampled
+    return source_is_grayscale(source) if source is not None else False
+
+
 def material_link_slot(link: object, links: list[object]) -> str:
     from_node = getattr(link, "from_node", None)
     if getattr(from_node, "type", "") != "TEX_IMAGE":
@@ -244,11 +361,18 @@ def material_link_slot(link: object, links: list[object]) -> str:
     to_node = getattr(link, "to_node", None)
     to_node_type = str(getattr(to_node, "type", ""))
     socket_name = str(getattr(getattr(link, "to_socket", None), "name", ""))
+    if to_node_type == "BUMP" and socket_name.strip().lower() == "height":
+        return "bump" if any(
+            same_node(getattr(candidate, "from_node", None), to_node) and
+            getattr(getattr(candidate, "to_node", None), "type", "") == "BSDF_PRINCIPLED" and
+            str(getattr(getattr(candidate, "to_socket", None), "name", "")).strip().lower() == "normal"
+            for candidate in links
+        ) else ""
     slot = texture_slot_name(socket_name, to_node_type)
     if slot != "normal" or to_node_type != "NORMAL_MAP":
         return slot
     return slot if any(
-        getattr(candidate, "from_node", None) is to_node and
+        same_node(getattr(candidate, "from_node", None), to_node) and
         getattr(getattr(candidate, "to_node", None), "type", "") == "BSDF_PRINCIPLED" and
         str(getattr(getattr(candidate, "to_socket", None), "name", "")).strip().lower() == "normal"
         for candidate in links
@@ -280,15 +404,40 @@ def material_texture_bindings(
         source = image_source_path(image)
         if source is None:
             continue
-        output = texture_output_path_for_source(source)
-        if output is None:
-            continue
+        if slot == "normal" and str(getattr(getattr(link, "to_node", None), "type", "")) == "NORMAL_MAP" and \
+                image_is_bump_source(image, source):
+            slot = "bump"
+        output = source if slot == "bump" else texture_output_path_for_source(source)
+        if output is None: continue
 
         key = (slot, source)
         if key in seen:
             continue
         seen.add(key)
-        bindings.append(TextureBinding(slot, source, output))
+        if slot == "bump":
+            target_node = getattr(link, "to_node", None)
+            target_type = str(getattr(target_node, "type", ""))
+            inputs = getattr(target_node, "inputs", None)
+            getter = getattr(inputs, "get", None)
+            strength_socket = getter("Strength") if callable(getter) else None
+            distance_socket = getter("Distance") if callable(getter) else None
+            # A grayscale image connected to Normal Map is height data despite
+            # the node type. Its Strength controls decoded tangent normals and
+            # is not a Blender Bump height scale (some imported assets set it
+            # to zero), so use a unit height conversion for this recovery path.
+            normal_map_height = target_type == "NORMAL_MAP"
+            bindings.append(TextureBinding(
+                slot,
+                source,
+                output,
+                1.0 if normal_map_height else
+                    max(0.0, min(1.0, float(getattr(strength_socket, "default_value", 1.0)))),
+                1.0 if normal_map_height else
+                    max(0.0, float(getattr(distance_socket, "default_value", 1.0))),
+                False if normal_map_height else bool(getattr(target_node, "invert", False)),
+            ))
+        else:
+            bindings.append(TextureBinding(slot, source, output))
 
     return sorted(bindings, key=lambda binding: (binding.slot, generic_path(binding.source)))
 
@@ -303,10 +452,13 @@ def supported_material_images(material: object) -> list[object]:
         if getattr(from_node, "type", "") != "TEX_IMAGE":
             continue
         slot = material_link_slot(link, links)
-        if not slot:
+        if not slot or slot == "bump":
             continue
         image = getattr(from_node, "image", None)
         if image is None or id(image) in seen:
+            continue
+        if slot == "normal" and str(getattr(getattr(link, "to_node", None), "type", "")) == "NORMAL_MAP" and \
+                image_is_bump_source(image):
             continue
         seen.add(id(image))
         images.append(image)
@@ -380,18 +532,32 @@ def write_material_asset(
     factors = material_factors(material, bindings)
     packed_mra = next((binding for binding in bindings if binding.slot in {"metallic_roughness_ao", "orm"}), None)
     separate_mra = [binding for binding in bindings if binding.slot in {"metallic", "roughness", "ao"}]
-    generated_textures: tuple[Path, ...] = ()
+    generated_textures: list[Path] = []
+    direct_normal = next((binding for binding in bindings if binding.slot == "normal"), None)
+    bump = next((binding for binding in bindings if binding.slot == "bump"), None)
+    if direct_normal is None and bump is not None:
+        bump_normal_output = material_bump_normal_output_path(
+            blend_source, output_root, material.name)
+        write_bump_normal_texture(bump, bump_normal_output, dds_format)
+        direct_normal = TextureBinding("normal", bump.source, bump_normal_output)
+        generated_textures.append(bump_normal_output)
+    else:
+        stale_bump_normal = material_bump_normal_output_path(blend_source, output_root, material.name)
+        if stale_bump_normal.is_file():
+            stale_bump_normal.unlink()
     if packed_mra is None and separate_mra:
         mra_output = material_mra_output_path(blend_source, output_root, material.name)
         write_mra_texture(bindings, mra_output)
         packed_mra = TextureBinding("metallic_roughness_ao", mra_output, mra_output)
-        generated_textures = (mra_output,)
+        generated_textures.append(mra_output)
     elif packed_mra is None:
         stale_mra = material_mra_output_path(blend_source, output_root, material.name)
         if stale_mra.is_file():
             stale_mra.unlink()
     payload_bindings = [binding for binding in bindings
-                        if binding.slot not in {"metallic", "roughness", "ao"}]
+                        if binding.slot not in {"metallic", "roughness", "ao", "bump", "normal"}]
+    if direct_normal is not None:
+        payload_bindings.append(direct_normal)
     if packed_mra is not None:
         payload_bindings.append(packed_mra)
     output = material_output_path(blend_source, output_root, material.name)
@@ -413,7 +579,7 @@ def write_material_asset(
     write_binary_asset(output, desc)
     if logger is not None:
         logger(f"Material {material.name}: wrote {output.name} in {elapsed(start)}")
-    return MaterialExport(material, output, generated_textures)
+    return MaterialExport(material, output, tuple(generated_textures))
 
 
 def write_material_assets(

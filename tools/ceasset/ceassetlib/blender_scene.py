@@ -10,7 +10,7 @@ from .formats import AssetType
 from .ids import guid_from_stable_name
 from .scene_export import (
     AssetReference, CameraEntity, EmptyEntity, EntityDescription,
-    LightEntity, PlayerStart, PrefabEntity, Prop, SceneDescription,
+    LightEntity, PlayerStart, PrefabEntity, PrefabLightmap, Prop, SceneDescription,
     SceneSettings, Transform, TriggerEntity,
 )
 
@@ -111,6 +111,7 @@ def scene_description(
     prefab_outputs: dict[str, Path],
     asset_path: Callable[[Path], str],
     lightmaps: dict[str, LightmapPlacement] | None = None,
+    prefab_lightmaps: dict[str, tuple[tuple[int, LightmapPlacement], ...]] | None = None,
 ) -> SceneDescription:
     entities: list[EntityDescription] = []
     for obj in sorted(objects, key=lambda value: str(getattr(value, "name", ""))):
@@ -172,13 +173,22 @@ def scene_description(
                 float(getattr(light, "energy", 1.0)),
                 float(getattr(light, "cutoff_distance", 10.0)),
                 spot_size * max(0.0, 1.0 - spot_blend), spot_size,
-                (float(getattr(light, "size", 1.0)), float(getattr(light, "size_y", 1.0))))
+                (float(getattr(light, "size", 1.0)), float(getattr(light, "size_y", 1.0))),
+                enabled=True, casts_shadows=bool(getattr(light, "use_shadow", True)))
         elif obj_type == "EMPTY" and getattr(obj, "instance_collection", None) is not None:
             collection = obj.instance_collection
             output = prefab_outputs.get(str(getattr(collection, "name", "")))
             if output is None:
                 raise ValueError(f"collection instance has no generated .casset: {name}")
-            data = PrefabEntity(_reference(AssetType.ASSET, output, asset_path), transform)
+            placements = prefab_lightmaps.get(name, ()) if prefab_lightmaps is not None else ()
+            data = PrefabEntity(
+                _reference(AssetType.ASSET, output, asset_path), transform,
+                tuple(PrefabLightmap(
+                    object_index,
+                    _reference(AssetType.TEXTURE, placement.texture, asset_path),
+                    placement.scale, placement.offset, placement.rgbm_range)
+                    for object_index, placement in placements),
+            )
         elif obj_type == "EMPTY":
             if classname in ("", "empty"):
                 data = EmptyEntity(transform)

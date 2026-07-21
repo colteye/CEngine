@@ -9,8 +9,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ADDON_DIR = ROOT / "tools" / "blender_addon" / "cengine_asset_exporter"
 CEASSETLIB_DIR = ROOT / "tools" / "ceasset" / "ceassetlib"
-DEFAULT_OUTPUT = ROOT / "build" / "blender_addon" / "cengine_asset_exporter-0.1.9.zip"
-PILLOW_WHEEL = ADDON_DIR / "wheels" / "pillow-12.3.0-cp311-cp311-win_amd64.whl"
+DEFAULT_OUTPUT = ROOT / "build" / "blender_addon" / "cengine_asset_exporter-0.1.13.zip"
+PILLOW_WHEELS = {
+    "windows-x64": ADDON_DIR / "wheels" / "pillow-12.3.0-cp311-cp311-win_amd64.whl",
+    "macos-arm64": ADDON_DIR / "wheels" / "pillow-12.3.0-cp313-cp313-macosx_11_0_arm64.whl",
+}
 MANIFEST = ADDON_DIR / "blender_manifest.toml"
 
 
@@ -40,9 +43,13 @@ def platform_manifest(platform: str) -> str:
 
 def write_addon_zip(
     output: Path = DEFAULT_OUTPUT,
-    pillow_wheel: Path = PILLOW_WHEEL,
+    pillow_wheel: Path | None = None,
     platform: str = "windows-x64",
 ) -> Path:
+    if pillow_wheel is None:
+        pillow_wheel = PILLOW_WHEELS.get(platform)
+        if pillow_wheel is None:
+            raise ValueError(f"no bundled Pillow wheel is configured for {platform}")
     if not pillow_wheel.is_file():
         raise FileNotFoundError(f"Pillow wheel does not exist: {pillow_wheel}")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -64,7 +71,7 @@ def write_addon_zip(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Package the CEngine Blender add-on.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument("--pillow-wheel", type=Path, default=PILLOW_WHEEL)
+    parser.add_argument("--pillow-wheel", type=Path)
     parser.add_argument("--platform", default="windows-x64")
     args = parser.parse_args(argv)
     output = write_addon_zip(args.output, args.pillow_wheel, args.platform)

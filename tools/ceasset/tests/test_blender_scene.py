@@ -73,6 +73,8 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertEqual(prop.materials[0].path, "compiled/Brick.cmat")
         prefab = scene.entities[1].data
         self.assertEqual(prefab.prefab.path, "compiled/Door.casset")
+        light = scene.entities[2].data
+        self.assertTrue(light.casts_shadows)
 
     def test_static_mesh_receives_external_lightmap_atlas_binding(self) -> None:
         obj = FakeObject("Floor", "MESH")
@@ -92,6 +94,24 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertEqual(prop.lightmap_scale, (0.5, 0.5))
         self.assertEqual(prop.lightmap_offset, (0.5, 0.0))
         self.assertEqual(prop.lightmap_rgbm_range, 12.0)
+
+    def test_prefab_instance_receives_scene_owned_object_lightmaps(self) -> None:
+        collection = types.SimpleNamespace(name="PREFAB_Hall")
+        obj = FakeObject("Hall", "EMPTY", instance_collection=collection)
+        placement = LightmapPlacement(
+            Path("compiled/hall_lightmap.dds"), (0.25, 0.5), (0.5, 0.25), 16.0)
+
+        scene = scene_description(
+            (obj,), {}, {}, {"PREFAB_Hall": Path("compiled/Hall.casset")},
+            lambda path: path.as_posix(),
+            prefab_lightmaps={"Hall": ((3, placement),)},
+        )
+
+        prefab = scene.entities[0].data
+        self.assertIsInstance(prefab, PrefabEntity)
+        self.assertEqual(prefab.lightmaps[0].object_index, 3)
+        self.assertEqual(prefab.lightmaps[0].lightmap.path, "compiled/hall_lightmap.dds")
+        self.assertEqual(prefab.lightmaps[0].scale, (0.25, 0.5))
 
     def test_missing_generated_mesh_fails_with_object_name(self) -> None:
         with self.assertRaisesRegex(ValueError, "Missing"):

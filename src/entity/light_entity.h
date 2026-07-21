@@ -23,6 +23,7 @@ public:
     float outer_angle_radians = 0.7853982f;
     glm::vec2 area_size = glm::vec2(1.0f);
     bool enabled = true;
+    bool casts_shadows = true;
     std::string_view Classname() const override;
 };
 

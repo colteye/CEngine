@@ -306,6 +306,33 @@ void OpenGLRenderBackend::Shutdown()
 	window_height = 0;
 }
 
+bool OpenGLRenderBackend::Resize(int in_window_width, int in_window_height)
+{
+	if (in_window_width <= 0 || in_window_height <= 0)
+	{
+		return false;
+	}
+	if (in_window_width == window_width && in_window_height == window_height)
+	{
+		return true;
+	}
+
+	DestroyFrameResources();
+	if (!CreateFrameResources(in_window_width, in_window_height))
+	{
+		DestroyFrameResources();
+		return false;
+	}
+	if (shader_passes.ssao != nullptr)
+	{
+		shader_passes.ssao->SetTextures(frame_resources.opaque_lit_color, frame_resources.scene_depth,
+			frame_resources.g_normal_roughness, frame_resources.ssao, in_window_width, in_window_height);
+	}
+	window_width = in_window_width;
+	window_height = in_window_height;
+	return true;
+}
+
 bool OpenGLRenderBackend::RegisterRenderable(std::uint32_t slot, const Renderable& renderable)
 {
 	assert(renderable.mesh != nullptr);

@@ -19,12 +19,12 @@ void Controls::Update(Camera* cam, float delta_time)
 	float speed = 5.0f; // 3 units / second
 	float mouseSpeed = 0.3f;
 	double xpos, ypos;
-	int framebuffer_width = 0;
-	int framebuffer_height = 0;
-	glfwGetFramebufferSize(glfw_window, &framebuffer_width, &framebuffer_height);
+	int window_width = 0;
+	int window_height = 0;
+	glfwGetWindowSize(glfw_window, &window_width, &window_height);
 
-	const double center_x = framebuffer_width * 0.5;
-	const double center_y = framebuffer_height * 0.5;
+	const double center_x = window_width * 0.5;
+	const double center_y = window_height * 0.5;
 	glfwGetCursorPos(glfw_window, &xpos, &ypos);
 	glfwSetCursorPos(glfw_window, center_x, center_y);
 

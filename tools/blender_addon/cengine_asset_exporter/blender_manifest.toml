@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 id = "cengine_asset_exporter"
-version = "0.1.9"
+version = "0.1.13"
 name = "CEngine Asset Exporter"
 tagline = "Export CEngine target assets from Blender"
 maintainer = "CEngine"

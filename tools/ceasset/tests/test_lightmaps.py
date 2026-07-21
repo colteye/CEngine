@@ -9,7 +9,7 @@ ADDON = ROOT.parent / "blender_addon"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ADDON))
 
-from cengine_asset_exporter.lightmaps import encode_rgbm, plan_atlas
+from cengine_asset_exporter.lightmaps import _combine_light_passes, encode_rgbm, plan_atlas
 
 
 class LightmapTests(unittest.TestCase):
@@ -30,6 +30,14 @@ class LightmapTests(unittest.TestCase):
         self.assertAlmostEqual(decoded[0], 4.0, places=2)
         self.assertAlmostEqual(decoded[1], 2.0, places=2)
         self.assertAlmostEqual(decoded[2], 1.0, places=1)
+
+    def test_indirect_and_static_direct_passes_are_added_before_encoding(self) -> None:
+        combined = _combine_light_passes(
+            (0.5, 0.25, 0.0, 1.0),
+            (1.0, 0.25, 0.125, 1.0),
+        )
+
+        self.assertEqual(combined, [1.5, 0.5, 0.125, 1.0])
 
 
 if __name__ == "__main__":

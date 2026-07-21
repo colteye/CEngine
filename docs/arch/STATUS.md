@@ -44,7 +44,7 @@ Results:
 
 - CMake configure and build passed;
 - 8 of 8 CTest tests passed;
-- 79 asset-tool tests ran successfully (78 passed, 1 skipped because Pillow is
+- 84 asset-tool tests ran successfully (83 passed, 1 skipped because Pillow is
   supplied by the packaged Blender add-on rather than the host Python);
 - Markdown links and `git diff --check` passed.
 
@@ -53,7 +53,7 @@ Results:
 | Capability | State | Evidence and gap |
 | --- | --- | --- |
 | target asset headers/readers | implemented | `src/assets/asset_format.*`, typed readers, and asset tests exist |
-| deterministic Python/Blender cooking paths | partial | exporters and 78 tests exist; no committed M0 room fixture exists |
+| deterministic Python/Blender cooking paths | partial | exporters and 84 tests exist; no committed M0 room fixture exists |
 | `.cscene` reading and validation | implemented | `src/assets/cscene_reader.*` plus malformed-range/version tests |
 | scene loading and activation | partial | `src/scene/scene_loader.*` constructs an unpublished scene; the viewer binds render/physics state before entity activation, but the committed M0 fixture is missing |
 | generation-checked entity identity | implemented | `EntityId { index, generation }`, stale-handle tests, and reusable slots exist |

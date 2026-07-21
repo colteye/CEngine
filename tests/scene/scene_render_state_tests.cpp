@@ -1,4 +1,5 @@
 #include "renderer/render_system.h"
+#include "camera.h"
 #include "assets/asset_database.h"
 #include "entity/light_entity.h"
 #include "entity/prop_entity.h"
@@ -119,6 +120,8 @@ bool ValidateCookedScene(const std::filesystem::path& scene_path,
         Expect(!lights.empty(), "cooked scene should bind its direct lights") &&
         Expect(lights[0].type == CEngine::Renderer::LightType::Directional,
             "Sponza Sun should bind as a directional light") &&
+        Expect(lights[0].casts_shadows,
+            "Sponza Sun should bind as a shadow-casting directional light") &&
         Expect(std::abs(glm::length(lights[0].direction) - 1.0f) < 0.0001f,
             "light world transform should produce a normalized renderer direction") &&
         Expect(found_realtime_light && glm::length(lights[0].direction - expected_light_direction) < 0.0001f,
@@ -162,6 +165,12 @@ int main(int argc, char** argv)
         Expect(CEngine::Renderer::RenderSystem::ResolveLight(current_light) != nullptr,
             "current light handle should resolve");
 
+	Camera camera;
+	camera.SetAspectRatio(16.0f / 9.0f);
+	const auto& frame = CEngine::Renderer::RenderSystem::GetFrameConstants();
+	const bool camera_result = Expect(std::abs(frame.proj[1][1] / frame.proj[0][0] - 16.0f / 9.0f) < 0.0001f,
+		"camera projection should preserve the framebuffer aspect ratio");
+
     CEngine::Scene::Scene scene;
     auto& prop = static_cast<CEngine::Entities::PropEntity&>(
         scene.CreateEntity("prop", "MovingCrate"));
@@ -201,5 +210,5 @@ int main(int argc, char** argv)
     const bool generation_result = true;
 #endif
     CEngine::Renderer::RenderSystem::Shutdown();
-    return result && physics_result && cleanup_result && generation_result ? 0 : 1;
+    return result && camera_result && physics_result && cleanup_result && generation_result ? 0 : 1;
 }

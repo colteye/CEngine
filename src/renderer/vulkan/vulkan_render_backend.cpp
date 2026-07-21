@@ -116,6 +116,39 @@ void VulkanRenderBackend::Shutdown()
 	initialized = false;
 }
 
+bool VulkanRenderBackend::Resize(int window_width, int window_height)
+{
+	if (!initialized || window_width <= 0 || window_height <= 0)
+	{
+		return false;
+	}
+	if (swapchain_extent.width == static_cast<uint32_t>(window_width) &&
+		swapchain_extent.height == static_cast<uint32_t>(window_height))
+	{
+		return true;
+	}
+
+	vkDeviceWaitIdle(device);
+	if (!command_buffers.empty())
+	{
+		vkFreeCommandBuffers(device, command_pool, static_cast<uint32_t>(command_buffers.size()),
+			command_buffers.data());
+		command_buffers.clear();
+	}
+	DestroySwapchainResources();
+	if (!CreateSwapchain(window_width, window_height) ||
+		!CreateImageViews() ||
+		!CreateRenderPass() ||
+		!CreateFramebuffers() ||
+		!CreateCommandBuffers())
+	{
+		initialized = false;
+		return false;
+	}
+	current_frame = 0;
+	return true;
+}
+
 void VulkanRenderBackend::Render()
 {
 	if (!initialized)

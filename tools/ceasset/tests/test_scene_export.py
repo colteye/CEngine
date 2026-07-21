@@ -14,7 +14,7 @@ from ceassetlib.scene_export import (
     EntityConnection,
     EntityDescription,
     LightEntity,
-    PrefabEntity,
+    PrefabEntity, PrefabLightmap,
     SceneDescription,
     SceneSettings,
     Prop,
@@ -54,7 +54,7 @@ class SceneExportTests(unittest.TestCase):
                     name="Camera",
                 ),
                 EntityDescription(
-                    data=PrefabEntity(prefab),
+                    data=PrefabEntity(prefab, lightmaps=(PrefabLightmap(2, lightmap),)),
                 ),
             ),
             settings=SceneSettings(active_camera_entity=2),
@@ -111,6 +111,10 @@ class SceneExportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "dynamic prop mass"):
             build_scene_payload(SceneDescription((EntityDescription(
                 Prop(mesh, dynamic=True, collision_enabled=True, mass=0.0)),)))
+        prefab = AssetReference(AssetType.ASSET, "assets/compiled/test.casset", guid(12))
+        with self.assertRaisesRegex(ValueError, "duplicated"):
+            build_scene_payload(SceneDescription((EntityDescription(PrefabEntity(
+                prefab, lightmaps=(PrefabLightmap(1, lightmap), PrefabLightmap(1, lightmap)))),)))
 
 
 if __name__ == "__main__":

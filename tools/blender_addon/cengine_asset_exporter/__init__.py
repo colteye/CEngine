@@ -10,7 +10,7 @@ from typing import Callable
 bl_info = {
     "name": "CEngine Asset Exporter",
     "author": "CEngine",
-    "version": (0, 1, 9),
+    "version": (0, 1, 13),
     "blender": (4, 5, 0),
     "location": "File > Export > CEngine Assets",
     "description": "Export selected Blender collections and textures to CEngine target assets.",
@@ -686,13 +686,21 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
     log(f"Animation export complete: {len(animation_outputs)} .canim in {elapsed(phase_start)}")
 
     lightmap_placements = {}
+    prefab_lightmap_placements = {}
     lightmap_outputs: list[Path] = []
+    scene_objects = exported_scene_objects(collection) if is_scene else []
+    prefab_objects_by_instance: dict[str, list[object]] = {}
+    if is_scene:
+        for obj in scene_objects:
+            instance = object_instance_collection(obj)
+            if instance is not None:
+                prefab_objects_by_instance[obj.name] = collection_export_objects(instance, logger=log)
     if is_scene:
         phase_start = time.perf_counter()
         log("Lightmap bake started")
-        lightmap_placements, lightmap_outputs = bake_scene_lightmaps(
-            blender, source, root, exported_scene_objects(collection),
-            collection_spec.asset_name, log)
+        lightmap_placements, prefab_lightmap_placements, lightmap_outputs = bake_scene_lightmaps(
+            blender, source, root, scene_objects,
+            collection_spec.asset_name, prefab_objects_by_instance, log)
         log(f"Lightmap bake complete: {len(lightmap_outputs)} .dds in {elapsed(phase_start)}")
 
     phase_start = time.perf_counter()
@@ -727,7 +735,7 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
     if is_scene:
         log("Referenced .casset export started")
         prefab_outputs: dict[str, Path] = {}
-        for obj in exported_scene_objects(collection):
+        for obj in scene_objects:
             instance = object_instance_collection(obj)
             if instance is None or instance.name in prefab_outputs:
                 continue
@@ -741,8 +749,9 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         log(f"Referenced .casset export complete: {len(collection_outputs)} file(s) in {elapsed(phase_start)}")
         scene_output = collection_output_dir / f"{collection_spec.asset_name}.cscene"
         description = scene_description(
-            exported_scene_objects(collection), mesh_outputs_by_name,
-            material_outputs_by_name, prefab_outputs, asset_path, lightmap_placements)
+            scene_objects, mesh_outputs_by_name,
+            material_outputs_by_name, prefab_outputs, asset_path,
+            lightmap_placements, prefab_lightmap_placements)
         description = type(description)(description.entities, blender_scene_settings(blender),
                                         description.connections)
         write_scene(scene_output, description, asset_path(scene_output), source_hash)

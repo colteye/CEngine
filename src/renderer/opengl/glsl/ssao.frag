@@ -11,8 +11,8 @@ uniform mat4 view;
 
 const float radius = 0.65;
 const float bias = 0.025;
-const float intensity = 1.35;
-const float contrast = 1.25;
+const float intensity = 0.65;
+const float contrast = 1.0;
 
 const int sample_count = 8;
 const vec3 kernel[sample_count] = vec3[sample_count](

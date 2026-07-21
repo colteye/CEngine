@@ -12,6 +12,7 @@
 #include "entity/trigger_entity.h"
 #include "scene/scene.h"
 
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
 #include <string>
@@ -87,6 +88,43 @@ bool LoadMaterials(Scene& scene, std::uint32_t first, std::uint32_t count,
         if (row == 0) output_first = material;
     }
     output_count = count;
+    return true;
+}
+
+bool LoadPrefabLightmaps(Scene& scene, Entities::PrefabEntity& prefab,
+    std::uint32_t first, std::uint32_t count, Assets::ByteView auxiliary,
+    std::string* error)
+{
+    if (auxiliary.size % sizeof(DiskPrefabLightmap) != 0)
+        return Fail(error, "prefab lightmap table is invalid");
+    const std::size_t available = auxiliary.size / sizeof(DiskPrefabLightmap);
+    if (count == 0)
+    {
+        if (first != InvalidAssetIndex)
+            return Fail(error, "empty prefab lightmap range is invalid");
+        return true;
+    }
+    if (first == InvalidAssetIndex || first > available || count > available - first)
+        return Fail(error, "prefab lightmap range is invalid");
+    prefab.lightmaps.reserve(count);
+    std::uint32_t previous_object = InvalidEntityIndex;
+    for (std::uint32_t row = 0; row < count; ++row)
+    {
+        DiskPrefabLightmap disk;
+        std::memcpy(&disk, auxiliary.data + (first + row) * sizeof(disk), sizeof(disk));
+        if (disk.lightmap_asset >= scene.AssetReferenceCount() ||
+            scene.ReferencedAssetType(disk.lightmap_asset) != Assets::AssetType::Texture)
+            return Fail(error, "prefab lightmap asset is invalid");
+        if ((row != 0 && disk.object_index <= previous_object) ||
+            disk.scale[0] <= 0.0f || disk.scale[1] <= 0.0f ||
+            disk.offset[0] < 0.0f || disk.offset[1] < 0.0f ||
+            disk.offset[0] + disk.scale[0] > 1.0f ||
+            disk.offset[1] + disk.scale[1] > 1.0f || disk.rgbm_range <= 0.0f)
+            return Fail(error, "prefab lightmap binding is invalid");
+        prefab.lightmaps.push_back({disk.object_index, scene.AssetReference(disk.lightmap_asset),
+            {disk.scale[0], disk.scale[1]}, {disk.offset[0], disk.offset[1]}, disk.rgbm_range});
+        previous_object = disk.object_index;
+    }
     return true;
 }
 
@@ -176,7 +214,8 @@ bool LoadClassRecord(Scene& scene, Entity& entity, std::string_view classname,
         light.inner_angle_radians = disk.inner_angle_radians;
         light.outer_angle_radians = disk.outer_angle_radians;
         light.area_size = {disk.area_size[0], disk.area_size[1]};
-        light.enabled = disk.enabled != 0;
+        light.enabled = (disk.flags & LightEnabled) != 0;
+        light.casts_shadows = (disk.flags & LightCastsShadow) != 0;
         return true;
     }
     if (classname == "prefab_instance")
@@ -189,7 +228,8 @@ bool LoadClassRecord(Scene& scene, Entity& entity, std::string_view classname,
         auto& prefab = static_cast<Entities::PrefabEntity&>(entity);
         CopyTransform(disk.transform, prefab.GetTransform());
         prefab.prefab = scene.AssetReference(disk.prefab_asset);
-        return true;
+        return LoadPrefabLightmaps(scene, prefab, disk.first_lightmap, disk.lightmap_count,
+            auxiliary, error);
     }
     if (classname == "trigger")
     {
@@ -280,10 +320,19 @@ bool ExpandPrefab(Scene& scene, Assets::AssetDatabase& database,
     if (prefab.CompositionType() != Assets::CAssetCompositionType::Prefab)
         return Fail(error, "prefab instance does not reference a prefab composition");
 
+    std::size_t lightmap_index = 0;
     for (std::uint32_t object_index = 0; object_index < prefab.ObjectCount(); ++object_index)
     {
         Assets::CAssetObject object;
         if (!prefab.Object(object_index, object)) return Fail(error, "prefab object is invalid");
+        const Entities::PrefabLightmapBinding* lightmap = nullptr;
+        if (lightmap_index < instance.lightmaps.size() &&
+            instance.lightmaps[lightmap_index].object_index == object_index)
+        {
+            lightmap = &instance.lightmaps[lightmap_index++];
+        }
+        if (lightmap != nullptr && object.object_type != 1)
+            return Fail(error, "prefab lightmap references a non-mesh object");
         if (object.object_type != 1) continue;
 
         std::vector<Assets::CAssetComponent> meshes;
@@ -316,9 +365,17 @@ bool ExpandPrefab(Scene& scene, Assets::AssetDatabase& database,
             prop.mesh = mesh;
             prop.first_material = scene.AppendMaterial(material);
             prop.material_count = 1;
+            if (lightmap != nullptr)
+            {
+                prop.lightmap = lightmap->lightmap;
+                prop.lightmap_scale = lightmap->scale;
+                prop.lightmap_offset = lightmap->offset;
+                prop.lightmap_rgbm_range = lightmap->rgbm_range;
+            }
         }
     }
-    return true;
+    return lightmap_index == instance.lightmaps.size() ||
+        Fail(error, "prefab lightmap object index is outside the prefab");
 }
 
 bool ExpandPrefabs(Scene& scene, Assets::AssetDatabase& database, std::string* error)

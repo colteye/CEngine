@@ -19,6 +19,7 @@ from cengine_asset_exporter.materials import (  # noqa: E402
     material_payload,
     material_texture_bindings,
     object_materials,
+    supported_material_images,
     write_material_asset,
 )
 
@@ -46,9 +47,12 @@ class FakeSocket:
 
 
 class FakeLink:
-    def __init__(self, image: FakeImage, socket: str, to_node_type: str = "BSDF_PRINCIPLED") -> None:
-        self.from_node = FakeNode("TEX_IMAGE", image)
-        self.to_node = FakeNode(to_node_type)
+    def __init__(self, image: FakeImage | None, socket: str,
+                 to_node_type: str = "BSDF_PRINCIPLED",
+                 from_node: FakeNode | None = None,
+                 to_node: FakeNode | None = None) -> None:
+        self.from_node = from_node or FakeNode("TEX_IMAGE", image)
+        self.to_node = to_node or FakeNode(to_node_type)
         self.to_socket = FakeSocket(socket)
 
 
@@ -109,6 +113,88 @@ class BlenderMaterialsTests(unittest.TestCase):
         )
 
         self.assertEqual([(binding.slot, binding.output.name) for binding in bindings], [("base_color", "albedo.dds"), ("normal", "normal.dds")])
+
+    def test_bump_height_link_becomes_a_generated_normal_source(self) -> None:
+        bump_image = FakeImage(Path("stone_bump.png"))
+        bump = FakeNode("BUMP", inputs={
+            "Strength": FakeSocket("Strength", 0.6),
+            "Distance": FakeSocket("Distance", 0.25),
+        })
+        principled = FakeNode("BSDF_PRINCIPLED")
+        material = FakeMaterial("Stone", [
+            FakeLink(bump_image, "Height", to_node=bump),
+            FakeLink(None, "Normal", from_node=bump, to_node=principled),
+        ])
+
+        bindings = material_texture_bindings(
+            material,
+            lambda fake_image: fake_image.path,
+            lambda source: source.with_suffix(".dds"),
+        )
+
+        self.assertEqual(len(bindings), 1)
+        self.assertEqual(bindings[0].slot, "bump")
+        self.assertEqual(bindings[0].output, Path("stone_bump.png"))
+        self.assertAlmostEqual(bindings[0].bump_strength, 0.6)
+        self.assertAlmostEqual(bindings[0].bump_distance, 0.25)
+
+    def test_bump_named_image_through_normal_map_uses_unit_height_even_at_zero_strength(self) -> None:
+        bump_image = FakeImage(Path("stone_bump.png"))
+        bump_image.name = "stone_bump.png"
+        bump_image.filepath = "stone_bump.png"
+        normal_map = FakeNode("NORMAL_MAP", inputs={
+            "Strength": FakeSocket("Strength", 0.0),
+        })
+        principled = FakeNode("BSDF_PRINCIPLED")
+        material = FakeMaterial("Stone", [
+            FakeLink(bump_image, "Color", to_node=normal_map),
+            FakeLink(None, "Normal", from_node=normal_map, to_node=principled),
+        ])
+
+        bindings = material_texture_bindings(
+            material,
+            lambda fake_image: fake_image.path,
+            lambda source: source.with_suffix(".dds"),
+        )
+
+        self.assertEqual(len(bindings), 1)
+        self.assertEqual(bindings[0].slot, "bump")
+        self.assertAlmostEqual(bindings[0].bump_strength, 1.0)
+        self.assertAlmostEqual(bindings[0].bump_distance, 1.0)
+        self.assertEqual(supported_material_images(material), [])
+
+    def test_grayscale_image_through_normal_map_is_assumed_to_be_bump(self) -> None:
+        height = FakeImage(Path("stone_detail.png"))
+        height.name = "stone_detail.png"
+        height.filepath = "stone_detail.png"
+        height.pixels = [0.1, 0.1, 0.1, 1.0, 0.8, 0.8, 0.8, 1.0]
+        normal_map = FakeNode("NORMAL_MAP", inputs={})
+        principled = FakeNode("BSDF_PRINCIPLED")
+        material = FakeMaterial("Stone", [
+            FakeLink(height, "Color", to_node=normal_map),
+            FakeLink(None, "Normal", from_node=normal_map, to_node=principled),
+        ])
+
+        bindings = material_texture_bindings(
+            material,
+            lambda fake_image: fake_image.path,
+            lambda source: source.with_suffix(".dds"),
+        )
+
+        self.assertEqual([binding.slot for binding in bindings], ["bump"])
+        self.assertEqual(supported_material_images(material), [])
+
+    def test_unsupported_principled_images_are_not_exported(self) -> None:
+        base = FakeImage(Path("base.png"))
+        specular = FakeImage(Path("specular.png"))
+        alpha = FakeImage(Path("alpha.png"))
+        material = FakeMaterial("Basic", [
+            FakeLink(base, "Base Color"),
+            FakeLink(specular, "Specular IOR Level"),
+            FakeLink(alpha, "Alpha"),
+        ])
+
+        self.assertEqual(supported_material_images(material), [base])
 
     def test_material_payload_records_texture_slots_and_paths(self) -> None:
         material = FakeMaterial("HeroSkin", [])

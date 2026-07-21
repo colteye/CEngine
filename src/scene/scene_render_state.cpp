@@ -33,6 +33,7 @@ Renderer::LightRecord MakeLight(const Entities::LightEntity& entity)
     light.spot_inner_cos = std::cos(entity.inner_angle_radians);
     light.spot_outer_cos = std::cos(entity.outer_angle_radians);
     light.enabled = entity.enabled;
+    light.casts_shadows = entity.casts_shadows;
     return light;
 }
 } // namespace
