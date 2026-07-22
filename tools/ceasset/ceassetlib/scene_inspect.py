@@ -11,7 +11,8 @@ from .scene_format import (
     ASSET_REFERENCE, CAMERA_ENTITY, ENTITY_CLASS_BLOCK,
     ENTITY_CLASS_VERSION, ENTITY_CONNECTION, LIGHT_ENTITY, LightFlags, PLAYER_START,
     PREFAB_ENTITY, PREFAB_LIGHTMAP, PROP, PropFlags, SCENE_ENTITY, SCENE_HEADER,
-    SCENE_MAGIC, SCENE_SETTINGS, SCENE_VERSION, TRANSFORM, TRIGGER_ENTITY, INVALID_INDEX,
+    SCENE_MAGIC, SCENE_SETTINGS, SCENE_VERSION, SKYBOX_ENTITY,
+    EXPONENTIAL_HEIGHT_FOG_ENTITY, TRANSFORM, TRIGGER_ENTITY, INVALID_INDEX,
 )
 
 
@@ -23,6 +24,8 @@ CLASS_STRIDES = {
     "prefab_instance": PREFAB_ENTITY.size,
     "trigger": TRIGGER_ENTITY.size,
     "info_player_start": PLAYER_START.size,
+    "skybox": SKYBOX_ENTITY.size,
+    "exponential_height_fog": EXPONENTIAL_HEIGHT_FOG_ENTITY.size,
 }
 
 
@@ -231,6 +234,17 @@ def inspect_scene(path: Path, project_root: Path, validate_assets: bool = False)
                     raise ValueError("light record is invalid")
                 if values[-1] & ~int(LightFlags.ENABLED | LightFlags.CASTS_SHADOW):
                     raise ValueError("light flags are invalid")
+            elif classname == "skybox":
+                values = SKYBOX_ENTITY.unpack(record)
+                require_asset(values[10], AssetType.TEXTURE, "skybox panorama")
+                if (not math.isfinite(values[11]) or values[11] < 0.0 or
+                        not math.isfinite(values[12]) or values[13] & ~1):
+                    raise ValueError("skybox record is invalid")
+            elif classname == "exponential_height_fog":
+                values = EXPONENTIAL_HEIGHT_FOG_ENTITY.unpack(record)
+                if (any(not math.isfinite(value) or value < 0.0 for value in values[10:18]) or
+                        values[16] > 1.0 or values[18] & ~1):
+                    raise ValueError("exponential height fog record is invalid")
         classes.append((classname, count))
     if not all(loaded):
         raise ValueError("one or more entities have no class record")

@@ -12,6 +12,7 @@
 #include "renderer/opengl/shaders/pbr_geometry_pass.h"
 #include "renderer/opengl/shaders/pbr_standard.h"
 #include "renderer/opengl/shaders/ssao.h"
+#include "renderer/opengl/shaders/shader.h"
 
 #include <glad/glad.h>
 
@@ -54,6 +55,22 @@ struct OpenGLShaderPasses {
 	std::unique_ptr<DeferredLighting> deferred_lighting;
 	std::unique_ptr<DepthOnly> depth_only;
 	std::unique_ptr<FullscreenBlit> fullscreen_blit;
+};
+
+struct OpenGLEnvironmentResources {
+    GLuint panorama = 0;
+    GLuint environment_map = 0;
+    GLuint irradiance_map = 0;
+    GLuint prefiltered_map = 0;
+    GLuint capture_fbo = 0;
+    GLuint capture_rbo = 0;
+    GLuint cube_vao = 0;
+    GLuint cube_vbo = 0;
+    std::unique_ptr<ShaderProgram> panorama_to_cube;
+    std::unique_ptr<ShaderProgram> irradiance;
+    std::unique_ptr<ShaderProgram> prefilter;
+    std::unique_ptr<ShaderProgram> skybox;
+    void Destroy();
 };
 
 struct ShaderBuffers {
@@ -109,6 +126,10 @@ private:
 	void RenderGeometryPass();
 	void RenderDeferredLightingPass();
 	void RenderAmbientOcclusionPass();
+	void SyncEnvironmentResources();
+	bool BuildEnvironmentResources();
+	void RenderSkybox();
+	void DrawEnvironmentCube() const;
 	void RenderForwardQueue(const std::vector<uint32_t>& queue, bool transparent);
 	void PresentSceneColor();
 	void DrawItem(const OpenGLDrawItem& item) const;
@@ -127,6 +148,7 @@ private:
 	OpenGLShadowSystem shadow_system;
 	OpenGLRenderQueues render_queues;
 	OpenGLShaderPasses shader_passes;
+	OpenGLEnvironmentResources environment_resources;
 	std::unordered_map<MaterialShaderType, ShaderBuffers> shader_buffer_dict;
 	std::unordered_map<Material*, OpenGLMaterialResources> material_resources;
 	std::unordered_map<const Lightmap*, GLuint> lightmap_resources;

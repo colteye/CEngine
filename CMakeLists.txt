@@ -147,6 +147,12 @@ endif()
 if(CENGINE_ENABLE_OPENGL)
     set(CENGINE_OPENGL_SHADER_SOURCES
         src/renderer/opengl/glsl/deferred_lighting.frag
+        src/renderer/opengl/glsl/environment_cube.vert
+        src/renderer/opengl/glsl/equirectangular_to_cube.frag
+        src/renderer/opengl/glsl/irradiance_convolution.frag
+        src/renderer/opengl/glsl/prefilter_environment.frag
+        src/renderer/opengl/glsl/skybox.vert
+        src/renderer/opengl/glsl/skybox.frag
         src/renderer/opengl/glsl/depth_only.vert
         src/renderer/opengl/glsl/depth_only.frag
         src/renderer/opengl/glsl/fullscreen_blit.frag
@@ -178,12 +184,14 @@ add_library(CEngineAssets STATIC ${CENGINE_ASSET_SOURCES})
 add_library(CEngineScene STATIC
     src/entity/camera_entity.cpp
     src/entity/empty_entity.cpp
+    src/entity/exponential_height_fog_entity.cpp
     src/entity/entity.cpp
     src/entity/entity_factory.cpp
     src/entity/light_entity.cpp
     src/entity/player_start.cpp
     src/entity/prefab_entity.cpp
     src/entity/prop_entity.cpp
+    src/entity/skybox_entity.cpp
     src/entity/trigger_entity.cpp
     src/scene/scene.cpp
     src/scene/scene_loader.cpp

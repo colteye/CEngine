@@ -157,7 +157,7 @@ def skin_influences(obj: object | None, vertex: object, bone_lookup: dict[str, i
     return indices, weights
 
 
-MATERIAL_UV_EXCLUDED = {"CEngineLightmap", "CEngineBake"}
+MATERIAL_UV_EXCLUDED = {"Lightmap", "CEngineLightmap", "CEngineBake"}
 
 
 def material_uv_data(mesh: object):
@@ -185,7 +185,9 @@ def lightmap_uv_data(mesh: object):
     if uv_layers is None:
         return ()
     getter = getattr(uv_layers, "get", None)
-    layer = getter("CEngineLightmap") if callable(getter) else None
+    layer = getter("Lightmap") if callable(getter) else None
+    if layer is None and callable(getter):
+        layer = getter("CEngineLightmap")
     if layer is None:
         try:
             layer = uv_layers[1] if len(uv_layers) > 1 else None

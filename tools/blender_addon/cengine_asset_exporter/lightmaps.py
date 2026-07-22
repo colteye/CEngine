@@ -13,12 +13,12 @@ from ceassetlib.paths import output_dir_for_source
 from ceassetlib.texture import write_rgbexp32_dds
 
 
-LIGHTMAP_UV = "CEngineLightmap"
+LIGHTMAP_UV = "Lightmap"
 BAKE_UV = "CEngineBake"
 DEFAULT_RESOLUTION = 4096
-DEFAULT_PADDING = 64
-LIGHTMAP_PACK_MARGIN = 0.001
-NORMAL_SEAM_DOT_THRESHOLD = 0.9999
+DEFAULT_PADDING = 8
+LIGHTMAP_PACK_MARGIN = 0.0001
+NORMAL_SEAM_DOT_THRESHOLD = math.cos(math.radians(45.0))
 GEOMETRY_SEAM_ANGLE_DEGREES = 140.0
 ENABLE_WARP_FALLBACK = True
 MAX_UV_STRETCH_RATIO = 64.0
@@ -30,12 +30,12 @@ UV_EPSILON = 1.0e-7
 DEFAULT_RGBM_RANGE = 8.0
 HDR_LIGHTMAP_DECODE_SCALE = 1.0
 DEFAULT_DENOISE = True
-DEFAULT_SAMPLES = 256
-DEFAULT_INDIRECT_CLAMP = 2.0
+DEFAULT_SAMPLES = 1024
 DEFAULT_INCLUDE_DIRECT = False
+ALPHA_CLIP_ENABLED = False
+ALPHA_CLIP_THRESHOLD = 0.5
 MINIMUM_LIGHTMAP_ENERGY = 1.0e-5
 INDIRECT_BAKE_LIGHT_MODES = frozenset({"baked", "mixed"})
-DIRECT_BAKE_LIGHT_MODES = frozenset({"baked"})
 
 
 @dataclass(frozen=True)
@@ -60,6 +60,8 @@ def plan_atlas(names: Iterable[str], resolution: int, padding: int) -> dict[str,
         return {}
     if resolution <= 0 or padding < 0:
         raise ValueError("lightmap resolution and padding must be positive")
+    if len(ordered) == 1:
+        return {ordered[0]: AtlasTile((1.0, 1.0), (0.0, 0.0))}
 
     columns = math.ceil(math.sqrt(len(ordered)))
     rows = math.ceil(len(ordered) / columns)
@@ -450,20 +452,6 @@ def _bake_targets(objects: Iterable[object],
     return targets
 
 
-def _combine_light_passes(indirect: Iterable[float], direct: Iterable[float]) -> list[float]:
-    indirect_values = list(indirect)
-    direct_values = list(direct)
-    if len(indirect_values) != len(direct_values) or len(indirect_values) % 4 != 0:
-        raise RuntimeError("Blender lightmap pass sizes do not match")
-    result = [0.0] * len(indirect_values)
-    for index in range(0, len(result), 4):
-        result[index] = max(0.0, indirect_values[index] + direct_values[index])
-        result[index + 1] = max(0.0, indirect_values[index + 1] + direct_values[index + 1])
-        result[index + 2] = max(0.0, indirect_values[index + 2] + direct_values[index + 2])
-        result[index + 3] = 1.0
-    return result
-
-
 def _maximum_rgb(pixels: Iterable[float]) -> float:
     values = pixels if hasattr(pixels, "__len__") and hasattr(pixels, "__getitem__") else list(pixels)
     if len(values) % 4 != 0:
@@ -472,128 +460,177 @@ def _maximum_rgb(pixels: Iterable[float]) -> float:
                 for index in range(0, len(values), 4)), default=0.0)
 
 
-def _clamp_rgb(pixels: object, maximum: float) -> object:
-    if maximum <= 0.0:
-        return pixels
-    for index in range(0, len(pixels), 4):
-        pixels[index] = min(maximum, max(0.0, pixels[index]))
-        pixels[index + 1] = min(maximum, max(0.0, pixels[index + 1]))
-        pixels[index + 2] = min(maximum, max(0.0, pixels[index + 2]))
-    return pixels
+def _active_material_output(node_tree: object) -> object | None:
+    for node in node_tree.nodes:
+        if getattr(node, "type", "") == "OUTPUT_MATERIAL" and bool(
+                getattr(node, "is_active_output", False)):
+            return node
+    return None
 
 
-def _apply_coverage_mask(pixels: object, coverage: object) -> object:
-    if len(pixels) != len(coverage) or len(pixels) % 4 != 0:
-        raise RuntimeError("lightmap coverage must match the RGBA denoise output")
-    for index in range(0, len(pixels), 4):
-        if max(float(coverage[index]), float(coverage[index + 1]),
-               float(coverage[index + 2])) <= 0.001:
-            pixels[index] = 0.0
-            pixels[index + 1] = 0.0
-            pixels[index + 2] = 0.0
+def _prepare_material_alpha_for_bake(material: object) -> dict[str, object] | None:
+    """Temporarily express Principled alpha as transparent/opaque geometry."""
+    if material is None or not bool(getattr(material, "use_nodes", False)):
+        return None
+    node_tree = material.node_tree
+    output_node = _active_material_output(node_tree)
+    if output_node is None:
+        return None
+    surface_input = output_node.inputs.get("Surface")
+    if surface_input is None or not surface_input.is_linked:
+        return None
+    output_surface_link = surface_input.links[0]
+    shader_socket = output_surface_link.from_socket
+    shader_node = output_surface_link.from_node
+    if getattr(shader_node, "type", "") != "BSDF_PRINCIPLED":
+        return None
+    alpha_input = shader_node.inputs.get("Alpha")
+    if alpha_input is None:
+        return None
+    alpha_link = alpha_input.links[0] if alpha_input.is_linked else None
+    original_alpha_default = float(alpha_input.default_value)
+    if alpha_link is None and original_alpha_default >= 1.0 - UV_EPSILON:
+        return None
+
+    temporary_nodes: list[object] = []
+    transparent_node = node_tree.nodes.new("ShaderNodeBsdfTransparent")
+    transparent_node.name = "LightBake_TemporaryTransparent"
+    transparent_node.label = "Temporary Light Bake Transparency"
+    temporary_nodes.append(transparent_node)
+    mix_node = node_tree.nodes.new("ShaderNodeMixShader")
+    mix_node.name = "LightBake_TemporaryAlphaMix"
+    mix_node.label = "Temporary Light Bake Alpha Mix"
+    temporary_nodes.append(mix_node)
+    mix_node.location = (output_node.location.x - 220.0, output_node.location.y)
+    transparent_node.location = (mix_node.location.x - 220.0,
+                                 mix_node.location.y + 120.0)
+
+    alpha_source_socket = None
+    if alpha_link is not None:
+        alpha_source_socket = alpha_link.from_socket
+        node_tree.links.remove(alpha_link)
+        alpha_input.default_value = 1.0
+    else:
+        alpha_input.default_value = 1.0
+
+    factor_socket = mix_node.inputs[0]
+    if alpha_source_socket is not None:
+        if ALPHA_CLIP_ENABLED:
+            threshold_node = node_tree.nodes.new("ShaderNodeMath")
+            threshold_node.name = "LightBake_TemporaryAlphaThreshold"
+            threshold_node.label = "Temporary Light Bake Alpha Threshold"
+            threshold_node.operation = "GREATER_THAN"
+            threshold_node.inputs[1].default_value = ALPHA_CLIP_THRESHOLD
+            threshold_node.location = (mix_node.location.x - 220.0,
+                                       mix_node.location.y - 100.0)
+            temporary_nodes.append(threshold_node)
+            node_tree.links.new(alpha_source_socket, threshold_node.inputs[0])
+            node_tree.links.new(threshold_node.outputs[0], factor_socket)
         else:
-            pixels[index] = max(0.0, pixels[index])
-            pixels[index + 1] = max(0.0, pixels[index + 1])
-            pixels[index + 2] = max(0.0, pixels[index + 2])
-        pixels[index + 3] = 1.0
-    return pixels
+            node_tree.links.new(alpha_source_socket, factor_socket)
+    else:
+        factor_socket.default_value = original_alpha_default
+
+    node_tree.links.remove(output_surface_link)
+    node_tree.links.new(transparent_node.outputs["BSDF"], mix_node.inputs[1])
+    node_tree.links.new(shader_socket, mix_node.inputs[2])
+    node_tree.links.new(mix_node.outputs["Shader"], surface_input)
+    return {
+        "node_tree": node_tree,
+        "output_node": output_node,
+        "shader_socket": shader_socket,
+        "alpha_input": alpha_input,
+        "alpha_source_socket": alpha_source_socket,
+        "original_alpha_default": original_alpha_default,
+        "temporary_nodes": temporary_nodes,
+    }
+
+
+def _restore_material_alpha_after_bake(change: dict[str, object]) -> None:
+    node_tree = change["node_tree"]
+    output_node = change["output_node"]
+    surface_input = output_node.inputs.get("Surface")
+    if surface_input is not None:
+        for link in list(surface_input.links):
+            node_tree.links.remove(link)
+    for node in reversed(change["temporary_nodes"]):
+        if node.id_data is node_tree:
+            node_tree.nodes.remove(node)
+    if surface_input is not None:
+        node_tree.links.new(change["shader_socket"], surface_input)
+    alpha_input = change["alpha_input"]
+    alpha_input.default_value = change["original_alpha_default"]
+    alpha_source_socket = change["alpha_source_socket"]
+    if alpha_source_socket is not None:
+        node_tree.links.new(alpha_source_socket, alpha_input)
 
 
 def _denoise_lightmap(
     blender: object,
-    pixels: object,
-    coverage: object,
+    source_image: object,
     resolution: int,
     logger: Callable[[str], None] | None = None,
 ) -> array:
-    source_image = blender.data.images.new(
-        "CEngineLightmapDenoiseSource", width=resolution, height=resolution,
-        alpha=True, float_buffer=True)
-    coverage_image = blender.data.images.new(
-        "CEngineLightmapDenoiseCoverage", width=resolution, height=resolution,
-        alpha=True, float_buffer=True)
-    denoise_scene = blender.data.scenes.new("CEngineLightmapDenoise")
-    camera_data = blender.data.cameras.new("CEngineLightmapDenoiseCamera")
-    camera = blender.data.objects.new("CEngineLightmapDenoiseCamera", camera_data)
-    compositor = None
+    scene = blender.context.scene
+    previous_group = scene.compositing_node_group
+    previous_filepath = scene.render.filepath
+    previous_format = scene.render.image_settings.file_format
+    previous_color_mode = scene.render.image_settings.color_mode
+    previous_color_depth = scene.render.image_settings.color_depth
+    previous_resolution = (
+        scene.render.resolution_x,
+        scene.render.resolution_y,
+        scene.render.resolution_percentage,
+    )
+    compositor = blender.data.node_groups.new(
+        "Lightmap_Compositor", "CompositorNodeTree")
     result_image = None
     try:
-        source_image.pixels.foreach_set(pixels)
-        coverage_image.pixels.foreach_set(coverage)
-        denoise_scene.collection.objects.link(camera)
-        denoise_scene.camera = camera
-        denoise_scene.render.resolution_x = resolution
-        denoise_scene.render.resolution_y = resolution
-        denoise_scene.render.resolution_percentage = 100
-        denoise_scene.render.film_transparent = True
-        denoise_scene.render.image_settings.file_format = "OPEN_EXR"
-        denoise_scene.render.image_settings.color_mode = "RGBA"
-        denoise_scene.render.image_settings.color_depth = "32"
-        if hasattr(denoise_scene, "use_nodes"):
-            denoise_scene.use_nodes = True
+        scene.compositing_node_group = compositor
+        compositor.nodes.clear()
+        compositor.interface.clear()
+        compositor.interface.new_socket(
+            name="Image", in_out="OUTPUT", socket_type="NodeSocketColor")
 
-        tree = getattr(denoise_scene, "node_tree", None)
-        modern_compositor = tree is None
-        if modern_compositor:
-            compositor = blender.data.node_groups.new(
-                "CEngineLightmapDenoiseCompositor", "CompositorNodeTree")
-            denoise_scene.compositing_node_group = compositor
-            tree = compositor
-        tree.nodes.clear()
-        image_node = tree.nodes.new("CompositorNodeImage")
+        image_node = compositor.nodes.new("CompositorNodeImage")
         image_node.image = source_image
-        coverage_node = tree.nodes.new("CompositorNodeImage")
-        coverage_node.image = coverage_image
-        denoise_node = tree.nodes.new("CompositorNodeDenoise")
-        if hasattr(denoise_node, "prefilter"):
-            denoise_node.prefilter = "ACCURATE"
-        if hasattr(denoise_node, "quality"):
-            denoise_node.quality = "HIGH"
-        hdr_input = denoise_node.inputs.get("HDR")
-        if hdr_input is not None:
-            hdr_input.default_value = True
-        despeckle_node = tree.nodes.new("CompositorNodeDespeckle")
-        factor_input = despeckle_node.inputs.get("Factor")
-        if factor_input is not None:
-            factor_input.default_value = 1.0
-        if modern_compositor:
-            tree.interface.new_socket(
-                name="Image", in_out="OUTPUT", socket_type="NodeSocketColor")
-            output_node = tree.nodes.new("NodeGroupOutput")
-        else:
-            output_node = tree.nodes.new("CompositorNodeComposite")
-        tree.links.new(image_node.outputs["Image"], denoise_node.inputs["Image"])
-        # A white-inside/black-outside feature image gives OIDN the UV-chart
-        # boundaries up front. Without it, small valid charts surrounded by
-        # unused black atlas space can be denoised away to exactly black.
-        tree.links.new(coverage_node.outputs["Image"], denoise_node.inputs["Albedo"])
-        tree.links.new(denoise_node.outputs["Image"], despeckle_node.inputs["Image"])
-        tree.links.new(despeckle_node.outputs["Image"], output_node.inputs["Image"])
+        denoise_node = compositor.nodes.new("CompositorNodeDenoise")
+        despeckle_node = compositor.nodes.new("CompositorNodeDespeckle")
+        despeckle_node.inputs["Factor"].default_value = 1.0
+        output_node = compositor.nodes.new("NodeGroupOutput")
+        compositor.links.new(image_node.outputs["Image"], denoise_node.inputs["Image"])
+        compositor.links.new(denoise_node.outputs["Image"], despeckle_node.inputs["Image"])
+        compositor.links.new(despeckle_node.outputs["Image"], output_node.inputs["Image"])
 
         if logger is not None:
-            logger("Lightmap AI denoise: OpenImageDenoise high-quality HDR pass")
+            logger("Lightmap compositor: Denoise -> Despeckle (factor 1.0)")
         with tempfile.TemporaryDirectory(prefix="cengine-lightmap-denoise-") as temporary:
-            denoise_scene.render.filepath = str(Path(temporary) / "denoised.exr")
-            blender.ops.render.render(scene=denoise_scene.name, write_still=True)
-            result_image = blender.data.images.load(
-                denoise_scene.render.filepath, check_existing=False)
-            result = array("f", [0.0]) * len(pixels)
+            scene.render.image_settings.file_format = "OPEN_EXR"
+            scene.render.image_settings.color_mode = "RGB"
+            scene.render.image_settings.color_depth = "32"
+            scene.render.filepath = str(Path(temporary) / "LightBake_Denoised.exr")
+            scene.render.resolution_x = resolution
+            scene.render.resolution_y = resolution
+            scene.render.resolution_percentage = 100
+            blender.ops.render.render(write_still=True)
+            if not Path(scene.render.filepath).is_file():
+                raise RuntimeError(f"Denoised EXR was not created: {scene.render.filepath}")
+            result_image = blender.data.images.load(scene.render.filepath, check_existing=False)
+            result = array("f", [0.0]) * len(source_image.pixels)
             result_image.pixels.foreach_get(result)
-
-        # OIDN has no UV-chart topology. Use a separately baked white coverage
-        # pass to distinguish genuinely unused atlas pixels from valid surface
-        # texels whose irradiance happens to be exactly black.
-        return _apply_coverage_mask(result, coverage)
+            return result
     finally:
         if result_image is not None:
             blender.data.images.remove(result_image)
-        blender.data.objects.remove(camera, do_unlink=True)
-        blender.data.cameras.remove(camera_data)
-        blender.data.scenes.remove(denoise_scene)
-        if compositor is not None and compositor.users == 0:
+        scene.compositing_node_group = previous_group
+        if compositor.users == 0:
             blender.data.node_groups.remove(compositor)
-        blender.data.images.remove(source_image)
-        blender.data.images.remove(coverage_image)
+        scene.render.filepath = previous_filepath
+        scene.render.image_settings.file_format = previous_format
+        scene.render.image_settings.color_mode = previous_color_mode
+        scene.render.image_settings.color_depth = previous_color_depth
+        scene.render.resolution_x, scene.render.resolution_y, \
+            scene.render.resolution_percentage = previous_resolution
 
 
 def bake_scene_lightmaps(
@@ -627,8 +664,6 @@ def bake_scene_lightmaps(
         "ce_lightmap_denoise", DEFAULT_DENOISE))
     samples = max(1, int(getattr(scene, "get", lambda *_: DEFAULT_SAMPLES)(
         "ce_lightmap_samples", DEFAULT_SAMPLES)))
-    indirect_clamp = max(0.0, float(getattr(scene, "get", lambda *_: DEFAULT_INDIRECT_CLAMP)(
-        "ce_lightmap_indirect_clamp", DEFAULT_INDIRECT_CLAMP)))
     include_direct = bool(getattr(scene, "get", lambda *_: DEFAULT_INCLUDE_DIRECT)(
         "ce_lightmap_include_direct", DEFAULT_INCLUDE_DIRECT))
     tiles = plan_atlas((target.key for target in targets), resolution, padding)
@@ -637,15 +672,12 @@ def bake_scene_lightmaps(
 
     output_dir = output_dir_for_source(source, output_root) / "lightmaps"
     output = output_dir / f"{clean_asset_name(scene_name)}_0.dds"
-    indirect_image = blender.data.images.new(
-        f"CEngine_{scene_name}_Indirect", width=resolution, height=resolution,
-        alpha=True, float_buffer=True)
-    direct_image = (blender.data.images.new(
-        f"CEngine_{scene_name}_StaticDirect", width=resolution, height=resolution,
-        alpha=True, float_buffer=True) if include_direct else None)
-    coverage_image = blender.data.images.new(
-        f"CEngine_{scene_name}_Coverage", width=resolution, height=resolution,
-        alpha=True, float_buffer=True)
+    old_raw_image = blender.data.images.get("LightBake_Raw")
+    if old_raw_image is not None:
+        blender.data.images.remove(old_raw_image)
+    raw_image = blender.data.images.new(
+        "LightBake_Raw", width=resolution, height=resolution,
+        alpha=False, float_buffer=True)
     previous_engine = scene.render.engine
     previous_bake_clear = scene.render.bake.use_clear
     previous_pass_color = scene.render.bake.use_pass_color
@@ -659,35 +691,21 @@ def bake_scene_lightmaps(
     previous_diffuse_bounces = cycles.diffuse_bounces
     previous_glossy_bounces = cycles.glossy_bounces
     previous_transparent_max_bounces = cycles.transparent_max_bounces
-    previous_indirect_clamp = cycles.sample_clamp_indirect
-    previous_reflective_caustics = cycles.caustics_reflective
-    previous_refractive_caustics = cycles.caustics_refractive
+    previous_selected_to_active = scene.render.bake.use_selected_to_active
+    previous_bake_margin = scene.render.bake.margin
     previous_active = getattr(blender.context.view_layer.objects, "active", None)
     previous_selected = tuple(getattr(blender.context, "selected_objects", ()))
     temporary_objects: list[object] = []
     temporary_meshes: list[object] = []
     temporary_nodes: list[tuple[object, object]] = []
     temporary_materials: list[object] = []
+    alpha_material_changes: list[dict[str, object]] = []
     prepared_materials: set[int] = set()
     bake_materials: dict[int, object] = {}
     hidden_objects: list[tuple[object, bool]] = []
-    hidden_object_keys: set[int] = set()
-
     def hide_object(obj: object) -> None:
-        key = int(obj.as_pointer())
-        if key in hidden_object_keys:
-            return
-        hidden_object_keys.add(key)
         hidden_objects.append((obj, bool(obj.hide_render)))
         obj.hide_render = True
-
-    def set_light_visibility(visible_modes: frozenset[str]) -> None:
-        for obj in object_list:
-            if getattr(obj, "type", "") != "LIGHT":
-                continue
-            mode = str(getattr(obj, "get", lambda *_: "realtime")(
-                "ce_light_mode", "realtime")).lower()
-            obj.hide_render = mode not in visible_modes
 
     def target_image(image: object) -> None:
         for material, node in temporary_nodes:
@@ -697,51 +715,36 @@ def bake_scene_lightmaps(
             material.node_tree.nodes.active = node
             node.select = True
 
-    def bake_pass(image: object, use_direct: bool, use_indirect: bool,
-                  visible_modes: frozenset[str], use_color: bool = False) -> None:
-        target_image(image)
-        set_light_visibility(visible_modes)
-        scene.render.bake.use_pass_color = use_color
-        scene.render.bake.use_pass_direct = use_direct
-        scene.render.bake.use_pass_indirect = use_indirect
+    def bake_pass() -> None:
+        target_image(raw_image)
+        scene.cycles.bake_type = "DIFFUSE"
+        scene.render.bake.use_selected_to_active = False
+        scene.render.bake.use_clear = True
+        scene.render.bake.margin = padding
+        scene.render.bake.use_pass_color = False
+        scene.render.bake.use_pass_direct = include_direct
+        scene.render.bake.use_pass_indirect = True
         for index, target in enumerate(temporary_objects):
             _select_only(blender, target)
             scene.render.bake.use_clear = index == 0
-            blender.ops.object.bake(type="DIFFUSE", margin=padding, use_selected_to_active=False)
+            blender.ops.object.bake(type="DIFFUSE")
 
     try:
         scene.render.engine = "CYCLES"
-        # Lightmap convergence is an offline-cook contract, independent from
-        # the scene's interactive render sample count. Clamp rare, extremely
-        # energetic indirect paths before OIDN so isolated firefly texels do
-        # not survive in otherwise dark atlas regions.
         cycles.samples = samples
         cycles.use_adaptive_sampling = True
-        cycles.adaptive_threshold = 0.01
-        cycles.max_bounces = 4
-        cycles.diffuse_bounces = 2
+        cycles.adaptive_threshold = 0.0
+        cycles.max_bounces = 8
+        cycles.diffuse_bounces = 4
         cycles.glossy_bounces = 1
         cycles.transparent_max_bounces = 8
-        cycles.sample_clamp_indirect = indirect_clamp
-        cycles.caustics_reflective = False
-        cycles.caustics_refractive = False
-        scene.render.bake.use_clear = True
         if logger is not None:
             logger(
                 f"Lightmap Cycles quality: {samples} samples, "
-                f"indirect clamp={indirect_clamp:g}, direct={'on' if include_direct else 'off'}, "
-                "diffuse caustics disabled")
-        # Build a closed bake stage. Blender collections used as prefab
-        # prototypes can also be linked into the scene, and collection instances
-        # may evaluate the same source mesh again. Hiding every original scene
-        # object before adding the concrete bake copies guarantees that exactly
-        # one copy of each static surface can cast and receive baked light. It
-        # also prevents unrelated objects or lights outside the exported scene
-        # collection from affecting the result.
-        for obj in tuple(getattr(scene, "objects", ())):
-            hide_object(obj)
-        for obj in object_list:
-            hide_object(obj)
+                f"direct={'on' if include_direct else 'off'}, indirect=on")
+        # Replace each receiving source surface with one concrete bake copy.
+        # All other scene geometry and lights remain visible, matching the
+        # standalone pipeline's lighting environment exactly.
         for source in source_meshes:
             hide_object(source)
 
@@ -788,60 +791,78 @@ def bake_scene_lightmaps(
                 for existing in material.node_tree.nodes:
                     existing.select = False
                 node = material.node_tree.nodes.new("ShaderNodeTexImage")
-                node.image = indirect_image
+                node.name = "LightmapBakeTarget"
+                node.label = "Lightmap Bake Target"
+                node.image = raw_image
                 material.node_tree.nodes.active = node
                 node.select = True
                 temporary_nodes.append((material, node))
 
-        # Mixed lights contribute bounced GI here while retaining realtime
-        # direct light and shadows on both static and dynamic surfaces.
-        bake_pass(indirect_image, use_direct=False, use_indirect=True,
-                  visible_modes=INDIRECT_BAKE_LIGHT_MODES)
-        indirect_pixels = indirect_image.pixels[:]
-        direct_pixels = None
-        if include_direct:
-            # Only fully baked lights contribute direct light and baked shadows.
-            bake_pass(direct_image, use_direct=True, use_indirect=False,
-                      visible_modes=DIRECT_BAKE_LIGHT_MODES)
-            direct_pixels = direct_image.pixels[:]
+        processed_materials: set[int] = set()
+        for candidate in scene.objects:
+            if (getattr(candidate, "type", "") != "MESH"
+                    or bool(getattr(candidate, "hide_render", False))):
+                continue
+            for slot in candidate.material_slots:
+                material = slot.material
+                if material is None:
+                    continue
+                material_key = int(material.as_pointer())
+                if material_key in processed_materials:
+                    continue
+                processed_materials.add(material_key)
+                change = _prepare_material_alpha_for_bake(material)
+                if change is not None:
+                    alpha_material_changes.append(change)
+        if logger is not None:
+            logger(
+                "Lightmap alpha preparation: temporarily converted "
+                f"{len(alpha_material_changes)} material(s)")
 
-        # Bake atlas coverage after lighting, using white diffuse color while
-        # retaining each copied material's authored alpha graph. This provides
-        # an exact mask for denoising without mutating source materials.
-        for material in temporary_materials:
-            for node in material.node_tree.nodes:
-                if getattr(node, "type", "") != "BSDF_PRINCIPLED":
-                    continue
-                base_color = node.inputs.get("Base Color")
-                if base_color is None:
-                    continue
-                for link in tuple(base_color.links):
-                    material.node_tree.links.remove(link)
-                base_color.default_value = (1.0, 1.0, 1.0, 1.0)
-        bake_pass(coverage_image, use_direct=False, use_indirect=False,
-                  visible_modes=frozenset(), use_color=True)
-        coverage_pixels = coverage_image.pixels[:]
-        combined_pixels = (_combine_light_passes(indirect_pixels, direct_pixels)
-                           if direct_pixels is not None else list(indirect_pixels))
-        indirect_max = _maximum_rgb(indirect_pixels)
-        direct_max = _maximum_rgb(direct_pixels) if direct_pixels is not None else 0.0
+        bake_pass()
+        combined_pixels = raw_image.pixels[:]
         raw_combined_max = _maximum_rgb(combined_pixels)
         if denoise:
-            combined_pixels = _denoise_lightmap(
-                blender, combined_pixels, coverage_pixels, resolution, logger)
-            combined_pixels = _clamp_rgb(combined_pixels, raw_combined_max)
+            combined_pixels = _denoise_lightmap(blender, raw_image, resolution, logger)
         combined_max = _maximum_rgb(combined_pixels)
         if logger is not None:
             logger(
-                f"Lightmap bake energy: indirect={indirect_max:.6g}, "
-                f"static-direct={direct_max:.6g}, combined={raw_combined_max:.6g}, "
+                f"Lightmap bake energy: raw={raw_combined_max:.6g}, "
                 f"output={combined_max:.6g}")
         if combined_max <= MINIMUM_LIGHTMAP_ENERGY:
             raise RuntimeError(
                 "Cycles produced an empty lightmap; check light modes, render visibility, "
                 "light linking, and overlapping prototype/instance geometry")
+
+        old_final_image = blender.data.images.get("LightBake_Final")
+        if old_final_image is not None:
+            blender.data.images.remove(old_final_image)
+        final_image = blender.data.images.new(
+            "LightBake_Final", width=resolution, height=resolution,
+            alpha=False, float_buffer=True)
+        final_image.pixels.foreach_set(combined_pixels)
+        for target in targets:
+            for slot in target.source.material_slots:
+                material = slot.material
+                if material is None:
+                    continue
+                if not material.use_nodes:
+                    material.use_nodes = True
+                old_node = material.node_tree.nodes.get("LightmapBakeTarget")
+                if old_node is not None:
+                    material.node_tree.nodes.remove(old_node)
+                node = material.node_tree.nodes.new("ShaderNodeTexImage")
+                node.name = "LightmapBakeTarget"
+                node.label = "Lightmap Bake Target"
+                node.image = final_image
+                for existing in material.node_tree.nodes:
+                    existing.select = False
+                node.select = True
+                material.node_tree.nodes.active = node
         _save_hdr(combined_pixels, resolution, output)
     finally:
+        for change in reversed(alpha_material_changes):
+            _restore_material_alpha_after_bake(change)
         for material, node in reversed(temporary_nodes):
             material.node_tree.nodes.remove(node)
         for obj in reversed(temporary_objects):
@@ -854,10 +875,7 @@ def bake_scene_lightmaps(
                 blender.data.materials.remove(material)
         for obj, hidden in hidden_objects:
             obj.hide_render = hidden
-        blender.data.images.remove(indirect_image)
-        if direct_image is not None:
-            blender.data.images.remove(direct_image)
-        blender.data.images.remove(coverage_image)
+        blender.data.images.remove(raw_image)
         scene.render.engine = previous_engine
         scene.render.bake.use_clear = previous_bake_clear
         scene.render.bake.use_pass_color = previous_pass_color
@@ -870,9 +888,8 @@ def bake_scene_lightmaps(
         cycles.diffuse_bounces = previous_diffuse_bounces
         cycles.glossy_bounces = previous_glossy_bounces
         cycles.transparent_max_bounces = previous_transparent_max_bounces
-        cycles.sample_clamp_indirect = previous_indirect_clamp
-        cycles.caustics_reflective = previous_reflective_caustics
-        cycles.caustics_refractive = previous_refractive_caustics
+        scene.render.bake.use_selected_to_active = previous_selected_to_active
+        scene.render.bake.margin = previous_bake_margin
         for selected in tuple(getattr(blender.context, "selected_objects", ())):
             selected.select_set(False)
         for selected in previous_selected:

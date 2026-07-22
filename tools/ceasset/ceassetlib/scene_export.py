@@ -13,7 +13,8 @@ from .scene_format import (
     ASSET_REFERENCE, CAMERA_ENTITY, ENTITY_CLASS_BLOCK,
     ENTITY_CLASS_VERSION, ENTITY_CONNECTION, EntityClassBlockFlags, LIGHT_ENTITY, LightFlags, PLAYER_START,
     PREFAB_ENTITY, PREFAB_LIGHTMAP, PROP, PropFlags, SCENE_ENTITY, SCENE_HEADER, SCENE_MAGIC,
-    SCENE_SETTINGS, SCENE_VERSION, TRANSFORM, TRIGGER_ENTITY, INVALID_INDEX,
+    SCENE_SETTINGS, SCENE_VERSION, SKYBOX_ENTITY, EXPONENTIAL_HEIGHT_FOG_ENTITY,
+    TRANSFORM, TRIGGER_ENTITY, INVALID_INDEX,
 )
 
 TABLE_ALIGNMENT = 16
@@ -125,8 +126,30 @@ class PlayerStart:
     team: int = 0
 
 
+@dataclass(frozen=True)
+class SkyboxEntity:
+    panorama: AssetReference
+    transform: Transform = field(default_factory=Transform)
+    intensity: float = 1.0
+    rotation_radians: float = 0.0
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
+class ExponentialHeightFogEntity:
+    transform: Transform = field(default_factory=Transform)
+    inscattering_color: tuple[float, float, float] = (0.5, 0.6, 0.7)
+    density: float = 0.02
+    height_falloff: float = 0.2
+    start_distance: float = 0.0
+    max_opacity: float = 1.0
+    cutoff_distance: float = 0.0
+    enabled: bool = True
+
+
 EntityData = Union[EmptyEntity, Prop, CameraEntity,
-                   LightEntity, PrefabEntity, TriggerEntity, PlayerStart]
+                   LightEntity, PrefabEntity, TriggerEntity, PlayerStart,
+                   SkyboxEntity, ExponentialHeightFogEntity]
 
 
 @dataclass(frozen=True)
@@ -168,6 +191,8 @@ CLASS_INFO = {
     PrefabEntity: ("prefab_instance", PREFAB_ENTITY),
     TriggerEntity: ("trigger", TRIGGER_ENTITY),
     PlayerStart: ("info_player_start", PLAYER_START),
+    SkyboxEntity: ("skybox", SKYBOX_ENTITY),
+    ExponentialHeightFogEntity: ("exponential_height_fog", EXPONENTIAL_HEIGHT_FOG_ENTITY),
 }
 
 
@@ -205,6 +230,8 @@ def _references(value: EntityData) -> tuple[AssetReference, ...]:
         return result
     if isinstance(value, PrefabEntity):
         return (value.prefab, *(binding.lightmap for binding in value.lightmaps))
+    if isinstance(value, SkyboxEntity):
+        return (value.panorama,)
     return ()
 
 
@@ -238,6 +265,22 @@ def _pack_entity(value: EntityData, assets: dict[AssetReference, int], materials
     transform = _transform_values(value.transform)
     if isinstance(value, EmptyEntity):
         return TRANSFORM.pack(*transform)
+    if isinstance(value, SkyboxEntity):
+        if value.intensity < 0.0 or not math.isfinite(value.intensity) or \
+                not math.isfinite(value.rotation_radians):
+            raise ValueError("skybox intensity and rotation must be finite and intensity nonnegative")
+        return SKYBOX_ENTITY.pack(*transform, _asset_index(value.panorama, assets),
+                                  value.intensity, value.rotation_radians, int(value.enabled))
+    if isinstance(value, ExponentialHeightFogEntity):
+        scalars = (value.density, value.height_falloff, value.start_distance,
+                   value.max_opacity, value.cutoff_distance)
+        if (any(not math.isfinite(component) or component < 0.0 for component in scalars) or
+                value.max_opacity > 1.0 or
+                any(not math.isfinite(component) or component < 0.0
+                    for component in value.inscattering_color)):
+            raise ValueError("exponential height fog parameters are invalid")
+        return EXPONENTIAL_HEIGHT_FOG_ENTITY.pack(
+            *transform, *value.inscattering_color, *scalars, int(value.enabled))
     if isinstance(value, Prop):
         first = len(materials) if value.materials else INVALID_INDEX
         materials.extend(_asset_index(item, assets) for item in value.materials)
@@ -308,6 +351,12 @@ def build_scene_payload(scene: SceneDescription) -> bytes:
     for entity in entities:
         if type(entity.data) not in CLASS_INFO:
             raise ValueError("scene contains an unsupported entity class")
+    if sum(isinstance(entity.data, SkyboxEntity) and entity.data.enabled and bool(entity.flags & 1)
+           for entity in entities) > 1:
+        raise ValueError("scene may contain at most one enabled skybox")
+    if sum(isinstance(entity.data, ExponentialHeightFogEntity) and entity.data.enabled and
+           bool(entity.flags & 1) for entity in entities) > 1:
+        raise ValueError("scene may contain at most one enabled exponential height fog")
 
     assets, asset_indices = _collect_assets(entities)
     active_camera = INVALID_INDEX

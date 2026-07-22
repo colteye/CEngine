@@ -10,8 +10,8 @@ sys.path.insert(0, str(ROOT))
 
 from ceassetlib.blender_scene import LightmapPlacement, object_transform, scene_description
 from ceassetlib.scene_export import (
-    CameraEntity, EmptyEntity, LightEntity, PlayerStart,
-    PrefabEntity, Prop, TriggerEntity,
+    CameraEntity, EmptyEntity, ExponentialHeightFogEntity, LightEntity, PlayerStart,
+    PrefabEntity, Prop, SkyboxEntity, TriggerEntity,
 )
 
 
@@ -155,6 +155,26 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertEqual(scene.entities[1].data.team, 2)
         self.assertIsInstance(scene.entities[2].data, TriggerEntity)
         self.assertEqual(scene.entities[2].data.half_extents, (2.0, 3.0, 4.0))
+
+    def test_environment_entities_export_authored_settings(self) -> None:
+        objects = (
+            FakeObject("Sky", "EMPTY", props={
+                "ce_classname": "skybox", "ce_intensity": 1.5, "ce_rotation_radians": 0.25}),
+            FakeObject("Fog", "EMPTY", props={
+                "ce_classname": "exponential_height_fog", "ce_fog_density": 0.04,
+                "ce_height_falloff": 0.3, "ce_start_distance": 2.0,
+                "ce_max_opacity": 0.8, "ce_cutoff_distance": 500.0,
+                "ce_inscattering_color": (0.4, 0.5, 0.6)}),
+        )
+        scene = scene_description(objects, {}, {}, {}, lambda path: path.as_posix(),
+            skybox_outputs={"Sky": Path("environments/test.dds")})
+        fog = scene.entities[0].data
+        sky = scene.entities[1].data
+        self.assertIsInstance(fog, ExponentialHeightFogEntity)
+        self.assertEqual(fog.density, 0.04)
+        self.assertIsInstance(sky, SkyboxEntity)
+        self.assertEqual(sky.panorama.path, "environments/test.dds")
+        self.assertEqual(sky.intensity, 1.5)
 
 
 if __name__ == "__main__":

@@ -203,7 +203,8 @@ offset/size byte ranges without a terminator. Every entity declaration belongs
 to exactly one class block.
 
 The current class records are `empty`, `prop`, `camera`, `light`,
-`prefab_instance`, `trigger`, and `info_player_start`. `prop` is one class for
+`prefab_instance`, `trigger`, `info_player_start`, `skybox`, and
+`exponential_height_fog`. `prop` is one class for
 both static and dynamic objects. Its fixed record stores transform, mesh and
 material references, optional lightmap binding, flags, collision half-extents,
 and mass. Prop flag bit `1` is visible, bit `2` enables collision, and bit `4`
@@ -236,6 +237,20 @@ The final word of a `light` record is a flag mask: bit `1` enables the light and
 bit `2` makes realtime and mixed lights cast shadows. The Blender exporter maps
 the light datablock's shadow setting to the cast-shadow bit. A shadow-casting Sun
 is rendered through the directional-light cascade path.
+
+A `skybox` record references one cooked 2:1 equirectangular HDR texture and
+stores intensity, Z-axis rotation in radians, and an enabled flag. The Blender
+exporter accepts `.exr` and `.hdr` panorama sources and cooks them to the
+runtime's linear RGBE DDS representation. The renderer derives the display
+cubemap, diffuse irradiance cubemap, and roughness-prefiltered specular cubemap
+when the active environment changes. The same intensity and rotation apply to
+both the visible background and image-based lighting.
+
+An `exponential_height_fog` record stores its base height in the entity
+transform and fixed fields for inscattering color, density, height falloff,
+start distance, maximum opacity, cutoff distance, and enabled state. Density,
+falloff, and distances use meters. A scene may contain at most one enabled
+skybox and one enabled exponential-height-fog entity.
 
 ## Sources
 

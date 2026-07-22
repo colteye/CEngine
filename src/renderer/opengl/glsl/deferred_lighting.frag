@@ -21,6 +21,19 @@ uniform vec3 ambient_sky_color;
 uniform vec3 ambient_ground_color;
 uniform float ambient_intensity;
 uniform bool ambient_enabled;
+uniform samplerCube ibl_irradiance;
+uniform samplerCube ibl_prefiltered;
+uniform bool ibl_enabled;
+uniform float ibl_intensity;
+uniform float ibl_rotation_radians;
+uniform bool fog_enabled;
+uniform vec3 fog_inscattering_color;
+uniform float fog_density;
+uniform float fog_height_falloff;
+uniform float fog_base_height;
+uniform float fog_start_distance;
+uniform float fog_max_opacity;
+uniform float fog_cutoff_distance;
 
 const int MAX_DIRECT_LIGHTS = 64;
 const float LIGHT_TYPE_DIRECTIONAL = 0.0;
@@ -82,6 +95,42 @@ float geometry_smith(vec3 normal, vec3 view_dir, vec3 light_dir, float roughness
 vec3 fresnel_schlick(float hdotv, vec3 f0)
 {
 	return f0 + (1.0 - f0) * pow(1.0 - hdotv, 5.0);
+}
+
+vec3 rotate_environment(vec3 direction) {
+	float c = cos(ibl_rotation_radians), s = sin(ibl_rotation_radians);
+	direction.xy = mat2(c, -s, s, c) * direction.xy;
+	return direction;
+}
+
+vec3 fresnel_schlick_roughness(float ndotv, vec3 f0, float roughness) {
+	return f0 + (max(vec3(1.0 - roughness), f0) - f0) * pow(1.0 - ndotv, 5.0);
+}
+
+vec2 environment_brdf(float ndotv, float roughness) {
+	const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
+	const vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
+	vec4 r = roughness * c0 + c1;
+	float a004 = min(r.x * r.x, exp2(-9.28 * ndotv)) * r.x + r.y;
+	return vec2(-1.04, 1.04) * a004 + r.zw;
+}
+
+vec3 apply_height_fog(vec3 color, vec3 world_pos) {
+	if (!fog_enabled) return color;
+	vec3 delta = world_pos - cam_pos_world;
+	float distance_to_surface = length(delta);
+	if (distance_to_surface <= fog_start_distance ||
+		(fog_cutoff_distance > 0.0 && distance_to_surface > fog_cutoff_distance)) return color;
+	vec3 ray = delta / max(distance_to_surface, 0.0001);
+	float distance_in_fog = distance_to_surface - fog_start_distance;
+	float start_height = cam_pos_world.z + ray.z * fog_start_distance;
+	float start_density = fog_density * exp(clamp(-fog_height_falloff *
+		(start_height - fog_base_height), -80.0, 80.0));
+	float slope = fog_height_falloff * ray.z;
+	float optical_depth = abs(slope) < 0.00001 ? start_density * distance_in_fog :
+		start_density * (1.0 - exp(-slope * distance_in_fog)) / slope;
+	float amount = min(1.0 - exp(-max(optical_depth, 0.0)), fog_max_opacity);
+	return mix(color, fog_inscattering_color, amount);
 }
 
 vec3 world_position_from_depth(float depth)
@@ -304,12 +353,25 @@ void main()
 	vec3 ambient_color = mix(ambient_ground_color, ambient_sky_color, sky_weight);
 	vec3 ambient = ambient_enabled && !has_lightmap ?
 		ambient_color * ambient_intensity * albedo * ao : vec3(0.0);
+	vec3 ibl = vec3(0.0);
+	if (ibl_enabled) {
+		float ndotv = max(dot(normal, view_dir), 0.0);
+		vec3 f0 = mix(vec3(0.04), albedo, metallic);
+		vec3 f = fresnel_schlick_roughness(ndotv, f0, roughness);
+		vec3 kd = (vec3(1.0) - f) * (1.0 - metallic);
+		vec3 diffuse_ibl = texture(ibl_irradiance, rotate_environment(normal)).rgb * albedo;
+		vec3 reflection = reflect(-view_dir, normal);
+		vec3 prefiltered = textureLod(ibl_prefiltered, rotate_environment(reflection), roughness * 4.0).rgb;
+		vec2 brdf = environment_brdf(ndotv, roughness);
+		vec3 specular_ibl = prefiltered * (f * brdf.x + brdf.y);
+		ibl = ((has_lightmap ? vec3(0.0) : kd * diffuse_ibl * ao) + specular_ibl * ao) * ibl_intensity;
+	}
 	vec3 baked_indirect = albedo * texture(g_baked_light, uv).rgb;
 	vec3 runtime_direct = evaluate_direct_lights(world_pos, normal, view_dir, albedo,
 		metallic, roughness, receives_shadows);
 	// Shadow visibility is applied inside runtime_direct only. A fully shadowed
 	// mixed light must not erase the independent baked-indirect contribution.
-	vec3 color = ambient + baked_indirect + runtime_direct;
+	vec3 color = apply_height_fog(ambient + ibl + baked_indirect + runtime_direct, world_pos);
 
 	color = color / (color + vec3(1.0));
 	color = pow(color, vec3(1.0 / 2.2));

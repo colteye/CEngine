@@ -9,9 +9,9 @@ from .collection_export import blender_to_engine_matrix_rows, object_role
 from .formats import AssetType
 from .ids import guid_from_stable_name
 from .scene_export import (
-    AssetReference, CameraEntity, EmptyEntity, EntityDescription,
+    AssetReference, CameraEntity, EmptyEntity, EntityDescription, ExponentialHeightFogEntity,
     LightEntity, PlayerStart, PrefabEntity, PrefabLightmap, Prop, SceneDescription,
-    SceneSettings, Transform, TriggerEntity,
+    SceneSettings, SkyboxEntity, Transform, TriggerEntity,
 )
 
 
@@ -112,6 +112,7 @@ def scene_description(
     asset_path: Callable[[Path], str],
     lightmaps: dict[str, LightmapPlacement] | None = None,
     prefab_lightmaps: dict[str, tuple[tuple[int, LightmapPlacement], ...]] | None = None,
+    skybox_outputs: dict[str, Path] | None = None,
 ) -> SceneDescription:
     entities: list[EntityDescription] = []
     for obj in sorted(objects, key=lambda value: str(getattr(value, "name", ""))):
@@ -202,6 +203,28 @@ def scene_description(
                     trigger_once=bool(_property(obj, "ce_trigger_once", False)))
             elif classname == "info_player_start":
                 data = PlayerStart(transform, int(_property(obj, "ce_team", 0)))
+            elif classname == "skybox":
+                output = (skybox_outputs or {}).get(name)
+                if output is None:
+                    raise ValueError(f"skybox has no generated HDR panorama: {name}")
+                data = SkyboxEntity(
+                    _reference(AssetType.TEXTURE, output, asset_path), transform,
+                    float(_property(obj, "ce_intensity", 1.0)),
+                    float(_property(obj, "ce_rotation_radians", 0.0)),
+                    bool(_property(obj, "ce_enabled", True)))
+            elif classname == "exponential_height_fog":
+                color = tuple(float(value) for value in _property(
+                    obj, "ce_inscattering_color", (0.5, 0.6, 0.7)))
+                if len(color) != 3:
+                    raise ValueError(f"fog inscattering color must have three values: {name}")
+                data = ExponentialHeightFogEntity(
+                    transform, color,
+                    float(_property(obj, "ce_fog_density", 0.02)),
+                    float(_property(obj, "ce_height_falloff", 0.2)),
+                    float(_property(obj, "ce_start_distance", 0.0)),
+                    float(_property(obj, "ce_max_opacity", 1.0)),
+                    float(_property(obj, "ce_cutoff_distance", 0.0)),
+                    bool(_property(obj, "ce_enabled", True)))
             else:
                 raise ValueError(f"unsupported empty entity classname: {classname}")
         else:

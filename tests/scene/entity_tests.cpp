@@ -3,8 +3,10 @@
 #include "assets/asset_database.h"
 #include "entity/camera_entity.h"
 #include "entity/light_entity.h"
+#include "entity/exponential_height_fog_entity.h"
 #include "entity/prefab_entity.h"
 #include "entity/prop_entity.h"
+#include "entity/skybox_entity.h"
 
 #include <cmath>
 #include <filesystem>
@@ -48,6 +50,22 @@ bool EntityClassesOwnTheirFields()
         Expect(Near(prop.GetTransform().world_matrix[3].x, 2.0f), "entity transform should update") &&
         Expect(light.Classname() == "light" && Near(light.intensity, 5.0f), "light should own light fields") &&
         Expect(scene.EntityCount() == 2, "scene should own both entities");
+}
+
+bool EnvironmentEntitiesOwnTheirFields()
+{
+    Scene scene;
+    auto& sky = static_cast<CEngine::Entities::SkyboxEntity&>(
+        scene.CreateEntity("skybox", "Environment"));
+    sky.intensity = 1.5f;
+    auto& fog = static_cast<CEngine::Entities::ExponentialHeightFogEntity&>(
+        scene.CreateEntity("exponential_height_fog", "Atmosphere"));
+    fog.density = 0.04f;
+    fog.GetTransform().position.z = 2.0f;
+    return Expect(sky.Classname() == "skybox" && Near(sky.intensity, 1.5f),
+            "skybox should own its environment fields") &&
+        Expect(fog.Classname() == "exponential_height_fog" && Near(fog.density, 0.04f) &&
+            Near(fog.GetTransform().position.z, 2.0f), "fog should use actor height as base height");
 }
 
 bool SlotLookupWorks()
@@ -104,6 +122,7 @@ int main(int argc, char** argv)
             Expect(Near(scene->Entities()[3]->GetTransform().position.x, 1.0f),
                 "prefab placement transform should apply to realized props") ? 0 : 1;
     }
-    return GenerationalSlotsRejectStaleHandles() && EntityClassesOwnTheirFields() && SlotLookupWorks() &&
+    return GenerationalSlotsRejectStaleHandles() && EntityClassesOwnTheirFields() &&
+        EnvironmentEntitiesOwnTheirFields() && SlotLookupWorks() &&
         LightModesHaveExplicitRuntimeDirectSemantics() ? 0 : 1;
 }

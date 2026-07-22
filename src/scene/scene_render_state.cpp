@@ -4,7 +4,9 @@
 #include "assets/material_loader.h"
 #include "assets/mesh_loader.h"
 #include "entity/light_entity.h"
+#include "entity/exponential_height_fog_entity.h"
 #include "entity/prop_entity.h"
+#include "entity/skybox_entity.h"
 #include "renderer/render_system.h"
 #include "scene/scene.h"
 
@@ -73,6 +75,39 @@ bool SceneRenderState::Activate(const Scene& scene, Assets::AssetDatabase& asset
     ambient.intensity = scene.Settings().exposure;
     ambient.enabled = glm::any(glm::greaterThan(scene.Settings().ambient_color, glm::vec3(0.0f)));
     Renderer::RenderSystem::SetAmbientLighting(ambient);
+
+    Renderer::ImageBasedLighting ibl;
+    Renderer::ExponentialHeightFog fog_state;
+    for (const auto& entity : scene.Entities())
+    {
+        if (entity == nullptr || !entity->Enabled()) continue;
+        if (entity->Classname() == "skybox")
+        {
+            const auto& skybox = static_cast<const Entities::SkyboxEntity&>(*entity);
+            if (!skybox.enabled) continue;
+            ibl.panorama_path = assets.FullPath(skybox.panorama);
+            ibl.intensity = skybox.intensity;
+            ibl.rotation_radians = skybox.rotation_radians;
+            ibl.enabled = true;
+            ambient.enabled = false;
+        }
+        else if (entity->Classname() == "exponential_height_fog")
+        {
+            const auto& fog = static_cast<const Entities::ExponentialHeightFogEntity&>(*entity);
+            if (!fog.enabled) continue;
+            fog_state.inscattering_color = fog.inscattering_color;
+            fog_state.density = fog.density;
+            fog_state.height_falloff = fog.height_falloff;
+            fog_state.base_height = fog.GetTransform().position.z;
+            fog_state.start_distance = fog.start_distance;
+            fog_state.max_opacity = fog.max_opacity;
+            fog_state.cutoff_distance = fog.cutoff_distance;
+            fog_state.enabled = true;
+        }
+    }
+    Renderer::RenderSystem::SetAmbientLighting(ambient);
+    Renderer::RenderSystem::SetImageBasedLighting(ibl);
+    Renderer::RenderSystem::SetExponentialHeightFog(fog_state);
 
     materials_.reserve(scene.AssetReferenceCount());
     for (std::uint32_t index = 0; index < scene.AssetReferenceCount(); ++index)
@@ -220,6 +255,8 @@ void SceneRenderState::Stop()
     lightmaps_.clear();
     materials_.clear();
     Renderer::RenderSystem::SetAmbientLighting(Renderer::AmbientLighting{});
+    Renderer::RenderSystem::SetImageBasedLighting(Renderer::ImageBasedLighting{});
+    Renderer::RenderSystem::SetExponentialHeightFog(Renderer::ExponentialHeightFog{});
     active_ = false;
 }
 

@@ -62,6 +62,7 @@ Results:
 | deferred structural changes | missing | create and destroy are currently immediate |
 | scheduled entity behavior | missing | no authoritative scheduler or fixed-tick simulation root exists |
 | main-thread renderer | implemented | the viewer invokes the retained renderer directly on the main thread; one backend is selected per build behind the existing `IRenderBackend` boundary |
+| environment presentation | implemented, optional | typed `skybox` and `exponential_height_fog` scene entities drive HDR panorama sky rendering, diffuse/specular IBL, and analytic height fog; this does not change the active M0 gate |
 | generation-checked render handles | implemented | reusable renderable and light slots carry generations and reject stale handles before reaching the backend |
 | scene/render binding | partial/divergent | `SceneRenderState` creates retained objects, but dynamic updates directly read entity storage rather than applying a presentation snapshot |
 | basic Jolt bodies and fixed substeps | implemented | static/dynamic prop boxes, spheres, and a four-substep accumulator exist |

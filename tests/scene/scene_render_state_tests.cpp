@@ -2,7 +2,9 @@
 #include "camera.h"
 #include "assets/asset_database.h"
 #include "entity/light_entity.h"
+#include "entity/exponential_height_fog_entity.h"
 #include "entity/prop_entity.h"
+#include "entity/skybox_entity.h"
 #include "physics/physics_backend.h"
 #include "physics/physics_system.h"
 #if defined(CENGINE_ENABLE_JOLT_PHYSICS)
@@ -90,6 +92,8 @@ bool ValidateCookedScene(const std::filesystem::path& scene_path,
     std::size_t expected_realtime_lights = 0;
     glm::vec3 expected_sun_direction(0.0f);
     bool found_realtime_sun = false;
+    bool found_skybox = false;
+    bool found_fog = false;
     for (const auto& entity : scene->Entities())
     {
         if (entity == nullptr) continue;
@@ -123,6 +127,8 @@ bool ValidateCookedScene(const std::filesystem::path& scene_path,
                 }
             }
         }
+        if (entity->Classname() == "skybox") found_skybox = true;
+        if (entity->Classname() == "exponential_height_fog") found_fog = true;
     }
     try
     {
@@ -133,6 +139,8 @@ bool ValidateCookedScene(const std::filesystem::path& scene_path,
         return Expect(false, exception.what());
     }
     const auto& ambient = CEngine::Renderer::RenderSystem::GetAmbientLighting();
+    const auto& ibl = CEngine::Renderer::RenderSystem::GetImageBasedLighting();
+    const auto& fog = CEngine::Renderer::RenderSystem::GetExponentialHeightFog();
     const auto& lights = CEngine::Renderer::RenderSystem::GetDirectLights();
     std::size_t shadow_only_renderable_count = 0;
     bool shadow_only_flags_are_valid = true;
@@ -167,8 +175,11 @@ bool ValidateCookedScene(const std::filesystem::path& scene_path,
             "every visible Sponza prop should have a lightmap and the occluder should not") &&
         Expect(scene->AssetReferenceCount() > 0, "cooked scene should reference target assets") &&
         Expect(render_state.Active(), "cooked scene render bindings should activate") &&
-        Expect(ambient.enabled && ambient.sky_color == scene->Settings().ambient_color,
-            "scene environment lighting should reach the renderer") &&
+        Expect(found_skybox && ibl.enabled && !ambient.enabled &&
+                ibl.panorama_path.filename() == "golden_gate_hills_1k.dds",
+            "authored skybox should replace fallback ambient lighting with IBL") &&
+        Expect(found_fog && fog.enabled && fog.density > 0.0f,
+            "authored exponential height fog should reach the renderer") &&
         Expect(lights.size() == expected_realtime_lights,
             "cooked scene should bind every realtime and mixed light") &&
         Expect(directional_count == 1 && point_count == 0,

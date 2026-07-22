@@ -326,6 +326,15 @@ The initial visual target is:
 Existing renderer features may remain, but they do not gate the milestone and
 must not force a render graph, Render Thread, or runtime backend selection path.
 
+The approved environment presentation path uses one concrete `skybox` entity
+and one concrete `exponential_height_fog` entity per scene. The skybox owns one
+authored HDR panorama reference plus intensity and rotation; renderer-private
+derived cubemaps provide its background, diffuse irradiance, and prefiltered
+specular IBL. When IBL is active it replaces the fallback ambient approximation,
+but does not replace authored direct lights. Fog owns fixed UE-style height-fog
+parameters and is evaluated consistently in deferred and forward shading. GPU
+textures, convolution passes, and backend handles remain renderer-owned.
+
 ### 6.5 Input
 
 Platform input is normalized into engine-owned actions. Game code builds a

@@ -5,14 +5,17 @@
 #include "assets/casset_loader.h"
 #include "assets/cscene_reader.h"
 #include "entity/camera_entity.h"
+#include "entity/exponential_height_fog_entity.h"
 #include "entity/light_entity.h"
 #include "entity/player_start.h"
 #include "entity/prefab_entity.h"
 #include "entity/prop_entity.h"
+#include "entity/skybox_entity.h"
 #include "entity/trigger_entity.h"
 #include "scene/scene.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <string>
@@ -255,6 +258,50 @@ bool LoadClassRecord(Scene& scene, Entity& entity, std::string_view classname,
         start.team = disk.team;
         return true;
     }
+    if (classname == "skybox") {
+        DiskSkyboxEntity disk;
+        if (!ReadRecord(records, row, stride, disk))
+            return Fail(error, "skybox record stride is unsupported");
+        if (disk.panorama_asset >= scene.AssetReferenceCount() ||
+            scene.ReferencedAssetType(disk.panorama_asset) != Assets::AssetType::Texture ||
+            !std::isfinite(disk.intensity) || disk.intensity < 0.0f ||
+            !std::isfinite(disk.rotation_radians) || (disk.flags & ~EnvironmentEnabled) != 0)
+            return Fail(error, "skybox record is invalid");
+        auto& skybox = static_cast<Entities::SkyboxEntity&>(entity);
+        CopyTransform(disk.transform, skybox.GetTransform());
+        skybox.panorama = scene.AssetReference(disk.panorama_asset);
+        skybox.intensity = disk.intensity;
+        skybox.rotation_radians = disk.rotation_radians;
+        skybox.enabled = (disk.flags & EnvironmentEnabled) != 0;
+        return true;
+    }
+    if (classname == "exponential_height_fog") {
+        DiskExponentialHeightFogEntity disk;
+        if (!ReadRecord(records, row, stride, disk))
+            return Fail(error, "exponential height fog record stride is unsupported");
+        const bool valid_color = std::isfinite(disk.inscattering_color[0]) &&
+            std::isfinite(disk.inscattering_color[1]) && std::isfinite(disk.inscattering_color[2]) &&
+            disk.inscattering_color[0] >= 0.0f && disk.inscattering_color[1] >= 0.0f &&
+            disk.inscattering_color[2] >= 0.0f;
+        if (!valid_color || !std::isfinite(disk.density) || disk.density < 0.0f ||
+            !std::isfinite(disk.height_falloff) || disk.height_falloff < 0.0f ||
+            !std::isfinite(disk.start_distance) || disk.start_distance < 0.0f ||
+            !std::isfinite(disk.max_opacity) || disk.max_opacity < 0.0f || disk.max_opacity > 1.0f ||
+            !std::isfinite(disk.cutoff_distance) || disk.cutoff_distance < 0.0f ||
+            (disk.flags & ~EnvironmentEnabled) != 0)
+            return Fail(error, "exponential height fog record is invalid");
+        auto& fog = static_cast<Entities::ExponentialHeightFogEntity&>(entity);
+        CopyTransform(disk.transform, fog.GetTransform());
+        fog.inscattering_color = {disk.inscattering_color[0], disk.inscattering_color[1],
+                                  disk.inscattering_color[2]};
+        fog.density = disk.density;
+        fog.height_falloff = disk.height_falloff;
+        fog.start_distance = disk.start_distance;
+        fog.max_opacity = disk.max_opacity;
+        fog.cutoff_distance = disk.cutoff_distance;
+        fog.enabled = (disk.flags & EnvironmentEnabled) != 0;
+        return true;
+    }
     return Fail(error, "scene contains an unsupported entity classname");
 }
 
@@ -472,6 +519,19 @@ std::unique_ptr<Scene> LoadScene(const std::filesystem::path& path, Assets::Asse
             Fail(error, "entity has no class record");
             return nullptr;
         }
+    std::uint32_t enabled_skyboxes = 0;
+    std::uint32_t enabled_fogs = 0;
+    for (const auto& entity : scene->Entities()) {
+        if (entity == nullptr || !entity->Enabled()) continue;
+        if (entity->Classname() == "skybox" &&
+            static_cast<const Entities::SkyboxEntity&>(*entity).enabled) ++enabled_skyboxes;
+        if (entity->Classname() == "exponential_height_fog" &&
+            static_cast<const Entities::ExponentialHeightFogEntity&>(*entity).enabled) ++enabled_fogs;
+    }
+    if (enabled_skyboxes > 1 || enabled_fogs > 1) {
+        Fail(error, "scene may contain at most one enabled skybox and one enabled exponential height fog");
+        return nullptr;
+    }
     if (!ExpandPrefabs(*scene, database, error))
         return nullptr;
     SceneSettings settings;

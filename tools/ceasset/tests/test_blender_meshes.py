@@ -245,6 +245,10 @@ class BlenderMeshesTests(unittest.TestCase):
         second = VERTEX.unpack_from(buffers.data, VERTEX.size)
         self.assertEqual(first[6:8], tuple(material_uvs[0].uv))
         self.assertEqual(second[6:8], tuple(material_uvs[1].uv))
+        for actual, expected in zip(first[8:10], old_lightmap_uvs[0].uv):
+            self.assertAlmostEqual(actual, expected)
+        for actual, expected in zip(second[8:10], old_lightmap_uvs[1].uv):
+            self.assertAlmostEqual(actual, expected)
 
     def test_mesh_buffers_pack_skin_indices_and_weights(self) -> None:
         armature = FakeArmature()

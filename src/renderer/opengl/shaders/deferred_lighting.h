@@ -17,7 +17,8 @@ public:
 	void Update(GLuint albedo, GLuint normal_roughness, GLuint material, GLuint baked_light, GLuint depth,
 		int width, int height,
 		const OpenGLShadowGpuData& shadow_data, GLuint shadow_atlas,
-		const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_shadow_maps);
+		const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_shadow_maps,
+		GLuint irradiance_map, GLuint prefiltered_map);
 
 private:
 	void InitializeParameters();

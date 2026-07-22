@@ -9,6 +9,9 @@
 #include <iostream>
 #include <utility>
 
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 namespace CEngine::Renderer {
 
 namespace {
@@ -43,6 +46,22 @@ glm::vec3 BoundsCenter(const Bounds& bounds, const glm::mat4& transform)
 	return (bounds.min + bounds.max) * 0.5f;
 }
 } // namespace
+
+void OpenGLEnvironmentResources::Destroy()
+{
+    panorama_to_cube.reset();
+    irradiance.reset();
+    prefilter.reset();
+    skybox.reset();
+    const GLuint textures[] = {panorama, environment_map, irradiance_map, prefiltered_map};
+    glDeleteTextures(4, textures);
+    panorama = environment_map = irradiance_map = prefiltered_map = 0;
+    if (capture_fbo != 0) glDeleteFramebuffers(1, &capture_fbo);
+    if (capture_rbo != 0) glDeleteRenderbuffers(1, &capture_rbo);
+    if (cube_vbo != 0) glDeleteBuffers(1, &cube_vbo);
+    if (cube_vao != 0) glDeleteVertexArrays(1, &cube_vao);
+    capture_fbo = capture_rbo = cube_vbo = cube_vao = 0;
+}
 
 void OpenGLMaterialResources::Destroy()
 {
@@ -273,6 +292,7 @@ bool OpenGLRenderBackend::Initialize(GLFWwindow* /*window*/, int in_window_width
 
 void OpenGLRenderBackend::Shutdown()
 {
+	environment_resources.Destroy();
 	shader_passes = OpenGLShaderPasses();
 
 	for (auto& it : material_resources)
@@ -755,7 +775,8 @@ void OpenGLRenderBackend::RenderDeferredLightingPass()
 	shader_passes.deferred_lighting->Update(frame_resources.g_albedo, frame_resources.g_normal_roughness,
 		frame_resources.g_material, frame_resources.g_baked_light, frame_resources.scene_depth,
 		window_width, window_height,
-		shadow_system.GetGpuData(), shadow_system.GetAtlasTexture(), shadow_system.GetPointTextures());
+		shadow_system.GetGpuData(), shadow_system.GetAtlasTexture(), shadow_system.GetPointTextures(),
+		environment_resources.irradiance_map, environment_resources.prefiltered_map);
 	RenderScreenSpaceQuad();
 }
 
@@ -777,6 +798,180 @@ void OpenGLRenderBackend::RenderAmbientOcclusionPass()
 	shader_passes.ssao->UseComposite();
 	shader_passes.ssao->UpdateComposite();
 	RenderScreenSpaceQuad();
+}
+
+bool OpenGLRenderBackend::BuildEnvironmentResources()
+{
+    const ImageBasedLighting& lighting = RenderSystem::GetImageBasedLighting();
+    auto& resources = environment_resources;
+    resources.panorama = OpenGLTexture::LoadDDS(lighting.panorama_path.string(), false);
+    if (resources.panorama == 0) return false;
+    resources.panorama_to_cube = std::make_unique<ShaderProgram>();
+    resources.irradiance = std::make_unique<ShaderProgram>();
+    resources.prefilter = std::make_unique<ShaderProgram>();
+    resources.skybox = std::make_unique<ShaderProgram>();
+    if (!resources.panorama_to_cube->Load("shaders/opengl/environment_cube.vert", "shaders/opengl/equirectangular_to_cube.frag") ||
+        !resources.irradiance->Load("shaders/opengl/environment_cube.vert", "shaders/opengl/irradiance_convolution.frag") ||
+        !resources.prefilter->Load("shaders/opengl/environment_cube.vert", "shaders/opengl/prefilter_environment.frag") ||
+        !resources.skybox->Load("shaders/opengl/skybox.vert", "shaders/opengl/skybox.frag")) return false;
+
+    constexpr float vertices[] = {
+        -1,-1,-1, -1,-1, 1, -1, 1, 1, -1, 1, 1, -1,-1,-1, -1, 1,-1,
+         1,-1, 1,  1,-1,-1,  1, 1,-1,  1, 1,-1,  1, 1, 1,  1,-1, 1,
+        -1,-1, 1, -1,-1,-1,  1,-1,-1,  1,-1,-1,  1,-1, 1, -1,-1, 1,
+        -1, 1,-1, -1, 1, 1,  1, 1, 1,  1, 1, 1,  1, 1,-1, -1, 1,-1,
+        -1,-1, 1,  1,-1, 1,  1, 1, 1,  1, 1, 1, -1, 1, 1, -1,-1, 1,
+         1,-1,-1, -1,-1,-1, -1, 1,-1, -1, 1,-1,  1, 1,-1,  1,-1,-1};
+    glGenVertexArrays(1, &resources.cube_vao);
+    glGenBuffers(1, &resources.cube_vbo);
+    glBindVertexArray(resources.cube_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, resources.cube_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+    glBindVertexArray(0);
+    glGenFramebuffers(1, &resources.capture_fbo);
+    glGenRenderbuffers(1, &resources.capture_rbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, resources.capture_fbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, resources.capture_rbo);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, resources.capture_rbo);
+
+    const glm::mat4 projection = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
+    const glm::vec3 origin(0.0f);
+    const std::array<glm::mat4, 6> views = {
+        glm::lookAt(origin, glm::vec3(1,0,0), glm::vec3(0,-1,0)),
+        glm::lookAt(origin, glm::vec3(-1,0,0), glm::vec3(0,-1,0)),
+        glm::lookAt(origin, glm::vec3(0,1,0), glm::vec3(0,0,1)),
+        glm::lookAt(origin, glm::vec3(0,-1,0), glm::vec3(0,0,-1)),
+        glm::lookAt(origin, glm::vec3(0,0,1), glm::vec3(0,-1,0)),
+        glm::lookAt(origin, glm::vec3(0,0,-1), glm::vec3(0,-1,0))};
+    auto configure_cube = [](GLuint texture, bool mipmapped) {
+        glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER,
+            mipmapped ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
+    };
+    auto allocate_cube = [&](GLuint& texture, int size, bool mipmapped) {
+        glGenTextures(1, &texture);
+        configure_cube(texture, mipmapped);
+        for (int face = 0; face < 6; ++face)
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, GL_RGB16F,
+                size, size, 0, GL_RGB, GL_FLOAT, nullptr);
+    };
+    auto set_capture_matrices = [&](GLuint program) {
+        glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, GL_FALSE,
+            glm::value_ptr(projection));
+    };
+    auto draw_faces = [&](GLuint program, GLuint target, int size, int mip) {
+        glViewport(0, 0, size, size);
+        for (int face = 0; face < 6; ++face) {
+            glUniformMatrix4fv(glGetUniformLocation(program, "view"), 1, GL_FALSE,
+                glm::value_ptr(views[face]));
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, target, mip);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            DrawEnvironmentCube();
+        }
+    };
+
+    glDisable(GL_CULL_FACE);
+    allocate_cube(resources.environment_map, 512, true);
+    glBindRenderbuffer(GL_RENDERBUFFER, resources.capture_rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+    resources.panorama_to_cube->Use();
+    GLuint program = resources.panorama_to_cube->GetId();
+    set_capture_matrices(program);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, resources.panorama);
+    glUniform1i(glGetUniformLocation(program, "panorama"), 0);
+    draw_faces(program, resources.environment_map, 512, 0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, resources.environment_map);
+    glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+
+    allocate_cube(resources.irradiance_map, 32, false);
+    glBindRenderbuffer(GL_RENDERBUFFER, resources.capture_rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 32, 32);
+    resources.irradiance->Use();
+    program = resources.irradiance->GetId();
+    set_capture_matrices(program);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, resources.environment_map);
+    glUniform1i(glGetUniformLocation(program, "environment_map"), 0);
+    draw_faces(program, resources.irradiance_map, 32, 0);
+
+    glGenTextures(1, &resources.prefiltered_map);
+    configure_cube(resources.prefiltered_map, true);
+    constexpr int prefilter_size = 128;
+    constexpr int mip_count = 5;
+    for (int mip = 0; mip < mip_count; ++mip) {
+        const int size = prefilter_size >> mip;
+        for (int face = 0; face < 6; ++face)
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, mip, GL_RGB16F,
+                size, size, 0, GL_RGB, GL_FLOAT, nullptr);
+    }
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAX_LEVEL, mip_count - 1);
+    resources.prefilter->Use();
+    program = resources.prefilter->GetId();
+    set_capture_matrices(program);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, resources.environment_map);
+    glUniform1i(glGetUniformLocation(program, "environment_map"), 0);
+    for (int mip = 0; mip < mip_count; ++mip) {
+        const int size = prefilter_size >> mip;
+        glBindRenderbuffer(GL_RENDERBUFFER, resources.capture_rbo);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, size, size);
+        glUniform1f(glGetUniformLocation(program, "roughness"), float(mip) / float(mip_count - 1));
+        draw_faces(program, resources.prefiltered_map, size, mip);
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, window_width, window_height);
+    glEnable(GL_CULL_FACE);
+    return glGetError() == GL_NO_ERROR;
+}
+
+void OpenGLRenderBackend::SyncEnvironmentResources()
+{
+    if (!RenderSystem::ConsumeImageBasedLightingResourcesDirty()) return;
+    environment_resources.Destroy();
+    if (RenderSystem::GetImageBasedLighting().enabled && !BuildEnvironmentResources())
+        std::cerr << "Failed to build image-based lighting resources.\n";
+}
+
+void OpenGLRenderBackend::DrawEnvironmentCube() const
+{
+    glBindVertexArray(environment_resources.cube_vao);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+    glBindVertexArray(0);
+}
+
+void OpenGLRenderBackend::RenderSkybox()
+{
+    const ImageBasedLighting& lighting = RenderSystem::GetImageBasedLighting();
+    if (!lighting.enabled || environment_resources.environment_map == 0 || !environment_resources.skybox) return;
+    glBindFramebuffer(GL_FRAMEBUFFER, frame_resources.scene_color_fbo);
+    glViewport(0, 0, window_width, window_height);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glDepthMask(GL_FALSE);
+    glDisable(GL_CULL_FACE);
+    environment_resources.skybox->Use();
+    const GLuint program = environment_resources.skybox->GetId();
+    const RenderFrameConstants& frame = RenderSystem::GetFrameConstants();
+    glUniformMatrix4fv(glGetUniformLocation(program, "view"), 1, GL_FALSE, glm::value_ptr(frame.view));
+    glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, GL_FALSE, glm::value_ptr(frame.proj));
+    glUniform1f(glGetUniformLocation(program, "intensity"), lighting.intensity);
+    glUniform1f(glGetUniformLocation(program, "rotation_radians"), lighting.rotation_radians);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, environment_resources.environment_map);
+    glUniform1i(glGetUniformLocation(program, "environment_map"), 0);
+    DrawEnvironmentCube();
+    glEnable(GL_CULL_FACE);
+    glDepthMask(GL_TRUE);
+    glDepthFunc(GL_LESS);
 }
 
 void OpenGLRenderBackend::RenderForwardQueue(const std::vector<uint32_t>& queue, bool transparent)
@@ -823,7 +1018,8 @@ void OpenGLRenderBackend::RenderForwardQueue(const std::vector<uint32_t>& queue,
 		{
 			shader->Use();
 			shader->UpdateFrame(shadow_system.GetGpuData(), shadow_system.GetAtlasTexture(),
-				shadow_system.GetPointTextures());
+				shadow_system.GetPointTextures(), environment_resources.irradiance_map,
+				environment_resources.prefiltered_map);
 			bound_shader = shader;
 		}
 		shader->SetTextures(item.albedo_tex, item.normal_tex, item.metallic_roughness_ao_tex,
@@ -885,11 +1081,13 @@ bool OpenGLRenderBackend::DrawsShadowCaster(const OpenGLDrawItem& item) const
 
 void OpenGLRenderBackend::Render()
 {
+	SyncEnvironmentResources();
 	BuildRenderQueues();
 	shadow_system.Render(draw_items, render_queues);
 	RenderGeometryPass();
 	RenderDeferredLightingPass();
 	RenderAmbientOcclusionPass();
+	RenderSkybox();
 	RenderForwardQueue(render_queues.forward, false);
 	RenderForwardQueue(render_queues.transparent, true);
 	PresentSceneColor();

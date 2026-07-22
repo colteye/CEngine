@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <vector>
 
@@ -28,6 +29,26 @@ struct AmbientLighting
 	glm::vec3 ground_color = glm::vec3(0.12f, 0.10f, 0.08f);
 	float intensity = 0.18f;
 	bool enabled = true;
+};
+
+struct ImageBasedLighting
+{
+    std::filesystem::path panorama_path;
+    float intensity = 1.0f;
+    float rotation_radians = 0.0f;
+    bool enabled = false;
+};
+
+struct ExponentialHeightFog
+{
+    glm::vec3 inscattering_color = glm::vec3(0.5f, 0.6f, 0.7f);
+    float density = 0.02f;
+    float height_falloff = 0.2f;
+    float base_height = 0.0f;
+    float start_distance = 0.0f;
+    float max_opacity = 1.0f;
+    float cutoff_distance = 0.0f;
+    bool enabled = false;
 };
 
 class RenderSystem
@@ -68,6 +89,11 @@ public:
 	static const RenderFrameConstants& GetFrameConstants();
 	static void SetAmbientLighting(const AmbientLighting& ambient);
 	static const AmbientLighting& GetAmbientLighting();
+	static void SetImageBasedLighting(const ImageBasedLighting& lighting);
+	static const ImageBasedLighting& GetImageBasedLighting();
+	static void SetExponentialHeightFog(const ExponentialHeightFog& fog);
+	static const ExponentialHeightFog& GetExponentialHeightFog();
+	static bool ConsumeImageBasedLightingResourcesDirty();
 
 private:
 	static void RebuildGpuLights();
@@ -83,7 +109,10 @@ private:
 	static std::vector<GpuLight> gpu_lights;
 	static std::vector<LightShadowGpuHandle> light_shadow_handles;
 	static RenderFrameConstants frame_constants;
-	static AmbientLighting ambient_lighting;
+    static AmbientLighting ambient_lighting;
+    static ImageBasedLighting image_based_lighting;
+    static ExponentialHeightFog exponential_height_fog;
+    static bool image_based_lighting_resources_dirty;
 	static uint64_t light_revision;
 	static bool lights_dirty;
 };

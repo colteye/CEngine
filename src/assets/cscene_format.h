@@ -31,6 +31,10 @@ enum LightFlags : std::uint32_t {
     LightCastsShadow = 1u << 1u,
 };
 
+enum EnvironmentFlags : std::uint32_t {
+    EnvironmentEnabled = 1u << 0u,
+};
+
 enum EntityClassBlockFlags : std::uint32_t {
     EntityClassBlockRequired = 1u << 0u,
 };
@@ -176,6 +180,25 @@ struct DiskPlayerStart {
     DiskTransform transform;
     std::uint32_t team = 0;
 };
+
+struct DiskSkyboxEntity {
+    DiskTransform transform;
+    std::uint32_t panorama_asset = InvalidAssetIndex;
+    float intensity = 1.0f;
+    float rotation_radians = 0.0f;
+    std::uint32_t flags = EnvironmentEnabled;
+};
+
+struct DiskExponentialHeightFogEntity {
+    DiskTransform transform;
+    float inscattering_color[3] = {0.5f, 0.6f, 0.7f};
+    float density = 0.02f;
+    float height_falloff = 0.2f;
+    float start_distance = 0.0f;
+    float max_opacity = 1.0f;
+    float cutoff_distance = 0.0f;
+    std::uint32_t flags = EnvironmentEnabled;
+};
 #pragma pack(pop)
 
 static_assert(sizeof(DiskSceneHeader) == 96);
@@ -192,6 +215,8 @@ static_assert(sizeof(DiskPrefabEntity) == 52);
 static_assert(sizeof(DiskPrefabLightmap) == 28);
 static_assert(sizeof(DiskTriggerEntity) == 56);
 static_assert(sizeof(DiskPlayerStart) == 44);
+static_assert(sizeof(DiskSkyboxEntity) == 56);
+static_assert(sizeof(DiskExponentialHeightFogEntity) == 76);
 
 } // namespace CEngine::Assets::CSceneFormat
 

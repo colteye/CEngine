@@ -30,6 +30,8 @@ class SceneFormatTests(unittest.TestCase):
                 "DiskPrefabLightmap": 28,
                 "DiskTriggerEntity": 56,
                 "DiskPlayerStart": 44,
+                "DiskSkyboxEntity": 56,
+                "DiskExponentialHeightFogEntity": 76,
             },
         )
 

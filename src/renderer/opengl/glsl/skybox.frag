@@ -1,0 +1,14 @@
+#version 330 core
+in vec3 direction;
+out vec4 frag_color;
+uniform samplerCube environment_map;
+uniform float intensity;
+uniform float rotation_radians;
+void main() {
+    float c = cos(rotation_radians), s = sin(rotation_radians);
+    vec3 d = normalize(direction);
+    d.xy = mat2(c, -s, s, c) * d.xy;
+    vec3 color = texture(environment_map, d).rgb * intensity;
+    color = color / (color + vec3(1.0));
+    frag_color = vec4(pow(color, vec3(1.0 / 2.2)), 1.0);
+}

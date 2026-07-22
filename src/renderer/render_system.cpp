@@ -30,6 +30,9 @@ std::vector<GpuLight> RenderSystem::gpu_lights;
 std::vector<LightShadowGpuHandle> RenderSystem::light_shadow_handles;
 RenderFrameConstants RenderSystem::frame_constants;
 AmbientLighting RenderSystem::ambient_lighting;
+ImageBasedLighting RenderSystem::image_based_lighting;
+ExponentialHeightFog RenderSystem::exponential_height_fog;
+bool RenderSystem::image_based_lighting_resources_dirty = true;
 uint64_t RenderSystem::light_revision = 1;
 bool RenderSystem::lights_dirty = true;
 
@@ -332,6 +335,36 @@ void RenderSystem::SetAmbientLighting(const AmbientLighting& ambient)
 const AmbientLighting& RenderSystem::GetAmbientLighting()
 {
 	return ambient_lighting;
+}
+
+void RenderSystem::SetImageBasedLighting(const ImageBasedLighting& lighting)
+{
+	const bool resources_changed = image_based_lighting.enabled != lighting.enabled ||
+		image_based_lighting.panorama_path != lighting.panorama_path;
+	image_based_lighting = lighting;
+	image_based_lighting_resources_dirty = image_based_lighting_resources_dirty || resources_changed;
+}
+
+const ImageBasedLighting& RenderSystem::GetImageBasedLighting()
+{
+	return image_based_lighting;
+}
+
+void RenderSystem::SetExponentialHeightFog(const ExponentialHeightFog& fog)
+{
+	exponential_height_fog = fog;
+}
+
+const ExponentialHeightFog& RenderSystem::GetExponentialHeightFog()
+{
+	return exponential_height_fog;
+}
+
+bool RenderSystem::ConsumeImageBasedLightingResourcesDirty()
+{
+	const bool result = image_based_lighting_resources_dirty;
+	image_based_lighting_resources_dirty = false;
+	return result;
 }
 
 void RenderSystem::RebuildGpuLights()

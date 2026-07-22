@@ -45,6 +45,8 @@ PREFAB_ENTITY = struct.Struct("<3f4f3fIII")
 PREFAB_LIGHTMAP = struct.Struct("<II2f2ff")
 TRIGGER_ENTITY = struct.Struct("<3f4f3f3fI")
 PLAYER_START = struct.Struct("<3f4f3fI")
+SKYBOX_ENTITY = struct.Struct("<3f4f3fIffI")
+EXPONENTIAL_HEIGHT_FOG_ENTITY = struct.Struct("<3f4f3f3f5fI")
 
 FIXED_STRUCTURE_SIZES = {
     "DiskSceneHeader": SCENE_HEADER.size,
@@ -61,4 +63,6 @@ FIXED_STRUCTURE_SIZES = {
     "DiskPrefabLightmap": PREFAB_LIGHTMAP.size,
     "DiskTriggerEntity": TRIGGER_ENTITY.size,
     "DiskPlayerStart": PLAYER_START.size,
+    "DiskSkyboxEntity": SKYBOX_ENTITY.size,
+    "DiskExponentialHeightFogEntity": EXPONENTIAL_HEIGHT_FOG_ENTITY.size,
 }

@@ -57,11 +57,11 @@ from ceassetlib.scene_export import write_scene
 from ceassetlib.ids import fnv1a, guid_from_stable_name, guid_to_string
 from ceassetlib.paths import generic_path, make_project_paths, output_dir_for_source, stored_path
 from ceassetlib.state import AssetRecord, load_registry, save_cache, save_registry
-from ceassetlib.texture import convert_texture_to_dds
+from ceassetlib.texture import convert_texture_to_dds, write_rgbexp32_dds
 
 from .animations import write_animation_assets
 from .materials import effective_material_names, supported_material_images, write_material_assets
-from .lightmaps import bake_scene_lightmaps
+from .lightmaps import bake_scene_lightmaps, encode_rgbexp32
 from .meshes import write_mesh_assets
 from .skeletons import write_skeleton_assets
 
@@ -311,6 +311,42 @@ def export_textures(
     if logger is not None:
         logger(f"Texture export complete: {len(outputs)} texture(s) in {elapsed(start)}")
     return outputs
+
+
+def export_skybox_panoramas(
+    blender: object,
+    blend_source: Path,
+    output_root: Path,
+    objects: list[object],
+    logger: Callable[[str], None] | None = None,
+) -> tuple[dict[str, Path], list[TextureExport]]:
+    by_entity: dict[str, Path] = {}
+    outputs: list[TextureExport] = []
+    by_source: dict[Path, Path] = {}
+    for obj in objects:
+        getter = getattr(obj, "get", None)
+        if not callable(getter) or str(getter("ce_classname", "")) != "skybox":
+            continue
+        authored_path = str(getter("ce_panorama", "") or "")
+        source = Path(blender.path.abspath(authored_path)).absolute()
+        if source.suffix.lower() not in {".exr", ".hdr"} or not source.is_file():
+            raise RuntimeError(f"skybox panorama must reference an existing .exr or .hdr: {obj.name}")
+        output = by_source.get(source)
+        if output is None:
+            output = output_dir_for_source(blend_source, output_root) / "environments" / \
+                f"{clean_asset_filename(source.stem)}.dds"
+            image = blender.data.images.load(str(source), check_existing=True)
+            width, height = int(image.size[0]), int(image.size[1])
+            if width <= 0 or height <= 0 or width != height * 2:
+                raise RuntimeError(f"skybox panorama must use a 2:1 equirectangular layout: {source}")
+            pixels = tuple(float(value) for value in image.pixels[:])
+            write_rgbexp32_dds(output, width, height, encode_rgbexp32(pixels))
+            by_source[source] = output
+            outputs.append(TextureExport(source, output))
+            if logger is not None:
+                logger(f"Skybox panorama: {source} -> {output} ({width}x{height} RGBE HDR)")
+        by_entity[str(obj.name)] = output
+    return by_entity, outputs
 
 
 def bool_attr(value: object, name: str) -> bool:
@@ -689,6 +725,11 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
     prefab_lightmap_placements = {}
     lightmap_outputs: list[Path] = []
     scene_objects = exported_scene_objects(collection) if is_scene else []
+    skybox_outputs: dict[str, Path] = {}
+    skybox_texture_outputs: list[TextureExport] = []
+    if is_scene:
+        skybox_outputs, skybox_texture_outputs = export_skybox_panoramas(
+            blender, source, root, scene_objects, log)
     prefab_objects_by_instance: dict[str, list[object]] = {}
     if is_scene:
         for obj in scene_objects:
@@ -751,7 +792,7 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         description = scene_description(
             scene_objects, mesh_outputs_by_name,
             material_outputs_by_name, prefab_outputs, asset_path,
-            lightmap_placements, prefab_lightmap_placements)
+            lightmap_placements, prefab_lightmap_placements, skybox_outputs)
         description = type(description)(description.entities, blender_scene_settings(blender),
                                         description.connections)
         write_scene(scene_output, description, asset_path(scene_output), source_hash)
@@ -789,10 +830,18 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
             log,
             source_fingerprint(texture_output.source),
         )
+    for texture_output in skybox_texture_outputs:
+        register_outputs(
+            project_root,
+            texture_output.source,
+            [texture_output.output],
+            log,
+            source_fingerprint(texture_output.source),
+        )
 
     result = ExportResult(
         len(collection_outputs),
-        len(texture_outputs) + len(lightmap_outputs) +
+        len(texture_outputs) + len(skybox_texture_outputs) + len(lightmap_outputs) +
         sum(len(getattr(material, "generated_textures", ())) for material in material_outputs),
         len(material_outputs),
         len(skeleton_outputs),

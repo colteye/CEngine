@@ -20,7 +20,8 @@ public:
 	PBRStandard();
 	void Use() const;
 	void UpdateFrame(const OpenGLShadowGpuData& shadow_data,
-		GLuint shadow_atlas, const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_shadow_maps);
+		GLuint shadow_atlas, const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_shadow_maps,
+		GLuint irradiance_map, GLuint prefiltered_map);
 	void UpdateObject(const glm::mat4& model, const Material& material, const glm::vec2& lightmap_scale,
 		const glm::vec2& lightmap_offset, float lightmap_rgbm_range);
 	void SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao, GLuint lightmap);

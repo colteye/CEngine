@@ -138,14 +138,19 @@ GLuint OpenGLTexture::LoadDDS(const std::string& image_p, bool flip_image) {
         // Decode before upload so texture filtering happens in linear HDR
         // space, not between mantissas with potentially different exponents.
         std::vector<std::uint16_t> pixels(encoded.size());
+        constexpr float kMaxFiniteHalf = 65504.0f;
         for (std::size_t index = 0; index < encoded.size(); index += 4u) {
             const int exponent = static_cast<int>(encoded[index + 3]) - 128;
             const float multiplier = std::ldexp(1.0f, exponent) / 255.0f;
-            pixels[index] = glm::packHalf1x16(static_cast<float>(encoded[index]) * multiplier);
-            pixels[index + 1] =
-                glm::packHalf1x16(static_cast<float>(encoded[index + 1]) * multiplier);
-            pixels[index + 2] =
-                glm::packHalf1x16(static_cast<float>(encoded[index + 2]) * multiplier);
+            const auto finite_half = [&](std::uint8_t mantissa) {
+                return glm::packHalf1x16(std::min(
+                    static_cast<float>(mantissa) * multiplier, kMaxFiniteHalf));
+            };
+            // A single over-range sun pixel becomes +Inf in RGBA16F and then
+            // contaminates the irradiance and specular convolutions with NaNs.
+            pixels[index] = finite_half(encoded[index]);
+            pixels[index + 1] = finite_half(encoded[index + 1]);
+            pixels[index + 2] = finite_half(encoded[index + 2]);
             pixels[index + 3] = glm::packHalf1x16(1.0f);
         }
         if (flip_image) {
