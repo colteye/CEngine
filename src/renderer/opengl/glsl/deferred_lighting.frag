@@ -9,7 +9,7 @@ uniform sampler2D g_material;
 uniform sampler2D g_baked_light;
 uniform sampler2D g_depth;
 uniform sampler2DShadow shadow_atlas;
-uniform samplerCube point_shadow_maps[8];
+uniform samplerCubeShadow point_shadow_maps[8];
 
 uniform mat4 view;
 uniform mat4 projection;
@@ -124,47 +124,51 @@ float atlas_shadow(mat4 light_matrix, vec4 rect, vec4 params, vec3 world_pos, ve
 	return lit * 0.25;
 }
 
-float sample_point_map(int index, vec3 direction)
+float sample_point_map(int index, vec3 direction, float reference_depth)
 {
-	if (index == 0) return texture(point_shadow_maps[0], direction).r;
-	if (index == 1) return texture(point_shadow_maps[1], direction).r;
-	if (index == 2) return texture(point_shadow_maps[2], direction).r;
-	if (index == 3) return texture(point_shadow_maps[3], direction).r;
-	if (index == 4) return texture(point_shadow_maps[4], direction).r;
-	if (index == 5) return texture(point_shadow_maps[5], direction).r;
-	if (index == 6) return texture(point_shadow_maps[6], direction).r;
-	return texture(point_shadow_maps[7], direction).r;
+	vec4 sample_coord = vec4(direction, reference_depth);
+	if (index == 0) return texture(point_shadow_maps[0], sample_coord);
+	if (index == 1) return texture(point_shadow_maps[1], sample_coord);
+	if (index == 2) return texture(point_shadow_maps[2], sample_coord);
+	if (index == 3) return texture(point_shadow_maps[3], sample_coord);
+	if (index == 4) return texture(point_shadow_maps[4], sample_coord);
+	if (index == 5) return texture(point_shadow_maps[5], sample_coord);
+	if (index == 6) return texture(point_shadow_maps[6], sample_coord);
+	return texture(point_shadow_maps[7], sample_coord);
 }
 
 float point_shadow(int index, vec3 world_pos, vec3 normal, vec3 light_dir)
 {
 	vec4 point_data = point_shadow_params[index];
 	vec4 filter_data = point_filter_params[index];
-	vec3 from_light = world_pos - point_data.xyz;
+	vec3 receiver_pos = world_pos + light_dir * filter_data.y;
+	vec3 from_light = receiver_pos - point_data.xyz;
 	float current_distance = length(from_light);
 	float far_plane = point_data.w;
 	if (far_plane <= 0.0 || current_distance >= far_plane) {
 		return 1.0;
 	}
 
-	float bias = max(filter_data.x * (1.0 - dot(normal, light_dir)), filter_data.x * 0.25) + filter_data.y * 0.0001;
-	float disk_radius = max(0.01, current_distance / far_plane * 0.08);
-	vec3 offsets[7] = vec3[](
-		vec3(0.0, 0.0, 0.0),
-		vec3(1.0, 0.0, 0.0),
-		vec3(-1.0, 0.0, 0.0),
-		vec3(0.0, 1.0, 0.0),
-		vec3(0.0, -1.0, 0.0),
-		vec3(0.0, 0.0, 1.0),
-		vec3(0.0, 0.0, -1.0)
+	float bias = max(filter_data.x * (1.0 - clamp(dot(normal, light_dir), 0.0, 1.0)), filter_data.x * 0.25);
+	// Shadow bias is a normalized depth offset for every shadow-map type. Keep
+	// the point-light path consistent with the atlas path instead of treating it
+	// as world units and dividing it by the light range a second time.
+	float reference_depth = clamp(current_distance / far_plane - bias, 0.0, 1.0);
+	float disk_radius = 3.0 / max(filter_data.z, 64.0);
+	vec3 offsets[4] = vec3[](
+		vec3(1.0, 1.0, 1.0),
+		vec3(1.0, -1.0, -1.0),
+		vec3(-1.0, 1.0, -1.0),
+		vec3(-1.0, -1.0, 1.0)
 	);
 
 	float lit = 0.0;
-	for (int sample_index = 0; sample_index < 7; ++sample_index) {
-		float closest_distance = sample_point_map(index, from_light + offsets[sample_index] * disk_radius) * far_plane;
-		lit += current_distance - bias <= closest_distance ? 1.0 : 0.0;
+	vec3 direction = from_light / current_distance;
+	for (int sample_index = 0; sample_index < 4; ++sample_index) {
+		lit += sample_point_map(index,
+			normalize(direction + offsets[sample_index] * disk_radius), reference_depth);
 	}
-	return lit / 7.0;
+	return lit * 0.25;
 }
 
 float directional_shadow(int cascade_start, vec3 world_pos, vec3 normal, vec3 light_dir)
@@ -300,9 +304,12 @@ void main()
 	vec3 ambient_color = mix(ambient_ground_color, ambient_sky_color, sky_weight);
 	vec3 ambient = ambient_enabled && !has_lightmap ?
 		ambient_color * ambient_intensity * albedo * ao : vec3(0.0);
-	vec3 color = ambient + albedo * texture(g_baked_light, uv).rgb +
-		evaluate_direct_lights(world_pos, normal, view_dir, albedo, metallic, roughness,
-		receives_shadows);
+	vec3 baked_indirect = albedo * texture(g_baked_light, uv).rgb;
+	vec3 runtime_direct = evaluate_direct_lights(world_pos, normal, view_dir, albedo,
+		metallic, roughness, receives_shadows);
+	// Shadow visibility is applied inside runtime_direct only. A fully shadowed
+	// mixed light must not erase the independent baked-indirect contribution.
+	vec3 color = ambient + baked_indirect + runtime_direct;
 
 	color = color / (color + vec3(1.0));
 	color = pow(color, vec3(1.0 / 2.2));

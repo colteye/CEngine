@@ -85,6 +85,7 @@ bool ValidateCookedScene(const std::filesystem::path& scene_path,
     if (!Expect(render_state.Activate(*scene, assets, &error), error.c_str())) return false;
     std::size_t prop_count = 0;
     std::size_t lightmapped_prop_count = 0;
+    std::size_t shadow_only_prop_count = 0;
     bool lightmapped_props_are_static = true;
     std::size_t expected_realtime_lights = 0;
     glm::vec3 expected_sun_direction(0.0f);
@@ -96,6 +97,11 @@ bool ValidateCookedScene(const std::filesystem::path& scene_path,
         {
             ++prop_count;
             const auto& prop = static_cast<const CEngine::Entities::PropEntity&>(*entity);
+            if (prop.shadow_only)
+            {
+                ++shadow_only_prop_count;
+                lightmapped_props_are_static = lightmapped_props_are_static && !prop.lightmap;
+            }
             if (prop.lightmap)
             {
                 ++lightmapped_prop_count;
@@ -128,6 +134,17 @@ bool ValidateCookedScene(const std::filesystem::path& scene_path,
     }
     const auto& ambient = CEngine::Renderer::RenderSystem::GetAmbientLighting();
     const auto& lights = CEngine::Renderer::RenderSystem::GetDirectLights();
+    std::size_t shadow_only_renderable_count = 0;
+    bool shadow_only_flags_are_valid = true;
+    for (const auto& renderable : CEngine::Renderer::RenderSystem::GetRenderables())
+    {
+        if ((renderable.flags & CEngine::Renderer::RenderableFlagShadowOnly) == 0) continue;
+        ++shadow_only_renderable_count;
+        shadow_only_flags_are_valid = shadow_only_flags_are_valid &&
+            (renderable.flags & CEngine::Renderer::RenderableFlagCastsShadow) != 0 &&
+            (renderable.flags & CEngine::Renderer::RenderableFlagReceivesShadow) == 0 &&
+            renderable.lightmap == nullptr;
+    }
     std::size_t directional_count = 0;
     std::size_t point_count = 0;
     const CEngine::Renderer::LightRecord* sun = nullptr;
@@ -142,16 +159,20 @@ bool ValidateCookedScene(const std::filesystem::path& scene_path,
     }
     return Expect(scene->EntityCount() > 0, "cooked scene should contain entities") &&
         Expect(prop_count > 0, "cooked scene should contain prop entities") &&
-        Expect(lightmapped_prop_count == prop_count && lightmapped_props_are_static,
-            "every expanded Sponza prop should have a valid static lightmap binding") &&
+        Expect(shadow_only_prop_count == 1 && shadow_only_renderable_count == 1 &&
+                shadow_only_flags_are_valid,
+            "Sponza should bind one cast-only occluder renderable") &&
+        Expect(lightmapped_prop_count + shadow_only_prop_count == prop_count &&
+                lightmapped_props_are_static,
+            "every visible Sponza prop should have a lightmap and the occluder should not") &&
         Expect(scene->AssetReferenceCount() > 0, "cooked scene should reference target assets") &&
         Expect(render_state.Active(), "cooked scene render bindings should activate") &&
         Expect(ambient.enabled && ambient.sky_color == scene->Settings().ambient_color,
             "scene environment lighting should reach the renderer") &&
         Expect(lights.size() == expected_realtime_lights,
             "cooked scene should bind every realtime and mixed light") &&
-        Expect(directional_count == 1 && point_count == 4,
-            "Sponza should bind one directional light and four point lights") &&
+        Expect(directional_count == 1 && point_count == 0,
+            "Sponza should bind its single authored directional light") &&
         Expect(sun != nullptr && sun->casts_shadows,
             "Sponza Sun should bind as a shadow-casting directional light") &&
         Expect(sun != nullptr && std::abs(glm::length(sun->direction) - 1.0f) < 0.0001f,

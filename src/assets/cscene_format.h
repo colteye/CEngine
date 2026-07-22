@@ -23,6 +23,7 @@ enum PropFlags : std::uint32_t {
     PropVisible = 1u << 0u,
     PropCollisionEnabled = 1u << 1u,
     PropDynamic = 1u << 2u,
+    PropShadowOnly = 1u << 3u,
 };
 
 enum LightFlags : std::uint32_t {

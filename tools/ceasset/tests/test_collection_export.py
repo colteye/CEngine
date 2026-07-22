@@ -18,6 +18,7 @@ from ceassetlib.collection_export import (
     bundle_relative_path,
     collection_export_spec,
     collection_payload,
+    object_role,
     write_collection_assets,
 )
 from ceassetlib.formats import AssetType
@@ -57,6 +58,9 @@ class FakeCollection:
 
 
 class CollectionExportTests(unittest.TestCase):
+    def test_occluder_prefix_maps_to_existing_shadow_blocker_role(self) -> None:
+        self.assertEqual(object_role(FakeObject("OCC_SunBlocker", "MESH")), "occluder")
+
     def test_collection_prefix_selects_prefab_asset(self) -> None:
         spec = collection_export_spec(FakeCollection("PREFAB_Hero", []))
 

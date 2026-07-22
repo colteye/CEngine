@@ -10,8 +10,23 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ADDON))
 
 from cengine_asset_exporter.lightmaps import (
-    _combine_light_passes, _maximum_rgb, encode_rgbm, plan_atlas,
+    DEFAULT_INCLUDE_DIRECT, DEFAULT_INDIRECT_CLAMP, DEFAULT_PADDING,
+    DEFAULT_RESOLUTION, DEFAULT_SAMPLES, DIRECT_BAKE_LIGHT_MODES,
+    INDIRECT_BAKE_LIGHT_MODES, _apply_coverage_mask, _clamp_rgb, _combine_light_passes,
+    LIGHTMAP_PACK_MARGIN, _bake_targets, _maximum_rgb, _static_meshes,
+    _trimmed_density_ratio, encode_rgbm, plan_atlas,
 )
+
+
+class FakeMeshObject:
+    def __init__(self, name: str, role: str = "") -> None:
+        self.name = name
+        self.type = "MESH"
+        self.matrix_world = object()
+        self.properties = {"ce_role": role} if role else {}
+
+    def get(self, key: str, default: object = None) -> object:
+        return self.properties.get(key, default)
 
 
 class LightmapTests(unittest.TestCase):
@@ -41,8 +56,51 @@ class LightmapTests(unittest.TestCase):
 
         self.assertEqual(combined, [1.5, 0.5, 0.125, 1.0])
 
+    def test_light_modes_have_explicit_bake_semantics(self) -> None:
+        self.assertEqual(INDIRECT_BAKE_LIGHT_MODES, {"baked", "mixed"})
+        self.assertEqual(DIRECT_BAKE_LIGHT_MODES, {"baked"})
+        self.assertNotIn("realtime", INDIRECT_BAKE_LIGHT_MODES)
+        self.assertNotIn("mixed", DIRECT_BAKE_LIGHT_MODES)
+
+    def test_offline_bake_quality_does_not_inherit_preview_defaults(self) -> None:
+        self.assertEqual(DEFAULT_RESOLUTION, 4096)
+        self.assertEqual(DEFAULT_PADDING, 64)
+        self.assertEqual(DEFAULT_SAMPLES, 256)
+        self.assertEqual(DEFAULT_INDIRECT_CLAMP, 2.0)
+        self.assertFalse(DEFAULT_INCLUDE_DIRECT)
+
+    def test_lightmap_pack_margin_is_fixed_for_bakes(self) -> None:
+        self.assertEqual(LIGHTMAP_PACK_MARGIN, 0.001)
+
+    def test_occluders_are_not_lightmap_unwrap_or_bake_targets(self) -> None:
+        wall = FakeMeshObject("SM_Wall")
+        blocker = FakeMeshObject("OCC_LightBlocker", "occluder")
+
+        self.assertEqual(_static_meshes((blocker, wall)), [wall])
+        targets = _bake_targets((blocker, wall), {})
+        self.assertEqual([target.source for target in targets], [wall])
+
+    def test_density_ratio_trims_single_triangle_outliers(self) -> None:
+        densities = [1.0] * 10 + [1000.0]
+
+        self.assertEqual(_trimmed_density_ratio(densities), 1.0)
+
     def test_maximum_rgb_ignores_alpha(self) -> None:
         self.assertEqual(_maximum_rgb((0.25, 0.5, 0.125, 1.0, 2.0, 1.0, 0.0, 0.0)), 2.0)
+
+    def test_denoise_output_is_clamped_to_source_energy(self) -> None:
+        pixels = [1.5, -0.25, 0.5, 1.0]
+
+        self.assertEqual(_clamp_rgb(pixels, 1.0), [1.0, 0.0, 0.5, 1.0])
+
+    def test_denoise_uses_coverage_instead_of_black_energy_as_chart_mask(self) -> None:
+        denoised = [0.25, 0.5, 0.75, 0.2, 0.25, 0.5, 0.75, 0.2]
+        coverage = [1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+
+        self.assertEqual(_apply_coverage_mask(denoised, coverage), [
+            0.25, 0.5, 0.75, 1.0,
+            0.0, 0.0, 0.0, 1.0,
+        ])
 
 
 if __name__ == "__main__":

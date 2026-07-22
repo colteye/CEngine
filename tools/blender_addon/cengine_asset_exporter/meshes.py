@@ -167,8 +167,11 @@ def material_uv_data(mesh: object):
 
     layers = list(uv_layers)
     active = getattr(uv_layers, "active", None)
-    candidates = [active]
-    candidates.extend(layer for layer in layers if bool(getattr(layer, "active_render", False)))
+    # Blender materials use the render-active UV map by default. The edit-active
+    # layer can legitimately be an authored or legacy lightmap, as in Sponza,
+    # and must not silently replace UV0 in the cooked mesh.
+    candidates = [layer for layer in layers if bool(getattr(layer, "active_render", False))]
+    candidates.append(active)
     candidates.extend(layers)
     for layer in candidates:
         if layer is None or str(getattr(layer, "name", "")) in MATERIAL_UV_EXCLUDED:

@@ -230,6 +230,22 @@ class BlenderMeshesTests(unittest.TestCase):
         self.assertEqual(first[8:10], (0.25, 0.5))
         self.assertEqual(second[8:10], (0.75, 0.5))
 
+    def test_render_active_uv_wins_over_differently_named_edit_active_lightmap(self) -> None:
+        mesh = FakeMesh()
+        material_uvs = mesh.uv_layers.active.data
+        old_lightmap_uvs = [
+            FakeUv((0.2, 0.3)), FakeUv((0.4, 0.5)), FakeUv((0.6, 0.7))]
+        old_lightmap = FakeUvLayer(old_lightmap_uvs, "Lightmap")
+        mesh.uv_layers.layers.append(old_lightmap)
+        mesh.uv_layers.active = old_lightmap
+
+        buffers = mesh_buffers(mesh)
+
+        first = VERTEX.unpack_from(buffers.data, 0)
+        second = VERTEX.unpack_from(buffers.data, VERTEX.size)
+        self.assertEqual(first[6:8], tuple(material_uvs[0].uv))
+        self.assertEqual(second[6:8], tuple(material_uvs[1].uv))
+
     def test_mesh_buffers_pack_skin_indices_and_weights(self) -> None:
         armature = FakeArmature()
         obj = FakeObject("SK_Body", "MESH", FakeMesh(skinned=True), armature)

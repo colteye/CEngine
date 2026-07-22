@@ -151,9 +151,9 @@ Select the top-level collection you want to export before running
 `.casset` mesh/material pair once as an ordinary `prop`; it does not create a
 general mutable runtime prefab graph.
 
-Scene exports also build baked lighting automatically. Static meshes retain an
-existing `CEngineLightmap` UV layer or receive a generated UV1, placements are
-packed into a deterministic padded atlas, and Cycles writes scene-linear
+Scene exports also build baked lighting automatically. Static meshes receive a
+fresh generated `CEngineLightmap` UV1 on every cook, placements are packed into
+a deterministic padded atlas, and Cycles writes scene-linear
 irradiance to RGBM BC3 DDS. The bake adds indirect light from `baked` and `mixed`
 lights to direct light from `baked` lights; realtime direct lighting and mixed
 direct lighting remain runtime work. Surface albedo is not stored in the
@@ -163,7 +163,16 @@ static placement. Collection-instance bindings are stored per casset object on
 the `prefab_instance` and copied to every material-split prop during expansion;
 the reusable `.casset` contains no scene lighting. Optional scene custom
 properties `ce_lightmap_resolution`, `ce_lightmap_padding`, and
-`ce_lightmap_rgbm_range` override the 1024, 4-pixel, and 8.0 defaults.
+`ce_lightmap_rgbm_range` override the 1024, 4-pixel, and 8.0 defaults. Generated
+UV1 uses connected angle-based charts, equalized texel density, and
+resolution-aware padding without changing the authored material UV0. Blender's
+OpenImageDenoise HDR pass is
+enabled by default after the Cycles passes are combined; set the scene property
+`ce_lightmap_denoise = false` only when a raw bake is explicitly required.
+Lightmap cooks use 64 Cycles samples, an indirect firefly clamp of 2.0, and
+disable reflective/refractive caustics independently of interactive render
+settings. Scene properties `ce_lightmap_samples` and
+`ce_lightmap_indirect_clamp` override those quality defaults.
 
 Every exported mesh placement is a `prop` entity. The `ce_dynamic` object
 property selects dynamic behavior; when absent or false the prop is static.

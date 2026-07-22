@@ -35,6 +35,7 @@ bool EntityClassesOwnTheirFields()
     auto& prop = static_cast<CEngine::Entities::PropEntity&>(
         scene.CreateEntity("prop", "HallwayCrate"));
     prop.visible = false;
+    prop.shadow_only = true;
     prop.GetTransform().position = {2.0f, 3.0f, 4.0f};
     prop.GetTransform().UpdateWorldMatrix();
     auto& light = static_cast<CEngine::Entities::LightEntity&>(
@@ -43,6 +44,7 @@ bool EntityClassesOwnTheirFields()
     return Expect(prop.Classname() == "prop", "prop classname should be fixed") &&
         Expect(prop.Name() == "HallwayCrate", "entity should own its name") &&
         Expect(!prop.visible, "prop should own visibility field") &&
+        Expect(prop.shadow_only, "prop should own shadow-only presentation state") &&
         Expect(Near(prop.GetTransform().world_matrix[3].x, 2.0f), "entity transform should update") &&
         Expect(light.Classname() == "light" && Near(light.intensity, 5.0f), "light should own light fields") &&
         Expect(scene.EntityCount() == 2, "scene should own both entities");
@@ -54,6 +56,18 @@ bool SlotLookupWorks()
     auto& camera = scene.CreateEntity("camera", "MainCamera");
     return Expect(scene.GetEntity(camera.Id()) == &camera, "runtime handle should find entity") &&
         Expect(scene.Entities()[camera.Id().index].get() == &camera, "single entity list should own entity");
+}
+
+bool LightModesHaveExplicitRuntimeDirectSemantics()
+{
+    using CEngine::Entities::HasRuntimeDirectLighting;
+    using CEngine::Entities::LightMode;
+    return Expect(HasRuntimeDirectLighting(LightMode::Realtime),
+            "realtime lights should provide runtime direct lighting") &&
+        Expect(HasRuntimeDirectLighting(LightMode::Mixed),
+            "mixed lights should provide runtime direct lighting and shadows") &&
+        Expect(!HasRuntimeDirectLighting(LightMode::Baked),
+            "baked lights should not be submitted to runtime direct lighting");
 }
 } // namespace
 
@@ -90,5 +104,6 @@ int main(int argc, char** argv)
             Expect(Near(scene->Entities()[3]->GetTransform().position.x, 1.0f),
                 "prefab placement transform should apply to realized props") ? 0 : 1;
     }
-    return GenerationalSlotsRejectStaleHandles() && EntityClassesOwnTheirFields() && SlotLookupWorks() ? 0 : 1;
+    return GenerationalSlotsRejectStaleHandles() && EntityClassesOwnTheirFields() && SlotLookupWorks() &&
+        LightModesHaveExplicitRuntimeDirectSemantics() ? 0 : 1;
 }

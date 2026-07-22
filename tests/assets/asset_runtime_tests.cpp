@@ -5,6 +5,7 @@
 
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <cstdint>
 #include <filesystem>
@@ -23,7 +24,7 @@ constexpr std::uint16_t MeshMetadataVersion = 2;
 constexpr std::uint32_t MeshFlagSkinned = 1u << 0u;
 constexpr std::uint32_t MeshFlagLightmapUv = 1u << 1u;
 constexpr std::array<char, 4> MaterialPayloadMagic = {'C', 'E', 'M', 'A'};
-constexpr std::uint16_t MaterialPayloadVersion = 3;
+constexpr std::uint16_t MaterialPayloadVersion = 4;
 
 #pragma pack(push, 1)
 struct DiskMaterialHeader {
@@ -31,6 +32,7 @@ struct DiskMaterialHeader {
     std::uint16_t version = MaterialPayloadVersion;
     std::uint16_t header_size = 0;
     std::uint32_t shader = 0;
+    std::uint32_t render_mode = 0;
     std::uint32_t texture_count = 0;
     std::uint32_t texture_table_offset = 0;
     std::uint32_t string_table_offset = 0;
@@ -41,6 +43,7 @@ struct DiskMaterialHeader {
     float metallic_factor = 0.0f;
     float roughness_factor = 0.5f;
     float ao_factor = 1.0f;
+    float alpha_cutoff = 0.5f;
 };
 
 struct DiskMaterialTexture {
@@ -392,6 +395,8 @@ bool MaterialLoaderAllowsNeutralSurfaceSlots()
     material_header.metallic_factor = 0.1f;
     material_header.roughness_factor = 0.8f;
     material_header.ao_factor = 0.9f;
+    material_header.render_mode = 2;
+    material_header.alpha_cutoff = 0.42f;
 
     std::vector<std::uint8_t> payload;
     AppendStruct(payload, material_header);
@@ -436,6 +441,16 @@ bool MaterialLoaderAllowsNeutralSurfaceSlots()
     }
     if (!Expect(material.GetMetallicRoughnessAoFactors() == glm::vec3(0.1f, 0.8f, 0.9f),
             "material loader should preserve authored metallic, roughness, and AO constants"))
+    {
+        return false;
+    }
+    if (!Expect(material.GetRenderMode() == Renderer::MaterialRenderMode::AlphaHashDither,
+            "material loader should preserve the authored render mode"))
+    {
+        return false;
+    }
+    if (!Expect(std::abs(material.GetAlphaCutoff() - 0.42f) < 0.0001f,
+            "material loader should preserve the authored alpha cutoff"))
     {
         return false;
     }

@@ -12,6 +12,13 @@ namespace CEngine::Entities {
 enum class LightType : std::uint32_t { Point, Sun, Spot, Area };
 enum class LightMode : std::uint32_t { Realtime, Baked, Mixed };
 
+// Realtime and Mixed lights both provide direct light and shadows at runtime.
+// Baked lights are represented entirely by the static lightmap.
+constexpr bool HasRuntimeDirectLighting(LightMode mode)
+{
+    return mode == LightMode::Realtime || mode == LightMode::Mixed;
+}
+
 class LightEntity final : public Scene::Entity {
 public:
     LightType type = LightType::Point;

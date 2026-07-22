@@ -17,6 +17,7 @@ from cengine_asset_exporter.materials import (  # noqa: E402
     material_factors,
     material_output_path,
     material_payload,
+    material_surface,
     material_texture_bindings,
     object_materials,
     supported_material_images,
@@ -63,8 +64,13 @@ class FakeNodeTree:
 
 
 class FakeMaterial:
-    def __init__(self, name: str, links: list[FakeLink], values: dict[str, object] | None = None) -> None:
+    def __init__(self, name: str, links: list[FakeLink], values: dict[str, object] | None = None,
+                 surface_render_method: str = "DITHERED", blend_method: str = "HASHED",
+                 alpha_threshold: float = 0.5) -> None:
         self.name = name
+        self.surface_render_method = surface_render_method
+        self.blend_method = blend_method
+        self.alpha_threshold = alpha_threshold
         principled = FakeNode("BSDF_PRINCIPLED", inputs={
             key: FakeSocket(key, value) for key, value in (values or {}).items()
         })
@@ -196,6 +202,26 @@ class BlenderMaterialsTests(unittest.TestCase):
 
         self.assertEqual(supported_material_images(material), [base])
 
+    def test_principled_alpha_image_is_a_packing_input_not_a_standalone_texture(self) -> None:
+        base = FakeImage(Path("leaves.png"))
+        opacity = FakeImage(Path("leaves_mask.png"))
+        material = FakeMaterial("Leaves", [
+            FakeLink(base, "Base Color"),
+            FakeLink(opacity, "Alpha"),
+        ])
+
+        bindings = material_texture_bindings(
+            material,
+            lambda fake_image: fake_image.path,
+            lambda source: source.with_suffix(".dds"),
+        )
+
+        self.assertEqual([(binding.slot, binding.output.name) for binding in bindings], [
+            ("alpha", "leaves_mask.png"),
+            ("base_color", "leaves.dds"),
+        ])
+        self.assertEqual(supported_material_images(material), [base])
+
     def test_material_payload_records_texture_slots_and_paths(self) -> None:
         material = FakeMaterial("HeroSkin", [])
         payload = material_payload(
@@ -207,9 +233,10 @@ class BlenderMaterialsTests(unittest.TestCase):
         header = MATERIAL_HEADER.unpack_from(payload)
         self.assertEqual(header[0], MATERIAL_MAGIC)
         self.assertEqual(header[1], MATERIAL_VERSION)
-        self.assertEqual(header[4], 1)
-        texture = MATERIAL_TEXTURE.unpack_from(payload, header[5])
-        strings = payload[header[6] : header[6] + header[7]]
+        self.assertEqual(header[4], 0)
+        self.assertEqual(header[5], 1)
+        texture = MATERIAL_TEXTURE.unpack_from(payload, header[6])
+        strings = payload[header[7] : header[7] + header[8]]
         self.assertEqual(texture[0], 1)
         self.assertEqual(strings[texture[1] : texture[1] + texture[2]], b"compiled/hero/textures/albedo.dds")
 
@@ -226,12 +253,38 @@ class BlenderMaterialsTests(unittest.TestCase):
         )
 
         header = MATERIAL_HEADER.unpack_from(payload)
-        self.assertEqual(header[4], 0)
-        for actual, expected in zip(header[10:14], (0.2, 0.4, 0.6, 1.0)):
+        self.assertEqual(header[5], 0)
+        for actual, expected in zip(header[11:15], (0.2, 0.4, 0.6, 1.0)):
             self.assertAlmostEqual(actual, expected)
-        self.assertAlmostEqual(header[14], 0.25)
-        self.assertAlmostEqual(header[15], 0.75)
-        self.assertAlmostEqual(header[16], 1.0)
+        self.assertAlmostEqual(header[15], 0.25)
+        self.assertAlmostEqual(header[16], 0.75)
+        self.assertAlmostEqual(header[17], 1.0)
+
+    def test_linked_principled_alpha_exports_alpha_hash_mode(self) -> None:
+        image_node = FakeNode("TEX_IMAGE", FakeImage(Path("leaves.png")))
+        principled = FakeNode("BSDF_PRINCIPLED", inputs={
+            "Alpha": FakeSocket("Alpha", 1.0),
+        })
+        material = FakeMaterial("Leaves", [
+            FakeLink(None, "Alpha", from_node=image_node, to_node=principled),
+        ])
+        material.node_tree.nodes = [principled]
+
+        surface = material_surface(material, 1)
+        payload = material_payload(Path("foliage.blend"), material, [])
+        header = MATERIAL_HEADER.unpack_from(payload)
+
+        self.assertEqual(surface.render_mode, 2)
+        self.assertEqual(header[4], 2)
+        self.assertAlmostEqual(header[18], 0.5)
+
+    def test_textured_material_preserves_principled_alpha_factor(self) -> None:
+        material = FakeMaterial("Glass", [], {"Alpha": 0.25})
+        factors = material_factors(material, [
+            type("Binding", (), {"slot": "base_color"})(),
+        ])
+
+        self.assertEqual(factors.base_color, (1.0, 1.0, 1.0, 0.25))
 
     def test_texture_inputs_replace_only_their_corresponding_constants(self) -> None:
         material = FakeMaterial("Mixed", [
@@ -279,9 +332,9 @@ class BlenderMaterialsTests(unittest.TestCase):
 
             payload = data[header[7] : header[7] + header[8]]
             material_header = MATERIAL_HEADER.unpack_from(payload)
-            texture = MATERIAL_TEXTURE.unpack_from(payload, material_header[5])
-            strings = payload[material_header[6] : material_header[6] + material_header[7]]
-            self.assertEqual(strings[material_header[8] : material_header[8] + material_header[9]], b"HeroSkin")
+            texture = MATERIAL_TEXTURE.unpack_from(payload, material_header[6])
+            strings = payload[material_header[7] : material_header[7] + material_header[8]]
+            self.assertEqual(strings[material_header[9] : material_header[9] + material_header[10]], b"HeroSkin")
             self.assertEqual(texture[0], 1)
             self.assertEqual(export.generated_textures, ())
             self.assertFalse((root / "compiled" / "hero" / "textures" / "HeroSkin_mra.dds").exists())

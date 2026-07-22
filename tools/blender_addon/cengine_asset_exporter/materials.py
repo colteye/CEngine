@@ -17,6 +17,7 @@ from ceassetlib.texture import normalize_pillow_dds_format
 
 MATERIAL_TEXTURE_SLOTS = {
     "base color": "base_color",
+    "alpha": "alpha",
     "metallic": "metallic",
     "roughness": "roughness",
     "normal": "normal",
@@ -24,10 +25,10 @@ MATERIAL_TEXTURE_SLOTS = {
     "occlusion": "ao",
 }
 
-MATERIAL_HEADER = struct.Struct("<4sHHIIIIIIIfffffff")
+MATERIAL_HEADER = struct.Struct("<4sHHIIIIIIIIffffffff")
 MATERIAL_TEXTURE = struct.Struct("<III")
 MATERIAL_MAGIC = b"CEMA"
-MATERIAL_VERSION = 3
+MATERIAL_VERSION = 4
 MATERIAL_SHADER_IDS = {
     "pbr": 1,
     "pbr_standard": 1,
@@ -40,6 +41,13 @@ MATERIAL_TEXTURE_SLOT_IDS = {
     "orm": 3,
     "roughness": 4,
     "metallic": 5,
+}
+MATERIAL_RENDER_MODE_IDS = {
+    "opaque": 0,
+    "alpha_clip": 1,
+    "alpha_hash": 2,
+    "transparent": 3,
+    "unlit": 4,
 }
 
 
@@ -66,6 +74,12 @@ class MaterialFactors:
     metallic: float
     roughness: float
     ao: float
+
+
+@dataclass(frozen=True)
+class MaterialSurface:
+    render_mode: int
+    alpha_cutoff: float
 
 
 @dataclass(frozen=True)
@@ -115,6 +129,11 @@ def material_bump_normal_output_path(blend_source: Path, output_root: Path, mate
         f"{clean_asset_name(material_name)}_bump_normal.dds"
 
 
+def material_base_alpha_output_path(blend_source: Path, output_root: Path, material_name: str) -> Path:
+    return output_dir_for_source(blend_source, output_root) / "textures" / \
+        f"{clean_asset_name(material_name)}_base_alpha.dds"
+
+
 def principled_value(material: object, socket_name: str, fallback: float) -> float:
     nodes = getattr(getattr(material, "node_tree", None), "nodes", ())
     for node in nodes:
@@ -146,14 +165,50 @@ def principled_color(material: object, socket_name: str,
 def material_factors(material: object, bindings: list[TextureBinding]) -> MaterialFactors:
     slots = {binding.slot for binding in bindings}
     packed_mra = bool(slots & {"metallic_roughness_ao", "orm"})
-    base_color = (1.0, 1.0, 1.0, 1.0) if "base_color" in slots else principled_color(
-        material, "Base Color", (1.0, 1.0, 1.0, 1.0))
+    authored_base_color = principled_color(material, "Base Color", (1.0, 1.0, 1.0, 1.0))
+    alpha = principled_value(material, "Alpha", 1.0)
+    base_color = (1.0, 1.0, 1.0, alpha) if "base_color" in slots else (
+        authored_base_color[0], authored_base_color[1], authored_base_color[2], alpha)
     metallic = 1.0 if packed_mra or "metallic" in slots else principled_value(material, "Metallic", 0.0)
     roughness = 1.0 if packed_mra or "roughness" in slots else principled_value(material, "Roughness", 0.5)
     ao = 1.0
     if not packed_mra and "ao" not in slots:
         ao = max(0.0, min(1.0, float(getattr(material, "get", lambda _key, default=None: default)("ce_ao", 1.0))))
     return MaterialFactors(base_color, metallic, roughness, ao)
+
+
+def material_has_authored_alpha(material: object) -> bool:
+    nodes = getattr(getattr(material, "node_tree", None), "nodes", ())
+    principled_nodes = [node for node in nodes if getattr(node, "type", "") == "BSDF_PRINCIPLED"]
+    links = getattr(getattr(material, "node_tree", None), "links", ())
+    if any(
+        any(same_node(getattr(link, "to_node", None), node) and
+            str(getattr(getattr(link, "to_socket", None), "name", "")).strip().lower() == "alpha"
+            for node in principled_nodes)
+        for link in links
+    ):
+        return True
+    return principled_value(material, "Alpha", 1.0) < 1.0
+
+
+def material_surface(material: object, shader_id: int) -> MaterialSurface:
+    if shader_id == MATERIAL_SHADER_IDS["unlit"]:
+        return MaterialSurface(MATERIAL_RENDER_MODE_IDS["unlit"], 0.5)
+    if not material_has_authored_alpha(material):
+        return MaterialSurface(MATERIAL_RENDER_MODE_IDS["opaque"], 0.5)
+
+    surface_method = str(getattr(material, "surface_render_method", "") or "").upper()
+    blend_method = str(getattr(material, "blend_method", "") or "").upper()
+    if blend_method == "CLIP":
+        mode = MATERIAL_RENDER_MODE_IDS["alpha_clip"]
+    elif blend_method == "BLEND" or surface_method == "BLENDED":
+        mode = MATERIAL_RENDER_MODE_IDS["transparent"]
+    else:
+        # Blender 4.2+ uses DITHERED; older files expose HASHED. Both map to
+        # the engine's stable alpha-hash path.
+        mode = MATERIAL_RENDER_MODE_IDS["alpha_hash"]
+    cutoff = max(0.0, min(1.0, float(getattr(material, "alpha_threshold", 0.5))))
+    return MaterialSurface(mode, cutoff)
 
 
 def write_mra_texture(bindings: list[TextureBinding], output: Path) -> None:
@@ -260,6 +315,51 @@ def write_bump_normal_texture(binding: TextureBinding, output: Path, dds_format:
                 alpha.close()
         finally:
             height.close()
+
+
+def write_base_alpha_texture(
+    base_color: TextureBinding | None,
+    opacity: TextureBinding,
+    output: Path,
+    dds_format: str,
+) -> None:
+    try:
+        from PIL import Image
+    except ImportError as error:
+        raise RuntimeError("Pillow is required to pack material opacity into base color") from error
+
+    with Image.open(opacity.source) as opacity_source:
+        opacity_rgba = opacity_source.convert("RGBA")
+        opacity_alpha = opacity_rgba.getchannel("A")
+        alpha_extrema = opacity_alpha.getextrema()
+        if alpha_extrema == (255, 255):
+            opacity_alpha.close()
+            opacity_alpha = opacity_source.convert("L")
+        try:
+            if base_color is None:
+                packed = Image.new("RGBA", opacity_alpha.size, (255, 255, 255, 255))
+            else:
+                with Image.open(base_color.source) as base_source:
+                    packed = base_source.convert("RGBA")
+            try:
+                if opacity_alpha.size != packed.size:
+                    resized = opacity_alpha.resize(packed.size, Image.Resampling.BILINEAR)
+                    opacity_alpha.close()
+                    opacity_alpha = resized
+                packed.putalpha(opacity_alpha)
+                output.parent.mkdir(parents=True, exist_ok=True)
+                temporary = output.with_name(output.name + ".tmp")
+                try:
+                    packed.save(temporary, format="DDS", pixel_format=normalize_pillow_dds_format(dds_format))
+                    temporary.replace(output)
+                finally:
+                    if temporary.exists():
+                        temporary.unlink()
+            finally:
+                packed.close()
+        finally:
+            opacity_alpha.close()
+            opacity_rgba.close()
 
 
 def object_materials(objects: Iterable[object]) -> list[object]:
@@ -407,7 +507,7 @@ def material_texture_bindings(
         if slot == "normal" and str(getattr(getattr(link, "to_node", None), "type", "")) == "NORMAL_MAP" and \
                 image_is_bump_source(image, source):
             slot = "bump"
-        output = source if slot == "bump" else texture_output_path_for_source(source)
+        output = source if slot in {"bump", "alpha"} else texture_output_path_for_source(source)
         if output is None: continue
 
         key = (slot, source)
@@ -452,7 +552,7 @@ def supported_material_images(material: object) -> list[object]:
         if getattr(from_node, "type", "") != "TEX_IMAGE":
             continue
         slot = material_link_slot(link, links)
-        if not slot or slot == "bump":
+        if not slot or slot in {"bump", "alpha"}:
             continue
         image = getattr(from_node, "image", None)
         if image is None or id(image) in seen:
@@ -479,6 +579,7 @@ def material_payload(
 
     del source
     factors = factors if factors is not None else material_factors(material, bindings)
+    surface = material_surface(material, shader_id)
     strings = bytearray()
 
     def append_string(text: str) -> tuple[int, int]:
@@ -502,6 +603,7 @@ def material_payload(
         MATERIAL_VERSION,
         MATERIAL_HEADER.size,
         shader_id,
+        surface.render_mode,
         len(texture_rows) // MATERIAL_TEXTURE.size,
         MATERIAL_HEADER.size,
         string_table_offset,
@@ -512,6 +614,7 @@ def material_payload(
         factors.metallic,
         factors.roughness,
         factors.ao,
+        surface.alpha_cutoff,
     )
     return bytes(header + texture_rows + strings)
 
@@ -530,9 +633,21 @@ def write_material_asset(
     start = time.perf_counter()
     bindings = material_texture_bindings(material, image_source_path, texture_output_path_for_source)
     factors = material_factors(material, bindings)
+    base_color = next((binding for binding in bindings if binding.slot == "base_color"), None)
+    opacity = next((binding for binding in bindings if binding.slot == "alpha"), None)
     packed_mra = next((binding for binding in bindings if binding.slot in {"metallic_roughness_ao", "orm"}), None)
     separate_mra = [binding for binding in bindings if binding.slot in {"metallic", "roughness", "ao"}]
     generated_textures: list[Path] = []
+    if opacity is not None:
+        base_alpha_output = material_base_alpha_output_path(blend_source, output_root, material.name)
+        write_base_alpha_texture(base_color, opacity, base_alpha_output, dds_format)
+        base_color = TextureBinding("base_color", base_color.source if base_color is not None else opacity.source,
+                                    base_alpha_output)
+        generated_textures.append(base_alpha_output)
+    else:
+        stale_base_alpha = material_base_alpha_output_path(blend_source, output_root, material.name)
+        if stale_base_alpha.is_file():
+            stale_base_alpha.unlink()
     direct_normal = next((binding for binding in bindings if binding.slot == "normal"), None)
     bump = next((binding for binding in bindings if binding.slot == "bump"), None)
     if direct_normal is None and bump is not None:
@@ -555,7 +670,9 @@ def write_material_asset(
         if stale_mra.is_file():
             stale_mra.unlink()
     payload_bindings = [binding for binding in bindings
-                        if binding.slot not in {"metallic", "roughness", "ao", "bump", "normal"}]
+                        if binding.slot not in {"base_color", "alpha", "metallic", "roughness", "ao", "bump", "normal"}]
+    if base_color is not None:
+        payload_bindings.append(base_color)
     if direct_normal is not None:
         payload_bindings.append(direct_normal)
     if packed_mra is not None:

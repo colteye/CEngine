@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
-from .collection_export import blender_to_engine_matrix_rows
+from .collection_export import blender_to_engine_matrix_rows, object_role
 from .formats import AssetType
 from .ids import guid_from_stable_name
 from .scene_export import (
@@ -143,6 +143,7 @@ def scene_description(
                     lightmap_offset=placement.offset if placement else (0.0, 0.0),
                     lightmap_rgbm_range=placement.rgbm_range if placement else 8.0,
                     dynamic=dynamic,
+                    shadow_only=object_role(obj) == "occluder",
                     collision_enabled=bool(_property(obj, "ce_collision",
                         _property(obj, "ce_physics", False))),
                     collision_half_extents=tuple(float(value) for value in _property(

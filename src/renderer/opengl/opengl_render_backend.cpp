@@ -521,7 +521,9 @@ void OpenGLRenderBackend::RemoveMaterial(Material* material)
 bool OpenGLRenderBackend::RegisterLightmap(const Lightmap* lightmap)
 {
 	assert(lightmap != nullptr);
-	const GLuint texture = OpenGLTexture::LoadDDS(lightmap->path);
+	// Blender bake pixels already use OpenGL's bottom-left origin. Ordinary
+	// source-image DDS files need nv_dds' vertical flip; generated lightmaps do not.
+	const GLuint texture = OpenGLTexture::LoadDDS(lightmap->path, false);
 	if (texture == 0) return false;
 	lightmap_resources.emplace(lightmap, texture);
 	return true;
@@ -653,7 +655,8 @@ void OpenGLRenderBackend::BuildRenderQueues()
 	{
 		const OpenGLDrawItem& item = draw_items[index];
 		if (item.material == nullptr || item.count == 0) continue;
-		if (IntersectsFrustum(item.world_bounds, camera_frustum))
+		if ((item.flags & RenderableFlagShadowOnly) == 0 &&
+			IntersectsFrustum(item.world_bounds, camera_frustum))
 		{
 			switch (ClassifyRenderMode(item.material->GetRenderMode()))
 			{

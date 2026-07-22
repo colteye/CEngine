@@ -95,6 +95,21 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertEqual(prop.lightmap_offset, (0.5, 0.0))
         self.assertEqual(prop.lightmap_rgbm_range, 12.0)
 
+    def test_scene_occluder_becomes_shadow_only_prop_without_lightmap(self) -> None:
+        obj = FakeObject("OCC_SunBlocker", "MESH", props={"ce_role": "occluder"})
+        scene = scene_description(
+            (obj,),
+            {"OCC_SunBlocker": [(Path("compiled/OCC_SunBlocker.cmesh"), "BlockerMaterial")]},
+            {"BlockerMaterial": Path("compiled/BlockerMaterial.cmat")},
+            {},
+            lambda path: path.as_posix(),
+        )
+
+        prop = scene.entities[0].data
+        self.assertIsInstance(prop, Prop)
+        self.assertTrue(prop.shadow_only)
+        self.assertIsNone(prop.lightmap)
+
     def test_prefab_instance_receives_scene_owned_object_lightmaps(self) -> None:
         collection = types.SimpleNamespace(name="PREFAB_Hall")
         obj = FakeObject("Hall", "EMPTY", instance_collection=collection)

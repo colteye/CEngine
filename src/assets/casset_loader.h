@@ -79,6 +79,8 @@ struct CAssetObject {
     std::array<float, 16> world_from_local = {};
 };
 
+constexpr std::uint32_t CAssetObjectRoleOccluder = 13;
+
 struct CAssetComponent {
     CAssetComponentKind kind = CAssetComponentKind::Unknown;
     std::string_view path;

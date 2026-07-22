@@ -63,6 +63,7 @@ class Prop:
     lightmap_rgbm_range: float = 8.0
     dynamic: bool = False
     visible: bool = True
+    shadow_only: bool = False
     collision_enabled: bool = False
     collision_half_extents: tuple[float, float, float] = (0.5, 0.5, 0.5)
     mass: float = 1.0
@@ -257,6 +258,8 @@ def _pack_entity(value: EntityData, assets: dict[AssetReference, int], materials
             flags |= PropFlags.COLLISION_ENABLED
         if value.dynamic:
             flags |= PropFlags.DYNAMIC
+        if value.shadow_only:
+            flags |= PropFlags.SHADOW_ONLY
         return PROP.pack(*transform, _asset_index(value.mesh, assets), first, len(value.materials),
                          lightmap, *value.lightmap_scale, *value.lightmap_offset,
                          value.lightmap_rgbm_range, int(flags),

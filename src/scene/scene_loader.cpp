@@ -175,6 +175,7 @@ bool LoadClassRecord(Scene& scene, Entity& entity, std::string_view classname,
         prop.lightmap_rgbm_range = disk.lightmap_rgbm_range;
         prop.dynamic = dynamic;
         prop.visible = (disk.flags & PropVisible) != 0;
+        prop.shadow_only = (disk.flags & PropShadowOnly) != 0;
         prop.collision_enabled = collision_enabled;
         prop.collision_half_extents = {disk.collision_half_extents[0],
             disk.collision_half_extents[1], disk.collision_half_extents[2]};
@@ -365,6 +366,7 @@ bool ExpandPrefab(Scene& scene, Assets::AssetDatabase& database,
             prop.mesh = mesh;
             prop.first_material = scene.AppendMaterial(material);
             prop.material_count = 1;
+            prop.shadow_only = object.role == Assets::CAssetObjectRoleOccluder;
             if (lightmap != nullptr)
             {
                 prop.lightmap = lightmap->lightmap;

@@ -17,6 +17,7 @@ class PropFlags(IntFlag):
     VISIBLE = 1 << 0
     COLLISION_ENABLED = 1 << 1
     DYNAMIC = 1 << 2
+    SHADOW_ONLY = 1 << 3
 
 
 class LightFlags(IntFlag):

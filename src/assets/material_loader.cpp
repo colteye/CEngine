@@ -16,7 +16,7 @@ namespace Renderer = CEngine::Renderer;
 namespace {
 
 constexpr std::array<char, 4> MaterialPayloadMagic = {'C', 'E', 'M', 'A'};
-constexpr std::uint16_t MaterialPayloadVersion = 3;
+constexpr std::uint16_t MaterialPayloadVersion = 4;
 constexpr std::uint32_t TextureSlotBaseColor = 1;
 constexpr std::uint32_t TextureSlotNormal = 2;
 constexpr std::uint32_t TextureSlotMetallicRoughnessAo = 3;
@@ -27,6 +27,7 @@ struct DiskMaterialHeader {
     std::uint16_t version = MaterialPayloadVersion;
     std::uint16_t header_size = 0;
     std::uint32_t shader = 0;
+    std::uint32_t render_mode = 0;
     std::uint32_t texture_count = 0;
     std::uint32_t texture_table_offset = 0;
     std::uint32_t string_table_offset = 0;
@@ -37,6 +38,7 @@ struct DiskMaterialHeader {
     float metallic_factor = 0.0f;
     float roughness_factor = 0.5f;
     float ao_factor = 1.0f;
+    float alpha_cutoff = 0.5f;
 };
 
 struct DiskMaterialTexture {
@@ -46,7 +48,7 @@ struct DiskMaterialTexture {
 };
 #pragma pack(pop)
 
-static_assert(sizeof(DiskMaterialHeader) == 64, "DiskMaterialHeader must stay packed and stable.");
+static_assert(sizeof(DiskMaterialHeader) == 72, "DiskMaterialHeader must stay packed and stable.");
 static_assert(sizeof(DiskMaterialTexture) == 12, "DiskMaterialTexture must stay packed and stable.");
 
 void SetError(std::string* error, const std::string& message)
@@ -77,6 +79,19 @@ Renderer::MaterialShaderType MaterialShaderFromDisk(std::uint32_t shader)
         return Renderer::MaterialShaderType::Unlit;
     default:
         return Renderer::MaterialShaderType::Unknown;
+    }
+}
+
+bool MaterialRenderModeFromDisk(std::uint32_t value, Renderer::MaterialRenderMode& mode)
+{
+    switch (value)
+    {
+    case 0: mode = Renderer::MaterialRenderMode::OpaqueDeferred; return true;
+    case 1: mode = Renderer::MaterialRenderMode::AlphaClip; return true;
+    case 2: mode = Renderer::MaterialRenderMode::AlphaHashDither; return true;
+    case 3: mode = Renderer::MaterialRenderMode::TransparentBlend; return true;
+    case 4: mode = Renderer::MaterialRenderMode::Unlit; return true;
+    default: return false;
     }
 }
 
@@ -213,7 +228,7 @@ bool LoadMaterialAsset(const std::filesystem::path& path, Renderer::Material& ma
     if (!IsUnitValue(header.base_color[0]) || !IsUnitValue(header.base_color[1]) ||
         !IsUnitValue(header.base_color[2]) || !IsUnitValue(header.base_color[3]) ||
         !IsUnitValue(header.metallic_factor) || !IsUnitValue(header.roughness_factor) ||
-        !IsUnitValue(header.ao_factor))
+        !IsUnitValue(header.ao_factor) || !IsUnitValue(header.alpha_cutoff))
     {
         SetError(error, "material factors must be finite values from zero through one");
         return false;
@@ -222,6 +237,12 @@ bool LoadMaterialAsset(const std::filesystem::path& path, Renderer::Material& ma
     if (shader_type == Renderer::MaterialShaderType::Unknown)
     {
         SetError(error, "material shader id is not supported");
+        return false;
+    }
+    Renderer::MaterialRenderMode render_mode;
+    if (!MaterialRenderModeFromDisk(header.render_mode, render_mode))
+    {
+        SetError(error, "material render mode is not supported");
         return false;
     }
 
@@ -294,6 +315,8 @@ bool LoadMaterialAsset(const std::filesystem::path& path, Renderer::Material& ma
         header.base_color[2], header.base_color[3]));
     loaded.SetMetallicRoughnessAoFactors(glm::vec3(
         header.metallic_factor, header.roughness_factor, header.ao_factor));
+    loaded.SetRenderMode(render_mode);
+    loaded.SetAlphaCutoff(header.alpha_cutoff);
     material = std::move(loaded);
     return true;
 }

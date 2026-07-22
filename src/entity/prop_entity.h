@@ -22,6 +22,7 @@ public:
     float lightmap_rgbm_range = 8.0f;
     bool dynamic = false;
     bool visible = true;
+    bool shadow_only = false;
     bool collision_enabled = false;
     glm::vec3 collision_half_extents = glm::vec3(0.5f);
     float mass = 1.0f;

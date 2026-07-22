@@ -39,7 +39,8 @@ enum RenderableFlags : uint32_t
 	RenderableFlagStatic = 1u << 0u,
 	RenderableFlagDynamic = 1u << 1u,
 	RenderableFlagCastsShadow = 1u << 2u,
-	RenderableFlagReceivesShadow = 1u << 3u
+	RenderableFlagReceivesShadow = 1u << 3u,
+	RenderableFlagShadowOnly = 1u << 4u
 };
 
 struct Renderable

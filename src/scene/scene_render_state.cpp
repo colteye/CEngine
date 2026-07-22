@@ -131,11 +131,16 @@ bool SceneRenderState::Activate(const Scene& scene, Assets::AssetDatabase& asset
             material_asset = prop->material_count != 0 ? scene.Material(prop->first_material) : Assets::AssetHandle{};
             visible = prop->visible;
             flags |= prop->dynamic ? Renderer::RenderableFlagDynamic : Renderer::RenderableFlagStatic;
+            if (prop->shadow_only)
+            {
+                flags &= ~Renderer::RenderableFlagReceivesShadow;
+                flags |= Renderer::RenderableFlagShadowOnly;
+            }
         }
         else if (entity_ptr->Classname() == "light")
         {
             const auto& light = static_cast<const Entities::LightEntity&>(*entity_ptr);
-            if (light.mode != Entities::LightMode::Baked)
+            if (Entities::HasRuntimeDirectLighting(light.mode))
                 lights_.push_back(Renderer::RenderSystem::RegisterLight(MakeLight(light)));
             continue;
         }
@@ -162,7 +167,7 @@ bool SceneRenderState::Activate(const Scene& scene, Assets::AssetDatabase& asset
         renderable.transform = entity_ptr->GetTransform().world_matrix;
         renderable.local_bounds = mesh->GetLocalBounds();
         renderable.flags = flags;
-        if (prop != nullptr && prop->lightmap)
+        if (prop != nullptr && prop->lightmap && !prop->shadow_only)
         {
             renderable.lightmap = FindLightmap(prop->lightmap);
             if (renderable.lightmap == nullptr)

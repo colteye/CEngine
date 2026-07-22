@@ -9,7 +9,7 @@ namespace CEngine::Renderer {
 class OpenGLTexture
 {
 public:
-	static GLuint LoadDDS(const std::string& imagepath);
+	static GLuint LoadDDS(const std::string& imagepath, bool flip_image = true);
 	static GLuint CreateSolid(GLubyte red, GLubyte green, GLubyte blue, GLubyte alpha = 255);
 };
 

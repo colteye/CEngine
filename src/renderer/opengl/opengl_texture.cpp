@@ -94,7 +94,7 @@ bool ValidateDds2D(const std::string& path, std::string& error)
 }
 } // namespace
 
-GLuint OpenGLTexture::LoadDDS(const std::string& image_p) {
+GLuint OpenGLTexture::LoadDDS(const std::string& image_p, bool flip_image) {
 	std::string validation_error;
 	if (!ValidateDds2D(image_p, validation_error))
 	{
@@ -107,7 +107,7 @@ GLuint OpenGLTexture::LoadDDS(const std::string& image_p) {
 
 	try
 	{
-		image.load(image_p);
+		image.load(image_p, flip_image);
 	}
 	catch (const std::exception& e)
 	{
