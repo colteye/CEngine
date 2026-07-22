@@ -24,17 +24,15 @@ namespace CEngine::Scene {
 namespace {
 using namespace Assets::CSceneFormat;
 
-bool Fail(std::string* error, const char* message)
-{
-    if (error != nullptr) *error = message;
+bool Fail(std::string* error, const char* message) {
+    if (error != nullptr)
+        *error = message;
     return false;
 }
 
-Assets::AssetType AssetTypeFor(std::uint32_t value)
-{
+Assets::AssetType AssetTypeFor(std::uint32_t value) {
     const auto type = static_cast<Assets::AssetType>(value);
-    switch (type)
-    {
+    switch (type) {
     case Assets::AssetType::Texture:
     case Assets::AssetType::Material:
     case Assets::AssetType::Mesh:
@@ -49,57 +47,59 @@ Assets::AssetType AssetTypeFor(std::uint32_t value)
     case Assets::AssetType::Package:
     case Assets::AssetType::Asset:
         return type;
-    default: return Assets::AssetType::Unknown;
+    default:
+        return Assets::AssetType::Unknown;
     }
 }
 
-void CopyTransform(const DiskTransform& source, Transform& target)
-{
+void CopyTransform(const DiskTransform& source, Transform& target) {
     target.position = {source.position[0], source.position[1], source.position[2]};
-    target.rotation = {source.rotation[3], source.rotation[0], source.rotation[1], source.rotation[2]};
+    target.rotation = {source.rotation[3], source.rotation[0], source.rotation[1],
+                       source.rotation[2]};
     target.scale = {source.scale[0], source.scale[1], source.scale[2]};
     target.UpdateWorldMatrix();
 }
 
 template <typename T>
-bool ReadRecord(Assets::ByteView records, std::uint32_t row, std::uint32_t stride, T& value)
-{
-    if (stride != sizeof(T)) return false;
+bool ReadRecord(Assets::ByteView records, std::uint32_t row, std::uint32_t stride, T& value) {
+    if (stride != sizeof(T))
+        return false;
     std::memcpy(&value, records.data + static_cast<std::size_t>(row) * stride, sizeof(T));
     return true;
 }
 
 bool LoadMaterials(Scene& scene, std::uint32_t first, std::uint32_t count,
-    Assets::ByteView auxiliary, std::uint32_t& output_first, std::uint32_t& output_count,
-    std::string* error)
-{
+                   Assets::ByteView auxiliary, std::uint32_t& output_first,
+                   std::uint32_t& output_count, std::string* error) {
     const std::size_t available = auxiliary.size / sizeof(std::uint32_t);
-    if (count == 0) { output_first = 0; output_count = 0; return true; }
+    if (count == 0) {
+        output_first = 0;
+        output_count = 0;
+        return true;
+    }
     if (first == InvalidAssetIndex || first > available || count > available - first)
         return Fail(error, "entity material range is invalid");
-    for (std::uint32_t row = 0; row < count; ++row)
-    {
+    for (std::uint32_t row = 0; row < count; ++row) {
         std::uint32_t asset_index;
-        std::memcpy(&asset_index, auxiliary.data + (first + row) * sizeof(asset_index), sizeof(asset_index));
+        std::memcpy(&asset_index, auxiliary.data + (first + row) * sizeof(asset_index),
+                    sizeof(asset_index));
         if (asset_index >= scene.AssetReferenceCount() ||
             scene.ReferencedAssetType(asset_index) != Assets::AssetType::Material)
             return Fail(error, "entity material asset is invalid");
         const std::uint32_t material = scene.AppendMaterial(scene.AssetReference(asset_index));
-        if (row == 0) output_first = material;
+        if (row == 0)
+            output_first = material;
     }
     output_count = count;
     return true;
 }
 
-bool LoadPrefabLightmaps(Scene& scene, Entities::PrefabEntity& prefab,
-    std::uint32_t first, std::uint32_t count, Assets::ByteView auxiliary,
-    std::string* error)
-{
+bool LoadPrefabLightmaps(Scene& scene, Entities::PrefabEntity& prefab, std::uint32_t first,
+                         std::uint32_t count, Assets::ByteView auxiliary, std::string* error) {
     if (auxiliary.size % sizeof(DiskPrefabLightmap) != 0)
         return Fail(error, "prefab lightmap table is invalid");
     const std::size_t available = auxiliary.size / sizeof(DiskPrefabLightmap);
-    if (count == 0)
-    {
+    if (count == 0) {
         if (first != InvalidAssetIndex)
             return Fail(error, "empty prefab lightmap range is invalid");
         return true;
@@ -108,44 +108,45 @@ bool LoadPrefabLightmaps(Scene& scene, Entities::PrefabEntity& prefab,
         return Fail(error, "prefab lightmap range is invalid");
     prefab.lightmaps.reserve(count);
     std::uint32_t previous_object = InvalidEntityIndex;
-    for (std::uint32_t row = 0; row < count; ++row)
-    {
+    for (std::uint32_t row = 0; row < count; ++row) {
         DiskPrefabLightmap disk;
         std::memcpy(&disk, auxiliary.data + (first + row) * sizeof(disk), sizeof(disk));
         if (disk.lightmap_asset >= scene.AssetReferenceCount() ||
             scene.ReferencedAssetType(disk.lightmap_asset) != Assets::AssetType::Texture)
             return Fail(error, "prefab lightmap asset is invalid");
-        if ((row != 0 && disk.object_index <= previous_object) ||
-            disk.scale[0] <= 0.0f || disk.scale[1] <= 0.0f ||
-            disk.offset[0] < 0.0f || disk.offset[1] < 0.0f ||
-            disk.offset[0] + disk.scale[0] > 1.0f ||
-            disk.offset[1] + disk.scale[1] > 1.0f || disk.rgbm_range <= 0.0f)
+        if ((row != 0 && disk.object_index <= previous_object) || disk.scale[0] <= 0.0f ||
+            disk.scale[1] <= 0.0f || disk.offset[0] < 0.0f || disk.offset[1] < 0.0f ||
+            disk.offset[0] + disk.scale[0] > 1.0f || disk.offset[1] + disk.scale[1] > 1.0f ||
+            disk.rgbm_range <= 0.0f)
             return Fail(error, "prefab lightmap binding is invalid");
-        prefab.lightmaps.push_back({disk.object_index, scene.AssetReference(disk.lightmap_asset),
-            {disk.scale[0], disk.scale[1]}, {disk.offset[0], disk.offset[1]}, disk.rgbm_range});
+        prefab.lightmaps.push_back({disk.object_index,
+                                    scene.AssetReference(disk.lightmap_asset),
+                                    {disk.scale[0], disk.scale[1]},
+                                    {disk.offset[0], disk.offset[1]},
+                                    disk.rgbm_range});
         previous_object = disk.object_index;
     }
     return true;
 }
 
 bool LoadClassRecord(Scene& scene, Entity& entity, std::string_view classname,
-    Assets::ByteView records, std::uint32_t row, std::uint32_t stride,
-    Assets::ByteView auxiliary, std::string* error)
-{
-    if (classname == "empty")
-    {
+                     Assets::ByteView records, std::uint32_t row, std::uint32_t stride,
+                     Assets::ByteView auxiliary, std::string* error) {
+    if (classname == "empty") {
         DiskTransform disk;
-        if (!ReadRecord(records, row, stride, disk)) return Fail(error, "empty record stride is unsupported");
+        if (!ReadRecord(records, row, stride, disk))
+            return Fail(error, "empty record stride is unsupported");
         CopyTransform(disk, entity.GetTransform());
         return true;
     }
-    if (classname == "prop")
-    {
+    if (classname == "prop") {
         DiskProp disk;
-        if (!ReadRecord(records, row, stride, disk)) return Fail(error, "prop record stride is unsupported");
+        if (!ReadRecord(records, row, stride, disk))
+            return Fail(error, "prop record stride is unsupported");
         if (disk.mesh_asset >= scene.AssetReferenceCount() ||
             scene.ReferencedAssetType(disk.mesh_asset) != Assets::AssetType::Mesh ||
-            (disk.lightmap_asset != InvalidAssetIndex && disk.lightmap_asset >= scene.AssetReferenceCount()))
+            (disk.lightmap_asset != InvalidAssetIndex &&
+             disk.lightmap_asset >= scene.AssetReferenceCount()))
             return Fail(error, "prop asset index is invalid");
         if (disk.lightmap_asset != InvalidAssetIndex &&
             scene.ReferencedAssetType(disk.lightmap_asset) != Assets::AssetType::Texture)
@@ -161,8 +162,9 @@ bool LoadClassRecord(Scene& scene, Entity& entity, std::string_view classname,
              disk.lightmap_rgbm_range <= 0.0f))
             return Fail(error, "prop lightmap binding is invalid");
         const bool collision_enabled = (disk.flags & PropCollisionEnabled) != 0;
-        if (collision_enabled && (disk.collision_half_extents[0] <= 0.0f ||
-            disk.collision_half_extents[1] <= 0.0f || disk.collision_half_extents[2] <= 0.0f))
+        if (collision_enabled &&
+            (disk.collision_half_extents[0] <= 0.0f || disk.collision_half_extents[1] <= 0.0f ||
+             disk.collision_half_extents[2] <= 0.0f))
             return Fail(error, "prop collision dimensions are invalid");
         if (collision_enabled && dynamic && disk.mass <= 0.0f)
             return Fail(error, "dynamic prop mass is invalid");
@@ -178,15 +180,16 @@ bool LoadClassRecord(Scene& scene, Entity& entity, std::string_view classname,
         prop.shadow_only = (disk.flags & PropShadowOnly) != 0;
         prop.collision_enabled = collision_enabled;
         prop.collision_half_extents = {disk.collision_half_extents[0],
-            disk.collision_half_extents[1], disk.collision_half_extents[2]};
+                                       disk.collision_half_extents[1],
+                                       disk.collision_half_extents[2]};
         prop.mass = disk.mass;
         return LoadMaterials(scene, disk.first_material_asset, disk.material_count, auxiliary,
-            prop.first_material, prop.material_count, error);
+                             prop.first_material, prop.material_count, error);
     }
-    if (classname == "camera")
-    {
+    if (classname == "camera") {
         DiskCameraEntity disk;
-        if (!ReadRecord(records, row, stride, disk)) return Fail(error, "camera record stride is unsupported");
+        if (!ReadRecord(records, row, stride, disk))
+            return Fail(error, "camera record stride is unsupported");
         if (disk.projection > 1 || disk.near_clip <= 0.0f || disk.far_clip <= disk.near_clip)
             return Fail(error, "camera record is invalid");
         auto& camera = static_cast<Entities::CameraEntity&>(entity);
@@ -199,10 +202,10 @@ bool LoadClassRecord(Scene& scene, Entity& entity, std::string_view classname,
         camera.enabled = disk.enabled != 0;
         return true;
     }
-    if (classname == "light")
-    {
+    if (classname == "light") {
         DiskLightEntity disk;
-        if (!ReadRecord(records, row, stride, disk)) return Fail(error, "light record stride is unsupported");
+        if (!ReadRecord(records, row, stride, disk))
+            return Fail(error, "light record stride is unsupported");
         if (disk.type > 3 || disk.mode > 2 || disk.intensity < 0.0f || disk.range < 0.0f)
             return Fail(error, "light record is invalid");
         auto& light = static_cast<Entities::LightEntity&>(entity);
@@ -219,10 +222,10 @@ bool LoadClassRecord(Scene& scene, Entity& entity, std::string_view classname,
         light.casts_shadows = (disk.flags & LightCastsShadow) != 0;
         return true;
     }
-    if (classname == "prefab_instance")
-    {
+    if (classname == "prefab_instance") {
         DiskPrefabEntity disk;
-        if (!ReadRecord(records, row, stride, disk)) return Fail(error, "prefab record stride is unsupported");
+        if (!ReadRecord(records, row, stride, disk))
+            return Fail(error, "prefab record stride is unsupported");
         if (disk.prefab_asset >= scene.AssetReferenceCount() ||
             scene.ReferencedAssetType(disk.prefab_asset) != Assets::AssetType::Asset)
             return Fail(error, "prefab asset index is invalid");
@@ -230,12 +233,12 @@ bool LoadClassRecord(Scene& scene, Entity& entity, std::string_view classname,
         CopyTransform(disk.transform, prefab.GetTransform());
         prefab.prefab = scene.AssetReference(disk.prefab_asset);
         return LoadPrefabLightmaps(scene, prefab, disk.first_lightmap, disk.lightmap_count,
-            auxiliary, error);
+                                   auxiliary, error);
     }
-    if (classname == "trigger")
-    {
+    if (classname == "trigger") {
         DiskTriggerEntity disk;
-        if (!ReadRecord(records, row, stride, disk)) return Fail(error, "trigger record stride is unsupported");
+        if (!ReadRecord(records, row, stride, disk))
+            return Fail(error, "trigger record stride is unsupported");
         auto& trigger = static_cast<Entities::TriggerEntity&>(entity);
         CopyTransform(disk.transform, trigger.GetTransform());
         trigger.half_extents = {disk.half_extents[0], disk.half_extents[1], disk.half_extents[2]};
@@ -243,10 +246,10 @@ bool LoadClassRecord(Scene& scene, Entity& entity, std::string_view classname,
         trigger.trigger_once = (disk.flags & 2u) != 0;
         return true;
     }
-    if (classname == "info_player_start")
-    {
+    if (classname == "info_player_start") {
         DiskPlayerStart disk;
-        if (!ReadRecord(records, row, stride, disk)) return Fail(error, "player start record stride is unsupported");
+        if (!ReadRecord(records, row, stride, disk))
+            return Fail(error, "player start record stride is unsupported");
         auto& start = static_cast<Entities::PlayerStart&>(entity);
         CopyTransform(disk.transform, start.GetTransform());
         start.team = disk.team;
@@ -255,9 +258,8 @@ bool LoadClassRecord(Scene& scene, Entity& entity, std::string_view classname,
     return Fail(error, "scene contains an unsupported entity classname");
 }
 
-bool CopyComposedTransform(const Transform& instance,
-    const std::array<float, 16>& row_major_object, Transform& target, std::string* error)
-{
+bool CopyComposedTransform(const Transform& instance, const std::array<float, 16>& row_major_object,
+                           Transform& target, std::string* error) {
     glm::mat4 object(1.0f);
     for (std::size_t row = 0; row < 4; ++row)
         for (std::size_t column = 0; column < 4; ++column)
@@ -273,40 +275,46 @@ bool CopyComposedTransform(const Transform& instance,
     return true;
 }
 
-Assets::AssetType ComponentAssetType(Assets::CAssetComponentKind kind)
-{
-    switch (kind)
-    {
-    case Assets::CAssetComponentKind::Mesh: return Assets::AssetType::Mesh;
-    case Assets::CAssetComponentKind::Material: return Assets::AssetType::Material;
-    case Assets::CAssetComponentKind::Skeleton: return Assets::AssetType::Skeleton;
-    case Assets::CAssetComponentKind::Animation: return Assets::AssetType::Animation;
-    default: return Assets::AssetType::Unknown;
+Assets::AssetType ComponentAssetType(Assets::CAssetComponentKind kind) {
+    switch (kind) {
+    case Assets::CAssetComponentKind::Mesh:
+        return Assets::AssetType::Mesh;
+    case Assets::CAssetComponentKind::Material:
+        return Assets::AssetType::Material;
+    case Assets::CAssetComponentKind::Skeleton:
+        return Assets::AssetType::Skeleton;
+    case Assets::CAssetComponentKind::Animation:
+        return Assets::AssetType::Animation;
+    default:
+        return Assets::AssetType::Unknown;
     }
 }
 
 bool AcquirePrefabComponent(Scene& scene, Assets::AssetDatabase& database,
-    Assets::AssetHandle prefab, const Assets::CAssetComponent& component,
-    Assets::AssetHandle& handle, std::string* error)
-{
+                            Assets::AssetHandle prefab, const Assets::CAssetComponent& component,
+                            Assets::AssetHandle& handle, std::string* error) {
     const Assets::AssetType type = ComponentAssetType(component.kind);
     if (type == Assets::AssetType::Unknown)
         return Fail(error, "prefab component type is unsupported");
     const std::filesystem::path relative =
-        (std::filesystem::path(database.Path(prefab)).parent_path() / component.path).lexically_normal();
+        (std::filesystem::path(database.Path(prefab)).parent_path() / component.path)
+            .lexically_normal();
     std::string normalized;
     if (!Assets::NormalizeProjectAssetPath(relative.generic_string(), normalized))
         return Fail(error, "prefab component path is outside the project");
 
     Assets::AssetFile target;
     const std::filesystem::path full = database.FullPath(prefab).parent_path() / component.path;
-    if (!target.Load(full.lexically_normal(), error)) return false;
-    if (target.Type() != type) return Fail(error, "prefab component asset type does not match");
+    if (!target.Load(full.lexically_normal(), error))
+        return false;
+    if (target.Type() != type)
+        return Fail(error, "prefab component asset type does not match");
     handle = database.Acquire(normalized, type, target.GetGuid(), error);
-    if (!handle) return false;
-    try { scene.AppendAssetReference(handle); }
-    catch (...)
-    {
+    if (!handle)
+        return false;
+    try {
+        scene.AppendAssetReference(handle);
+    } catch (...) {
         database.Release(handle);
         throw;
     }
@@ -314,61 +322,63 @@ bool AcquirePrefabComponent(Scene& scene, Assets::AssetDatabase& database,
 }
 
 bool ExpandPrefab(Scene& scene, Assets::AssetDatabase& database,
-    const Entities::PrefabEntity& instance, std::string* error)
-{
+                  const Entities::PrefabEntity& instance, std::string* error) {
     Assets::CAsset prefab;
-    if (!prefab.Load(database.FullPath(instance.prefab), error)) return false;
+    if (!prefab.Load(database.FullPath(instance.prefab), error))
+        return false;
     if (prefab.CompositionType() != Assets::CAssetCompositionType::Prefab)
         return Fail(error, "prefab instance does not reference a prefab composition");
 
     std::size_t lightmap_index = 0;
-    for (std::uint32_t object_index = 0; object_index < prefab.ObjectCount(); ++object_index)
-    {
+    for (std::uint32_t object_index = 0; object_index < prefab.ObjectCount(); ++object_index) {
         Assets::CAssetObject object;
-        if (!prefab.Object(object_index, object)) return Fail(error, "prefab object is invalid");
+        if (!prefab.Object(object_index, object))
+            return Fail(error, "prefab object is invalid");
         const Entities::PrefabLightmapBinding* lightmap = nullptr;
         if (lightmap_index < instance.lightmaps.size() &&
-            instance.lightmaps[lightmap_index].object_index == object_index)
-        {
+            instance.lightmaps[lightmap_index].object_index == object_index) {
             lightmap = &instance.lightmaps[lightmap_index++];
         }
         if (lightmap != nullptr && object.object_type != 1)
             return Fail(error, "prefab lightmap references a non-mesh object");
-        if (object.object_type != 1) continue;
+        if (object.object_type != 1)
+            continue;
 
         std::vector<Assets::CAssetComponent> meshes;
         std::vector<Assets::CAssetComponent> materials;
-        for (std::uint32_t component_index = 0; component_index < object.component_count; ++component_index)
-        {
+        for (std::uint32_t component_index = 0; component_index < object.component_count;
+             ++component_index) {
             Assets::CAssetComponent component;
             if (!prefab.Component(object, component_index, component))
                 return Fail(error, "prefab object component is invalid");
-            if (component.kind == Assets::CAssetComponentKind::Mesh) meshes.push_back(component);
-            else if (component.kind == Assets::CAssetComponentKind::Material) materials.push_back(component);
+            if (component.kind == Assets::CAssetComponentKind::Mesh)
+                meshes.push_back(component);
+            else if (component.kind == Assets::CAssetComponentKind::Material)
+                materials.push_back(component);
         }
         if (meshes.empty() || meshes.size() != materials.size())
             return Fail(error, "prefab mesh and material component counts do not match");
 
-        for (std::size_t part = 0; part < meshes.size(); ++part)
-        {
+        for (std::size_t part = 0; part < meshes.size(); ++part) {
             Assets::AssetHandle mesh;
             Assets::AssetHandle material;
-            if (!AcquirePrefabComponent(scene, database, instance.prefab, meshes[part], mesh, error) ||
-                !AcquirePrefabComponent(scene, database, instance.prefab, materials[part], material, error))
+            if (!AcquirePrefabComponent(scene, database, instance.prefab, meshes[part], mesh,
+                                        error) ||
+                !AcquirePrefabComponent(scene, database, instance.prefab, materials[part], material,
+                                        error))
                 return false;
             const std::string name = instance.Name() + "/" + std::string(object.name) +
-                (meshes.size() == 1 ? "" : ":" + std::to_string(part));
+                                     (meshes.size() == 1 ? "" : ":" + std::to_string(part));
             auto& prop = static_cast<Entities::PropEntity&>(scene.CreateEntity("prop", name));
             prop.SetFlags(instance.Flags());
             if (!CopyComposedTransform(instance.GetTransform(), object.world_from_local,
-                    prop.GetTransform(), error))
+                                       prop.GetTransform(), error))
                 return false;
             prop.mesh = mesh;
             prop.first_material = scene.AppendMaterial(material);
             prop.material_count = 1;
             prop.shadow_only = object.role == Assets::CAssetObjectRoleOccluder;
-            if (lightmap != nullptr)
-            {
+            if (lightmap != nullptr) {
                 prop.lightmap = lightmap->lightmap;
                 prop.lightmap_scale = lightmap->scale;
                 prop.lightmap_offset = lightmap->offset;
@@ -377,39 +387,40 @@ bool ExpandPrefab(Scene& scene, Assets::AssetDatabase& database,
         }
     }
     return lightmap_index == instance.lightmaps.size() ||
-        Fail(error, "prefab lightmap object index is outside the prefab");
+           Fail(error, "prefab lightmap object index is outside the prefab");
 }
 
-bool ExpandPrefabs(Scene& scene, Assets::AssetDatabase& database, std::string* error)
-{
+bool ExpandPrefabs(Scene& scene, Assets::AssetDatabase& database, std::string* error) {
     std::vector<const Entities::PrefabEntity*> instances;
     for (const auto& entity : scene.Entities())
         if (entity != nullptr && entity->Classname() == "prefab_instance")
             instances.push_back(static_cast<const Entities::PrefabEntity*>(entity.get()));
     for (const Entities::PrefabEntity* instance : instances)
-        if (!ExpandPrefab(scene, database, *instance, error)) return false;
+        if (!ExpandPrefab(scene, database, *instance, error))
+            return false;
     return true;
 }
 } // namespace
 
-std::unique_ptr<Scene> LoadScene(const std::filesystem::path& path,
-    Assets::AssetDatabase& database, std::string* error)
-{
+std::unique_ptr<Scene> LoadScene(const std::filesystem::path& path, Assets::AssetDatabase& database,
+                                 std::string* error) {
     Assets::CSceneFile file;
-    if (!file.Load(path, error)) return nullptr;
+    if (!file.Load(path, error))
+        return nullptr;
 
     std::vector<Assets::AssetHandle> assets;
     assets.reserve(file.AssetReferences().size);
-    for (const auto& reference : file.AssetReferences())
-    {
+    for (const auto& reference : file.AssetReferences()) {
         const Assets::AssetType type = AssetTypeFor(reference.type);
-        if (type == Assets::AssetType::Unknown)
-        { Fail(error, "scene asset reference type is unsupported"); return nullptr; }
+        if (type == Assets::AssetType::Unknown) {
+            Fail(error, "scene asset reference type is unsupported");
+            return nullptr;
+        }
         Assets::AssetHandle handle = database.Acquire(
             file.String(reference.path_offset, reference.path_size), type, reference.guid, error);
-        if (!handle)
-        {
-            for (Assets::AssetHandle acquired : assets) database.Release(acquired);
+        if (!handle) {
+            for (Assets::AssetHandle acquired : assets)
+                database.Release(acquired);
             return nullptr;
         }
         assets.push_back(handle);
@@ -420,73 +431,80 @@ std::unique_ptr<Scene> LoadScene(const std::filesystem::path& path,
     scene->Reserve(file.Entities().size);
     std::vector<Entity*> entities;
     entities.reserve(file.Entities().size);
-    for (const auto& row : file.Entities())
-    {
-        try
-        {
-            Entity& entity = scene->CreateEntity(
-                file.String(row.classname_offset, row.classname_size),
-                file.String(row.name_offset, row.name_size));
+    for (const auto& row : file.Entities()) {
+        try {
+            Entity& entity =
+                scene->CreateEntity(file.String(row.classname_offset, row.classname_size),
+                                    file.String(row.name_offset, row.name_size));
             entity.SetFlags(row.flags);
             entities.push_back(&entity);
-        }
-        catch (const std::exception& exception)
-        {
-            if (error != nullptr) *error = exception.what();
+        } catch (const std::exception& exception) {
+            if (error != nullptr)
+                *error = exception.what();
             return nullptr;
         }
     }
 
     std::vector<bool> loaded(entities.size(), false);
-    for (const auto& block : file.ClassBlocks())
-    {
-        if (block.version != SceneEntityClassVersion)
-        { Fail(error, "entity class record version is unsupported"); return nullptr; }
-        const std::string_view classname = file.String(block.classname_offset, block.classname_size);
+    for (const auto& block : file.ClassBlocks()) {
+        if (block.version != SceneEntityClassVersion) {
+            Fail(error, "entity class record version is unsupported");
+            return nullptr;
+        }
+        const std::string_view classname =
+            file.String(block.classname_offset, block.classname_size);
         const auto indices = file.ClassEntities(block);
         const Assets::ByteView records = file.ClassRecords(block);
-        for (std::uint32_t row = 0; row < block.count; ++row)
-        {
+        for (std::uint32_t row = 0; row < block.count; ++row) {
             const std::uint32_t entity_index = indices[row];
-            if (loaded[entity_index]) { Fail(error, "entity has more than one class record"); return nullptr; }
+            if (loaded[entity_index]) {
+                Fail(error, "entity has more than one class record");
+                return nullptr;
+            }
             if (!LoadClassRecord(*scene, *entities[entity_index], classname, records, row,
-                    block.record_stride, file.ClassAuxiliary(block), error))
+                                 block.record_stride, file.ClassAuxiliary(block), error))
                 return nullptr;
             loaded[entity_index] = true;
         }
     }
     for (bool value : loaded)
-        if (!value) { Fail(error, "entity has no class record"); return nullptr; }
-    if (!ExpandPrefabs(*scene, database, error)) return nullptr;
+        if (!value) {
+            Fail(error, "entity has no class record");
+            return nullptr;
+        }
+    if (!ExpandPrefabs(*scene, database, error))
+        return nullptr;
     SceneSettings settings;
     const DiskSceneSettings& disk_settings = file.Settings();
     settings.ambient_color = {disk_settings.ambient_color[0], disk_settings.ambient_color[1],
-        disk_settings.ambient_color[2]};
+                              disk_settings.ambient_color[2]};
     settings.exposure = disk_settings.exposure;
-    settings.gravity = {disk_settings.gravity[0], disk_settings.gravity[1], disk_settings.gravity[2]};
-    if (disk_settings.active_camera_entity != InvalidEntityIndex)
-    {
+    settings.gravity = {disk_settings.gravity[0], disk_settings.gravity[1],
+                        disk_settings.gravity[2]};
+    if (disk_settings.active_camera_entity != InvalidEntityIndex) {
         Entity* active_camera = entities[disk_settings.active_camera_entity];
-        if (active_camera->Classname() != "camera")
-        { Fail(error, "scene active camera does not reference a camera entity"); return nullptr; }
+        if (active_camera->Classname() != "camera") {
+            Fail(error, "scene active camera does not reference a camera entity");
+            return nullptr;
+        }
         const auto& camera = static_cast<const Entities::CameraEntity&>(*active_camera);
-        if (!active_camera->Enabled() || !camera.enabled)
-        { Fail(error, "scene active camera is disabled"); return nullptr; }
+        if (!active_camera->Enabled() || !camera.enabled) {
+            Fail(error, "scene active camera is disabled");
+            return nullptr;
+        }
         settings.active_camera = active_camera->Id();
     }
     scene->SetSettings(settings);
-    try
-    {
+    try {
         for (const auto& connection : file.Connections())
-            scene->AddConnection({entities[connection.source_entity]->Id(),
-                entities[connection.target_entity]->Id(),
-                std::string(file.String(connection.event_offset, connection.event_size)),
-                std::string(file.String(connection.action_offset, connection.action_size)),
-                connection.delay_seconds});
-    }
-    catch (const std::exception& exception)
-    {
-        if (error != nullptr) *error = exception.what();
+            scene->AddConnection(
+                {entities[connection.source_entity]->Id(), entities[connection.target_entity]->Id(),
+                 std::string(file.String(connection.event_offset, connection.event_size)),
+                 std::string(file.String(connection.action_offset, connection.action_size)),
+                 connection.delay_seconds});
+    } catch (const std::exception& exception) {
+        if (error != nullptr)
+            *error = exception.what();
         return nullptr;
     }
     return scene;

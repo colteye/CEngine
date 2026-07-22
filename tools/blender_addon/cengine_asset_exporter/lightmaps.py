@@ -10,7 +10,7 @@ from typing import Callable, Iterable
 from ceassetlib.blender_scene import LightmapPlacement
 from ceassetlib.collection_export import clean_asset_name, object_role
 from ceassetlib.paths import output_dir_for_source
-from ceassetlib.texture import write_rgba_dxt5
+from ceassetlib.texture import write_rgbexp32_dds
 
 
 LIGHTMAP_UV = "CEngineLightmap"
@@ -28,6 +28,7 @@ MIN_TEXEL_DENSITY_SAMPLES = 10
 FALLBACK_SMART_PROJECT_ANGLE_DEGREES = 66.0
 UV_EPSILON = 1.0e-7
 DEFAULT_RGBM_RANGE = 8.0
+HDR_LIGHTMAP_DECODE_SCALE = 1.0
 DEFAULT_DENOISE = True
 DEFAULT_SAMPLES = 256
 DEFAULT_INDIRECT_CLAMP = 2.0
@@ -104,6 +105,30 @@ def encode_rgbm(pixels: Iterable[float], rgbm_range: float) -> bytes:
         encoded[index + 1] = round(min(green, 1.0) * 255.0)
         encoded[index + 2] = round(min(blue, 1.0) * 255.0)
         encoded[index + 3] = round(multiplier * 255.0)
+    return bytes(encoded)
+
+
+def encode_rgbexp32(pixels: Iterable[float]) -> bytes:
+    values = pixels if hasattr(pixels, "__len__") and hasattr(pixels, "__getitem__") else list(pixels)
+    if len(values) % 4 != 0:
+        raise ValueError("Blender lightmap pixels must be RGBA")
+
+    encoded = bytearray(len(values))
+    for index in range(0, len(values), 4):
+        red = max(0.0, float(values[index]))
+        green = max(0.0, float(values[index + 1]))
+        blue = max(0.0, float(values[index + 2]))
+        maximum = max(red, green, blue)
+        if maximum <= 0.0:
+            exponent = -128
+            scale = 0.0
+        else:
+            exponent = max(-127, min(127, math.ceil(math.log2(maximum))))
+            scale = 255.0 / math.ldexp(1.0, exponent)
+        encoded[index] = round(min(255.0, red * scale))
+        encoded[index + 1] = round(min(255.0, green * scale))
+        encoded[index + 2] = round(min(255.0, blue * scale))
+        encoded[index + 3] = exponent + 128
     return bytes(encoded)
 
 
@@ -397,9 +422,8 @@ def _copy_bake_uv(mesh: object, tile: AtlasTile) -> None:
     target.active_render = True
 
 
-def _save_rgbm(pixels: Iterable[float], resolution: int, rgbm_range: float,
-               dds_path: Path) -> None:
-    write_rgba_dxt5(dds_path, resolution, resolution, encode_rgbm(pixels, rgbm_range))
+def _save_hdr(pixels: Iterable[float], resolution: int, dds_path: Path) -> None:
+    write_rgbexp32_dds(dds_path, resolution, resolution, encode_rgbexp32(pixels))
 
 
 def _bake_targets(objects: Iterable[object],
@@ -599,8 +623,6 @@ def bake_scene_lightmaps(
         "ce_lightmap_resolution", DEFAULT_RESOLUTION))
     padding = int(getattr(scene, "get", lambda *_: DEFAULT_PADDING)(
         "ce_lightmap_padding", DEFAULT_PADDING))
-    rgbm_range = float(getattr(scene, "get", lambda *_: DEFAULT_RGBM_RANGE)(
-        "ce_lightmap_rgbm_range", DEFAULT_RGBM_RANGE))
     denoise = bool(getattr(scene, "get", lambda *_: DEFAULT_DENOISE)(
         "ce_lightmap_denoise", DEFAULT_DENOISE))
     samples = max(1, int(getattr(scene, "get", lambda *_: DEFAULT_SAMPLES)(
@@ -818,7 +840,7 @@ def bake_scene_lightmaps(
             raise RuntimeError(
                 "Cycles produced an empty lightmap; check light modes, render visibility, "
                 "light linking, and overlapping prototype/instance geometry")
-        _save_rgbm(combined_pixels, resolution, rgbm_range, output)
+        _save_hdr(combined_pixels, resolution, output)
     finally:
         for material, node in reversed(temporary_nodes):
             material.node_tree.nodes.remove(node)
@@ -863,7 +885,8 @@ def bake_scene_lightmaps(
     prefab_placements: dict[str, list[tuple[int, LightmapPlacement]]] = {}
     for target in targets:
         tile = tiles[target.key]
-        placement = LightmapPlacement(output, tile.scale, tile.offset, rgbm_range)
+        placement = LightmapPlacement(
+            output, tile.scale, tile.offset, HDR_LIGHTMAP_DECODE_SCALE)
         if target.prop_name is not None:
             prop_placements[target.prop_name] = placement
         elif target.prefab_instance is not None and target.prefab_object_index is not None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import sys
 import unittest
 from pathlib import Path
@@ -14,7 +15,7 @@ from cengine_asset_exporter.lightmaps import (
     DEFAULT_RESOLUTION, DEFAULT_SAMPLES, DIRECT_BAKE_LIGHT_MODES,
     INDIRECT_BAKE_LIGHT_MODES, _apply_coverage_mask, _clamp_rgb, _combine_light_passes,
     LIGHTMAP_PACK_MARGIN, _bake_targets, _maximum_rgb, _static_meshes,
-    _trimmed_density_ratio, encode_rgbm, plan_atlas,
+    _trimmed_density_ratio, encode_rgbexp32, encode_rgbm, plan_atlas,
 )
 
 
@@ -47,6 +48,15 @@ class LightmapTests(unittest.TestCase):
         self.assertAlmostEqual(decoded[0], 4.0, places=2)
         self.assertAlmostEqual(decoded[1], 2.0, places=2)
         self.assertAlmostEqual(decoded[2], 1.0, places=1)
+
+    def test_rgbexp32_roundtrip_preserves_hdr_color_without_blocks(self) -> None:
+        encoded = encode_rgbexp32((4.0, 2.0, 1.0, 1.0))
+        multiplier = math.ldexp(1.0, encoded[3] - 128)
+        decoded = tuple(channel / 255.0 * multiplier for channel in encoded[:3])
+
+        self.assertAlmostEqual(decoded[0], 4.0, delta=0.01)
+        self.assertAlmostEqual(decoded[1], 2.0, delta=0.01)
+        self.assertAlmostEqual(decoded[2], 1.0, delta=0.01)
 
     def test_indirect_and_static_direct_passes_are_added_before_encoding(self) -> None:
         combined = _combine_light_passes(

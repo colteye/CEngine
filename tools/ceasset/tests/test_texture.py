@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,7 +9,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ceassetlib.texture import convert_texture_to_dds, normalize_pillow_dds_format, write_rgba_dxt5
+from ceassetlib.texture import (
+    convert_texture_to_dds, normalize_pillow_dds_format, write_rgbexp32_dds, write_rgba_dxt5,
+)
 
 
 class TextureTests(unittest.TestCase):
@@ -43,6 +46,17 @@ class TextureTests(unittest.TestCase):
             convert_texture_to_dds(source, output, "DXT5")
 
             self.assertEqual(output.read_bytes()[:4], b"DDS ")
+
+    def test_builtin_rgbexp32_writer_emits_tagged_uncompressed_texture(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "lightmap.dds"
+            pixels = bytes((255, 128, 64, 129, 0, 64, 32, 127))
+            write_rgbexp32_dds(output, 2, 1, pixels)
+
+            data = output.read_bytes()
+            self.assertEqual(data[:4], b"DDS ")
+            self.assertEqual(data[84:88], b"RGBE")
+            self.assertEqual(data[128:], pixels)
 
 
 if __name__ == "__main__":

@@ -110,3 +110,23 @@ def write_rgba_dxt5(output: Path, width: int, height: int, rgba: bytes) -> None:
     temporary = output.with_name(output.name + ".tmp")
     temporary.write_bytes(b"DDS " + header + blocks)
     temporary.replace(output)
+
+
+def write_rgbexp32_dds(output: Path, width: int, height: int, rgba: bytes) -> None:
+    if width <= 0 or height <= 0:
+        raise ValueError("RGBExp32 dimensions must be positive")
+    if len(rgba) != width * height * 4:
+        raise ValueError("RGBA byte count does not match the texture dimensions")
+
+    pitch = width * 4
+    flags = 0x0000100F  # caps, height, width, pitch, pixel format
+    pixel_format = struct.pack("<II4sIIIII", 32, 0x4, b"RGBE", 0, 0, 0, 0, 0)
+    header = struct.pack("<IIIIIII11I", 124, flags, height, width, pitch, 0, 1,
+                         *([0] * 11))
+    header += pixel_format
+    header += struct.pack("<IIIII", 0x1000, 0, 0, 0, 0)
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_name(output.name + ".tmp")
+    temporary.write_bytes(b"DDS " + header + rgba)
+    temporary.replace(output)
