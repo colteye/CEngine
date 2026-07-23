@@ -27,7 +27,7 @@ struct SceneSettings {
     glm::vec3 ambient_color = glm::vec3(0.0f);
     float exposure = 1.0f;
     glm::vec3 gravity = glm::vec3(0.0f, 0.0f, -9.81f);
-    EntityId active_camera;
+    EntityId active_player;
 };
 
 class Scene {

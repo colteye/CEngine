@@ -1,7 +1,7 @@
 #include "scene/scene.h"
 #include "scene/scene_loader.h"
 #include "assets/asset_database.h"
-#include "entity/camera_entity.h"
+#include "entity/player_entity.h"
 #include "entity/light_entity.h"
 #include "entity/exponential_height_fog_entity.h"
 #include "entity/prefab_entity.h"
@@ -71,9 +71,9 @@ bool EnvironmentEntitiesOwnTheirFields()
 bool SlotLookupWorks()
 {
     Scene scene;
-    auto& camera = scene.CreateEntity("camera", "MainCamera");
-    return Expect(scene.GetEntity(camera.Id()) == &camera, "runtime handle should find entity") &&
-        Expect(scene.Entities()[camera.Id().index].get() == &camera, "single entity list should own entity");
+    auto& player = scene.CreateEntity("player", "PlayerOne");
+    return Expect(scene.GetEntity(player.Id()) == &player, "runtime handle should find entity") &&
+        Expect(scene.Entities()[player.Id().index].get() == &player, "single entity list should own entity");
 }
 
 bool LightModesHaveExplicitRuntimeDirectSemantics()

@@ -19,11 +19,11 @@
 | Field | Value |
 | --- | --- |
 | active milestone | **M0: playable room** |
-| active vertical step | **1: load and render one deterministic cooked room** |
+| active vertical step | **1: load and render one deterministic cooked room, with authored player placement** |
 | state | in progress |
 | next deliverable | a committed `assets/demo/m0/m0_room.cscene` fixture that loads through the target-asset path and renders its static `prop` entities |
 | next automated gate | a headless fixture test that loads the M0 room and verifies its scene, entity, asset-reference, and static-content counts |
-| explicitly deferred | authoritative tick loop, `UserCommand`, presentation snapshots, door behavior, remote transport, animation, audio, Render Thread |
+| explicitly deferred | authoritative tick loop, `UserCommand`, presentation snapshots, door behavior, remote transport, animation, audio, Render Thread; the temporary viewer player controller is not the future authoritative command path |
 
 An agent should complete the next deliverable and automated gate before starting
 vertical step 2. Existing divergences listed below are not independent cleanup
@@ -73,6 +73,7 @@ Results:
 | authoritative simulation/tick owner | missing | physics currently owns its own real-delta accumulator |
 | `PresentationSnapshot` and `ClientView` | missing | renderer bindings currently update from live scene entities |
 | player/controller | missing | only free-camera controls and `info_player_start` data exist |
+| authored player placement and viewer possession | implemented ahead of the original step order | Blender `EMPTY` with `ce_classname = "player"` cooks to a `PlayerEntity`; the viewer possesses its first enabled player and synchronizes the existing free-look controls back to that entity. This is explicitly a local-view bridge, not the deferred authoritative controller/network design. |
 | interactive door | missing | no door entity or recorded interaction path exists |
 | M0 command capture/state hash | missing | no canonical declared-state capture exists |
 | M0 performance harness | missing | profile targets exist but there is no `CEngineM0Profile` executable or JSON result writer |

@@ -10,7 +10,7 @@ from typing import Union
 from .assetfile import align_up, make_asset_desc, write_binary_asset
 from .formats import AssetType
 from .scene_format import (
-    ASSET_REFERENCE, CAMERA_ENTITY, ENTITY_CLASS_BLOCK,
+    ASSET_REFERENCE, PLAYER_ENTITY, ENTITY_CLASS_BLOCK,
     ENTITY_CLASS_VERSION, ENTITY_CONNECTION, EntityClassBlockFlags, LIGHT_ENTITY, LightFlags, PLAYER_START,
     PREFAB_ENTITY, PREFAB_LIGHTMAP, PROP, PropFlags, SCENE_ENTITY, SCENE_HEADER, SCENE_MAGIC,
     SCENE_SETTINGS, SCENE_VERSION, SKYBOX_ENTITY, EXPONENTIAL_HEIGHT_FOG_ENTITY,
@@ -71,9 +71,9 @@ class Prop:
 
 
 @dataclass(frozen=True)
-class CameraEntity:
+class PlayerEntity:
     transform: Transform = field(default_factory=Transform)
-    projection: int = 0
+    view_mode: int = 0
     vertical_fov_radians: float = 1.0471976
     orthographic_size: float = 10.0
     near_clip: float = 0.1
@@ -147,7 +147,7 @@ class ExponentialHeightFogEntity:
     enabled: bool = True
 
 
-EntityData = Union[EmptyEntity, Prop, CameraEntity,
+EntityData = Union[EmptyEntity, Prop, PlayerEntity,
                    LightEntity, PrefabEntity, TriggerEntity, PlayerStart,
                    SkyboxEntity, ExponentialHeightFogEntity]
 
@@ -164,7 +164,7 @@ class SceneSettings:
     ambient_color: tuple[float, float, float] = (0.0, 0.0, 0.0)
     exposure: float = 1.0
     gravity: tuple[float, float, float] = (0.0, 0.0, -9.81)
-    active_camera_entity: int | None = None
+    active_player_entity: int | None = None
 
 
 @dataclass(frozen=True)
@@ -186,7 +186,7 @@ class SceneDescription:
 CLASS_INFO = {
     EmptyEntity: ("empty", TRANSFORM),
     Prop: ("prop", PROP),
-    CameraEntity: ("camera", CAMERA_ENTITY),
+    PlayerEntity: ("player", PLAYER_ENTITY),
     LightEntity: ("light", LIGHT_ENTITY),
     PrefabEntity: ("prefab_instance", PREFAB_ENTITY),
     TriggerEntity: ("trigger", TRIGGER_ENTITY),
@@ -307,10 +307,10 @@ def _pack_entity(value: EntityData, assets: dict[AssetReference, int], materials
                          lightmap, *value.lightmap_scale, *value.lightmap_offset,
                          value.lightmap_rgbm_range, int(flags),
                          *value.collision_half_extents, value.mass)
-    if isinstance(value, CameraEntity):
+    if isinstance(value, PlayerEntity):
         if value.near_clip <= 0.0 or value.far_clip <= value.near_clip:
-            raise ValueError("camera clip distances are invalid")
-        return CAMERA_ENTITY.pack(*transform, value.projection, value.vertical_fov_radians,
+            raise ValueError("player clip distances are invalid")
+        return PLAYER_ENTITY.pack(*transform, value.view_mode, value.vertical_fov_radians,
                                   value.orthographic_size, value.near_clip, value.far_clip, int(value.enabled))
     if isinstance(value, LightEntity):
         if value.intensity < 0.0 or value.range < 0.0:
@@ -359,13 +359,13 @@ def build_scene_payload(scene: SceneDescription) -> bytes:
         raise ValueError("scene may contain at most one enabled exponential height fog")
 
     assets, asset_indices = _collect_assets(entities)
-    active_camera = INVALID_INDEX
-    if scene.settings.active_camera_entity is not None:
-        if not 0 <= scene.settings.active_camera_entity < len(entities):
-            raise ValueError("active camera entity index is invalid")
-        if not isinstance(entities[scene.settings.active_camera_entity].data, CameraEntity):
-            raise ValueError("active camera entity must reference a camera")
-        active_camera = scene.settings.active_camera_entity
+    active_player = INVALID_INDEX
+    if scene.settings.active_player_entity is not None:
+        if not 0 <= scene.settings.active_player_entity < len(entities):
+            raise ValueError("active player entity index is invalid")
+        if not isinstance(entities[scene.settings.active_player_entity].data, PlayerEntity):
+            raise ValueError("active player entity must reference a player")
+        active_player = scene.settings.active_player_entity
 
     strings = StringTable()
     asset_rows = bytearray()
@@ -386,7 +386,7 @@ def build_scene_payload(scene: SceneDescription) -> bytes:
     output = bytearray(SCENE_HEADER.size)
     settings_offset = _append_aligned(output, SCENE_SETTINGS.pack(
         *scene.settings.ambient_color, scene.settings.exposure, *scene.settings.gravity,
-        active_camera, 0, 0, 0, 0))
+        active_player, 0, 0, 0, 0))
     asset_offset = _append_aligned(output, asset_rows) if asset_rows else 0
     entity_offset = _append_aligned(output, entity_rows)
     groups = sorted(grouped.items(), key=lambda item: CLASS_INFO[item[0]][0])

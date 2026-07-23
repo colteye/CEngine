@@ -41,7 +41,7 @@ enum EntityClassBlockFlags : std::uint32_t {
 
 enum class LightType : std::uint32_t { Point = 0, Sun = 1, Spot = 2, Area = 3 };
 enum class LightMode : std::uint32_t { Realtime = 0, Baked = 1, Mixed = 2 };
-enum class CameraProjection : std::uint32_t { Perspective = 0, Orthographic = 1 };
+enum class PlayerViewMode : std::uint32_t { FirstPerson = 0, ThirdPerson = 1 };
 
 #pragma pack(push, 1)
 struct DiskSceneHeader {
@@ -69,7 +69,7 @@ struct DiskSceneSettings {
     float ambient_color[3] = {};
     float exposure = 1.0f;
     float gravity[3] = {0.0f, 0.0f, -9.81f};
-    std::uint32_t active_camera_entity = InvalidEntityIndex;
+    std::uint32_t active_player_entity = InvalidEntityIndex;
     std::uint32_t reserved[4] = {};
 };
 
@@ -132,9 +132,9 @@ struct DiskProp {
     float mass = 1.0f;
 };
 
-struct DiskCameraEntity {
+struct DiskPlayerEntity {
     DiskTransform transform;
-    std::uint32_t projection = 0;
+    std::uint32_t view_mode = 0;
     float vertical_fov_radians = 1.0471976f;
     float orthographic_size = 10.0f;
     float near_clip = 0.1f;
@@ -209,7 +209,7 @@ static_assert(sizeof(DiskEntityClassBlock) == 52);
 static_assert(sizeof(DiskEntityConnection) == 28);
 static_assert(sizeof(DiskTransform) == 40);
 static_assert(sizeof(DiskProp) == 96);
-static_assert(sizeof(DiskCameraEntity) == 64);
+static_assert(sizeof(DiskPlayerEntity) == 64);
 static_assert(sizeof(DiskLightEntity) == 88);
 static_assert(sizeof(DiskPrefabEntity) == 52);
 static_assert(sizeof(DiskPrefabLightmap) == 28);

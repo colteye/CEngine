@@ -10,7 +10,7 @@ sys.path.insert(0, str(ROOT))
 
 from ceassetlib.blender_scene import LightmapPlacement, object_transform, scene_description
 from ceassetlib.scene_export import (
-    CameraEntity, EmptyEntity, ExponentialHeightFogEntity, LightEntity, PlayerStart,
+    PlayerEntity, EmptyEntity, ExponentialHeightFogEntity, LightEntity, PlayerStart,
     PrefabEntity, Prop, SkyboxEntity, TriggerEntity,
 )
 
@@ -50,7 +50,7 @@ class BlenderSceneTests(unittest.TestCase):
         prefab_collection = types.SimpleNamespace(name="PREFAB_Door")
         objects = [
             FakeObject("Mesh", "MESH", materials=(material,)),
-            FakeObject("Camera", "CAMERA", data=types.SimpleNamespace(type="PERSP")),
+            FakeObject("Player", "EMPTY", props={"ce_classname": "player"}),
             FakeObject("Light", "LIGHT", data=types.SimpleNamespace(type="SUN", color=(1, .5, .25))),
             FakeObject("Door", "EMPTY", instance_collection=prefab_collection),
             FakeObject("Marker", "EMPTY"),
@@ -66,14 +66,14 @@ class BlenderSceneTests(unittest.TestCase):
         )
 
         self.assertEqual([type(entity.data) for entity in scene.entities], [
-            CameraEntity, PrefabEntity, LightEntity, EmptyEntity, Prop,
+            PrefabEntity, LightEntity, EmptyEntity, Prop, PlayerEntity,
         ])
-        prop = scene.entities[-1].data
+        prop = scene.entities[3].data
         self.assertEqual(prop.mesh.path, "compiled/Mesh.cmesh")
         self.assertEqual(prop.materials[0].path, "compiled/Brick.cmat")
-        prefab = scene.entities[1].data
+        prefab = scene.entities[0].data
         self.assertEqual(prefab.prefab.path, "compiled/Door.casset")
-        light = scene.entities[2].data
+        light = scene.entities[1].data
         self.assertTrue(light.casts_shadows)
 
     def test_static_mesh_receives_external_lightmap_atlas_binding(self) -> None:

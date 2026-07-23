@@ -24,7 +24,7 @@ class SceneFormatTests(unittest.TestCase):
                 "DiskEntityConnection": 28,
                 "DiskTransform": 40,
                 "DiskProp": 96,
-                "DiskCameraEntity": 64,
+                "DiskPlayerEntity": 64,
                 "DiskLightEntity": 88,
                 "DiskPrefabEntity": 52,
                 "DiskPrefabLightmap": 28,

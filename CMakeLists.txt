@@ -182,7 +182,7 @@ set(CENGINE_ASSET_SOURCES
 add_library(CEngineAssets STATIC ${CENGINE_ASSET_SOURCES})
 
 add_library(CEngineScene STATIC
-    src/entity/camera_entity.cpp
+    src/entity/player_entity.cpp
     src/entity/empty_entity.cpp
     src/entity/exponential_height_fog_entity.cpp
     src/entity/entity.cpp

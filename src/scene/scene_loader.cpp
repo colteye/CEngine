@@ -4,7 +4,7 @@
 #include "assets/asset_io.h"
 #include "assets/casset_loader.h"
 #include "assets/cscene_reader.h"
-#include "entity/camera_entity.h"
+#include "entity/player_entity.h"
 #include "entity/exponential_height_fog_entity.h"
 #include "entity/light_entity.h"
 #include "entity/player_start.h"
@@ -189,20 +189,20 @@ bool LoadClassRecord(Scene& scene, Entity& entity, std::string_view classname,
         return LoadMaterials(scene, disk.first_material_asset, disk.material_count, auxiliary,
                              prop.first_material, prop.material_count, error);
     }
-    if (classname == "camera") {
-        DiskCameraEntity disk;
+    if (classname == "player") {
+        DiskPlayerEntity disk;
         if (!ReadRecord(records, row, stride, disk))
-            return Fail(error, "camera record stride is unsupported");
-        if (disk.projection > 1 || disk.near_clip <= 0.0f || disk.far_clip <= disk.near_clip)
-            return Fail(error, "camera record is invalid");
-        auto& camera = static_cast<Entities::CameraEntity&>(entity);
-        CopyTransform(disk.transform, camera.GetTransform());
-        camera.projection = static_cast<Entities::CameraProjection>(disk.projection);
-        camera.vertical_fov_radians = disk.vertical_fov_radians;
-        camera.orthographic_size = disk.orthographic_size;
-        camera.near_clip = disk.near_clip;
-        camera.far_clip = disk.far_clip;
-        camera.enabled = disk.enabled != 0;
+            return Fail(error, "player record stride is unsupported");
+        if (disk.view_mode > 1 || disk.near_clip <= 0.0f || disk.far_clip <= disk.near_clip)
+            return Fail(error, "player record is invalid");
+        auto& player = static_cast<Entities::PlayerEntity&>(entity);
+        CopyTransform(disk.transform, player.GetTransform());
+        player.view_mode = static_cast<Entities::PlayerViewMode>(disk.view_mode);
+        player.vertical_fov_radians = disk.vertical_fov_radians;
+        player.third_person_distance = disk.orthographic_size;
+        player.near_clip = disk.near_clip;
+        player.far_clip = disk.far_clip;
+        player.enabled = disk.enabled != 0;
         return true;
     }
     if (classname == "light") {
@@ -541,18 +541,18 @@ std::unique_ptr<Scene> LoadScene(const std::filesystem::path& path, Assets::Asse
     settings.exposure = disk_settings.exposure;
     settings.gravity = {disk_settings.gravity[0], disk_settings.gravity[1],
                         disk_settings.gravity[2]};
-    if (disk_settings.active_camera_entity != InvalidEntityIndex) {
-        Entity* active_camera = entities[disk_settings.active_camera_entity];
-        if (active_camera->Classname() != "camera") {
-            Fail(error, "scene active camera does not reference a camera entity");
+    if (disk_settings.active_player_entity != InvalidEntityIndex) {
+        Entity* active_player = entities[disk_settings.active_player_entity];
+        if (active_player->Classname() != "player") {
+            Fail(error, "scene active player does not reference a player entity");
             return nullptr;
         }
-        const auto& camera = static_cast<const Entities::CameraEntity&>(*active_camera);
-        if (!active_camera->Enabled() || !camera.enabled) {
-            Fail(error, "scene active camera is disabled");
+        const auto& player = static_cast<const Entities::PlayerEntity&>(*active_player);
+        if (!active_player->Enabled() || !player.enabled) {
+            Fail(error, "scene active player is disabled");
             return nullptr;
         }
-        settings.active_camera = active_camera->Id();
+        settings.active_player = active_player->Id();
     }
     scene->SetSettings(settings);
     try {

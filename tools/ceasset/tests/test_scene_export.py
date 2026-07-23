@@ -10,7 +10,7 @@ sys.path.insert(0, str(ROOT))
 from ceassetlib.formats import AssetType
 from ceassetlib.scene_export import (
     AssetReference,
-    CameraEntity,
+    PlayerEntity,
     EntityConnection,
     EntityDescription,
     LightEntity,
@@ -50,14 +50,14 @@ class SceneExportTests(unittest.TestCase):
                     name="CrateA",
                 ),
                 EntityDescription(
-                    data=CameraEntity(),
+                    data=PlayerEntity(),
                     name="Camera",
                 ),
                 EntityDescription(
                     data=PrefabEntity(prefab, lightmaps=(PrefabLightmap(2, lightmap),)),
                 ),
             ),
-            settings=SceneSettings(active_camera_entity=2),
+            settings=SceneSettings(active_player_entity=2),
             connections=(EntityConnection(0, "OnEnabled", 1, "Show", 0.25),),
         )
 
@@ -91,17 +91,17 @@ class SceneExportTests(unittest.TestCase):
             build_scene_payload(SceneDescription((EntityDescription(
                 Prop(AssetReference(
                     AssetType.MESH, "../bad.cmesh", guid(9)))),)))
-        with self.assertRaisesRegex(ValueError, "active camera entity index"):
+        with self.assertRaisesRegex(ValueError, "active player entity index"):
             build_scene_payload(SceneDescription(
-                (EntityDescription(CameraEntity()),),
-                SceneSettings(active_camera_entity=4)))
-        with self.assertRaisesRegex(ValueError, "must reference a camera"):
+                (EntityDescription(PlayerEntity()),),
+                SceneSettings(active_player_entity=4)))
+        with self.assertRaisesRegex(ValueError, "must reference a player"):
             build_scene_payload(SceneDescription(
                 (EntityDescription(LightEntity()),),
-                SceneSettings(active_camera_entity=0)))
+                SceneSettings(active_player_entity=0)))
         with self.assertRaisesRegex(ValueError, "connection entity index"):
             build_scene_payload(SceneDescription(
-                (EntityDescription(CameraEntity()),),
+                (EntityDescription(PlayerEntity()),),
                 connections=(EntityConnection(0, "OnReady", 2, "Enable"),)))
         mesh = AssetReference(AssetType.MESH, "assets/compiled/prop.cmesh", guid(10))
         lightmap = AssetReference(AssetType.TEXTURE, "assets/compiled/lightmap.dds", guid(11))

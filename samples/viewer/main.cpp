@@ -1,7 +1,7 @@
 #include "assets/asset_database.h"
 #include "camera.h"
 #include "controls.h"
-#include "entity/camera_entity.h"
+#include "entity/player_entity.h"
 #include "physics/physics_system.h"
 #include "renderer/render_system.h"
 #include "scene/scene.h"
@@ -244,16 +244,11 @@ void EndTuningFrame()
 }
 #endif
 
-void ApplyActiveCamera(const CEngine::Scene::Scene& scene, Camera& camera)
+CEngine::Entities::PlayerEntity* ActivePlayer(CEngine::Scene::Scene& scene)
 {
-	const CEngine::Scene::Entity* entity = scene.GetEntity(scene.Settings().active_camera);
-	if (entity == nullptr) return;
-
-	const auto& source = static_cast<const CEngine::Entities::CameraEntity&>(*entity);
-	camera.SetPosition(source.GetTransform().position);
-	camera.SetAnglesCartesian(glm::normalize(glm::vec3(
-		source.GetTransform().world_matrix * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f))));
-	camera.SetFOV(glm::degrees(source.vertical_fov_radians));
+	CEngine::Scene::Entity* entity = scene.GetEntity(scene.Settings().active_player);
+	if (entity == nullptr || entity->Classname() != "player") return nullptr;
+	return static_cast<CEngine::Entities::PlayerEntity*>(entity);
 }
 
 int RunScene(GLFWwindow* window, const std::filesystem::path& scene_path,
@@ -335,7 +330,11 @@ int RunScene(GLFWwindow* window, const std::filesystem::path& scene_path,
 	}
 	camera.SetAspectRatio(static_cast<float>(framebuffer_width) /
 		static_cast<float>(framebuffer_height));
-	ApplyActiveCamera(*scene, camera);
+	CEngine::Entities::PlayerEntity* player = ActivePlayer(*scene);
+	if (player == nullptr)
+		for (const auto& entity : scene->Entities())
+			if (entity != nullptr && entity->Classname() == "player") { player = static_cast<CEngine::Entities::PlayerEntity*>(entity.get()); break; }
+	if (player != nullptr) camera.ApplyPlayer(*player);
 	Controls controls(window);
 	bool ui_input_mode = true;
 	bool show_tuning_panel = true;
@@ -384,9 +383,9 @@ int RunScene(GLFWwindow* window, const std::filesystem::path& scene_path,
 
 #if defined(CENGINE_ENABLE_OPENGL)
 		BeginTuningFrame();
-		if (!ui_input_mode) controls.Update(&camera, delta_seconds);
+		if (!ui_input_mode && player != nullptr) { controls.Update(&camera, delta_seconds); camera.StoreInPlayer(*player); }
 #else
-		controls.Update(&camera, delta_seconds);
+		if (player != nullptr) { controls.Update(&camera, delta_seconds); camera.StoreInPlayer(*player); }
 #endif
 
 #if defined(CENGINE_ENABLE_JOLT_PHYSICS)

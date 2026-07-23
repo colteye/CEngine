@@ -9,7 +9,7 @@ from .collection_export import blender_to_engine_matrix_rows, object_role
 from .formats import AssetType
 from .ids import guid_from_stable_name
 from .scene_export import (
-    AssetReference, CameraEntity, EmptyEntity, EntityDescription, ExponentialHeightFogEntity,
+    AssetReference, PlayerEntity, EmptyEntity, EntityDescription, ExponentialHeightFogEntity,
     LightEntity, PlayerStart, PrefabEntity, PrefabLightmap, Prop, SceneDescription,
     SceneSettings, SkyboxEntity, Transform, TriggerEntity,
 )
@@ -154,14 +154,6 @@ def scene_description(
                 entity_name = name if len(outputs) == 1 else f"{name}:{material_name}"
                 entities.append(EntityDescription(data, entity_name))
             continue
-        elif obj_type == "CAMERA":
-            camera = getattr(obj, "data", None)
-            projection = 1 if str(getattr(camera, "type", "PERSP")) == "ORTHO" else 0
-            data = CameraEntity(transform, projection,
-                float(getattr(camera, "angle_y", getattr(camera, "angle", 1.0471976))),
-                float(getattr(camera, "ortho_scale", 10.0)),
-                float(getattr(camera, "clip_start", 0.1)),
-                float(getattr(camera, "clip_end", 1000.0)))
         elif obj_type == "LIGHT":
             light = getattr(obj, "data", None)
             light_type = {"POINT": 0, "SUN": 1, "SPOT": 2, "AREA": 3}.get(
@@ -203,6 +195,14 @@ def scene_description(
                     trigger_once=bool(_property(obj, "ce_trigger_once", False)))
             elif classname == "info_player_start":
                 data = PlayerStart(transform, int(_property(obj, "ce_team", 0)))
+            elif classname == "player":
+                data = PlayerEntity(transform,
+                    1 if str(_property(obj, "ce_view_mode", "first_person")) == "third_person" else 0,
+                    float(_property(obj, "ce_vertical_fov_radians", 1.0471976)),
+                    float(_property(obj, "ce_third_person_distance", 4.0)),
+                    float(_property(obj, "ce_near_clip", 0.1)),
+                    float(_property(obj, "ce_far_clip", 1000.0)),
+                    bool(_property(obj, "ce_enabled", True)))
             elif classname == "skybox":
                 output = (skybox_outputs or {}).get(name)
                 if output is None:

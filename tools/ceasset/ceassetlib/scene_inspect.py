@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath
 from .assetfile import ASSET_HEADER, ASSET_MAGIC, ASSET_VERSION
 from .formats import AssetType
 from .scene_format import (
-    ASSET_REFERENCE, CAMERA_ENTITY, ENTITY_CLASS_BLOCK,
+    ASSET_REFERENCE, PLAYER_ENTITY, ENTITY_CLASS_BLOCK,
     ENTITY_CLASS_VERSION, ENTITY_CONNECTION, LIGHT_ENTITY, LightFlags, PLAYER_START,
     PREFAB_ENTITY, PREFAB_LIGHTMAP, PROP, PropFlags, SCENE_ENTITY, SCENE_HEADER,
     SCENE_MAGIC, SCENE_SETTINGS, SCENE_VERSION, SKYBOX_ENTITY,
@@ -19,7 +19,7 @@ from .scene_format import (
 CLASS_STRIDES = {
     "empty": TRANSFORM.size,
     "prop": PROP.size,
-    "camera": CAMERA_ENTITY.size,
+    "player": PLAYER_ENTITY.size,
     "light": LIGHT_ENTITY.size,
     "prefab_instance": PREFAB_ENTITY.size,
     "trigger": TRIGGER_ENTITY.size,
@@ -36,7 +36,7 @@ class SceneInspection:
     classes: tuple[tuple[str, int], ...]
     assets: tuple[tuple[AssetType, str], ...]
     connections: int
-    active_camera: int | None
+    active_player: int | None
 
 
 def _range(data: bytes, offset: int, count: int, stride: int, name: str) -> memoryview:
@@ -224,8 +224,8 @@ def inspect_scene(path: Path, project_root: Path, validate_assets: bool = False)
                             binding[3] + binding[5] > 1.0 or binding[6] <= 0.0):
                         raise ValueError("prefab lightmap binding is invalid")
                     previous_object = binding[0]
-            elif classname == "camera":
-                values = CAMERA_ENTITY.unpack(record)
+            elif classname == "player":
+                values = PLAYER_ENTITY.unpack(record)
                 if values[10] > 1 or values[13] <= 0.0 or values[14] <= values[13]:
                     raise ValueError("camera record is invalid")
             elif classname == "light":
@@ -261,11 +261,11 @@ def inspect_scene(path: Path, project_root: Path, validate_assets: bool = False)
             raise ValueError("connection delay is invalid")
 
     settings = SCENE_SETTINGS.unpack_from(payload, settings_offset)
-    active_camera = settings[7]
-    if active_camera != INVALID_INDEX and active_camera >= entity_count:
+    active_player = settings[7]
+    if active_player != INVALID_INDEX and active_player >= entity_count:
         raise ValueError("active camera entity index is invalid")
     return SceneInspection(path, entity_count, tuple(classes), tuple(assets),
-        connection_count, None if active_camera == INVALID_INDEX else active_camera)
+        connection_count, None if active_player == INVALID_INDEX else active_player)
 
 
 def print_scene(inspection: SceneInspection) -> None:
@@ -278,4 +278,4 @@ def print_scene(inspection: SceneInspection) -> None:
     for asset_type, path in inspection.assets:
         print(f"  {asset_type.name.lower()}: {path}")
     print(f"connections: {inspection.connections}")
-    print(f"active camera: {inspection.active_camera if inspection.active_camera is not None else 'none'}")
+    print(f"active player: {inspection.active_player if inspection.active_player is not None else 'none'}")

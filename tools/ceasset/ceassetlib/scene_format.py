@@ -39,7 +39,7 @@ ENTITY_CLASS_BLOCK = struct.Struct("<IIHHIIQQQQ")
 ENTITY_CONNECTION = struct.Struct("<IIIIIIf")
 TRANSFORM = struct.Struct("<3f4f3f")
 PROP = struct.Struct("<3f4f3fIIII2f2ffI3ff")
-CAMERA_ENTITY = struct.Struct("<3f4f3fIffffI")
+PLAYER_ENTITY = struct.Struct("<3f4f3fIffffI")
 LIGHT_ENTITY = struct.Struct("<3f4f3fII3f4f2fI")
 PREFAB_ENTITY = struct.Struct("<3f4f3fIII")
 PREFAB_LIGHTMAP = struct.Struct("<II2f2ff")
@@ -57,7 +57,7 @@ FIXED_STRUCTURE_SIZES = {
     "DiskEntityConnection": ENTITY_CONNECTION.size,
     "DiskTransform": TRANSFORM.size,
     "DiskProp": PROP.size,
-    "DiskCameraEntity": CAMERA_ENTITY.size,
+    "DiskPlayerEntity": PLAYER_ENTITY.size,
     "DiskLightEntity": LIGHT_ENTITY.size,
     "DiskPrefabEntity": PREFAB_ENTITY.size,
     "DiskPrefabLightmap": PREFAB_LIGHTMAP.size,

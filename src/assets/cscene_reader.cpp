@@ -56,9 +56,9 @@ bool CSceneFile::Validate(std::string* error)
         !std::isfinite(settings_->gravity[1]) ||
         !std::isfinite(settings_->gravity[2]))
     { SetError(error, "scene settings are invalid"); return false; }
-    if (settings_->active_camera_entity != InvalidEntityIndex &&
-        settings_->active_camera_entity >= header_.entity_count)
-    { SetError(error, "scene active camera index is invalid"); return false; }
+    if (settings_->active_player_entity != InvalidEntityIndex &&
+        settings_->active_player_entity >= header_.entity_count)
+    { SetError(error, "scene active player index is invalid"); return false; }
     for (std::uint32_t value : settings_->reserved)
         if (value != 0) { SetError(error, "scene settings reserved fields must be zero"); return false; }
     for (const auto& asset : AssetReferences())

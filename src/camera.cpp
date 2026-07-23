@@ -6,6 +6,8 @@
 
 #include "renderer/render_system.h"
 #include "camera.h"
+#include "entity/player_entity.h"
+#include <glm/gtc/quaternion.hpp>
 
 namespace Renderer = CEngine::Renderer;
 
@@ -46,6 +48,27 @@ void Camera::SetFarClip(float distance)
 	if (!std::isfinite(distance) || distance <= m_near_clip) return;
 	m_far_clip = distance;
 	UpdateMatrices();
+}
+
+void Camera::ApplyPlayer(const CEngine::Entities::PlayerEntity& player)
+{
+	const auto& transform = player.GetTransform();
+	SetPosition(transform.position);
+	SetAnglesCartesian(glm::vec3(transform.world_matrix * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)));
+	SetFOV(glm::degrees(player.vertical_fov_radians));
+	SetNearClip(player.near_clip);
+	SetFarClip(player.far_clip);
+}
+
+void Camera::StoreInPlayer(CEngine::Entities::PlayerEntity& player) const
+{
+	auto& transform = player.GetTransform();
+	transform.position = m_position;
+	const glm::vec3 direction(std::cos(m_angles.y) * std::cos(m_angles.x),
+		std::cos(m_angles.y) * std::sin(m_angles.x), std::sin(m_angles.y));
+	transform.rotation = glm::quatLookAt(glm::normalize(direction), glm::vec3(0.0f, 0.0f, 1.0f));
+	transform.dirty = true;
+	transform.UpdateWorldMatrix();
 }
 
 void Camera::UpdateMatrices()

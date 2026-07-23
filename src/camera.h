@@ -3,6 +3,7 @@
 
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+namespace CEngine::Entities { class PlayerEntity; }
 
 class Camera
 {
@@ -26,6 +27,8 @@ public:
 	float GetFarClip() const { return m_far_clip; }
 	void SetNearClip(float distance);
 	void SetFarClip(float distance);
+	void ApplyPlayer(const CEngine::Entities::PlayerEntity& player);
+	void StoreInPlayer(CEngine::Entities::PlayerEntity& player) const;
 	
 private:
 
