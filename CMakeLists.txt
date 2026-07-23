@@ -29,7 +29,7 @@ if(NOT CENGINE_ENABLE_OPENGL AND NOT CENGINE_ENABLE_VULKAN)
     message(FATAL_ERROR "Select exactly one render backend per build; enable OpenGL or Vulkan.")
 endif()
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_C_STANDARD 99)
@@ -212,23 +212,26 @@ if(CENGINE_ENABLE_OPENGL)
 endif()
 
 set(CENGINE_ASSET_SOURCES
-    src/assets/asset_store.cpp
-    src/assets/asset_store_load.cpp
-    src/assets/asset_io.cpp
-    src/assets/casset_loader.cpp
-    src/assets/cscene_reader.cpp
-    src/assets/material_loader.cpp
-    src/assets/mesh_loader.cpp
-    src/assets/physics_loader.cpp
-    src/assets/skeleton_loader.cpp
-    src/assets/texture_loader.cpp
+    "${CENGINE_ENGINE_GENERATED_HEADER}"
+    src/assets/animation_asset.cpp
+    src/assets/audio_asset.cpp
+    src/assets/store.cpp
+    src/assets/particle_asset.cpp
+    src/assets/reader.cpp
+    src/assets/casset_asset.cpp
+    src/assets/material_asset.cpp
+    src/assets/mesh_asset.cpp
+    src/assets/physics_asset.cpp
+    src/assets/skeleton_asset.cpp
+    src/assets/texture_asset.cpp
 )
 
 add_library(CEngineAssets STATIC ${CENGINE_ASSET_SOURCES})
+add_dependencies(CEngineAssets CEngineEngineSchemas)
 
 add_library(CEngineScene STATIC
     "${CENGINE_ENGINE_GENERATED_HEADER}"
-    src/assets/scene_loader.cpp
+    src/assets/scene_asset.cpp
     src/entity/fog_entity.cpp
     src/entity/entity.cpp
     src/entity/entity_factory.cpp
@@ -255,6 +258,7 @@ endif()
 target_include_directories(CEngineAssets
     PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        "${CENGINE_GENERATED_ROOT}"
 )
 
 target_include_directories(CEngineAssets
@@ -291,35 +295,27 @@ if(CENGINE_BUILD_TESTS)
     else()
         target_compile_options(CEngineAssetTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
-    add_test(NAME asset_runtime COMMAND CEngineAssetTests)
-    add_executable(CEngineAssetStoreTests tests/assets/asset_store_tests.cpp)
-    target_link_libraries(CEngineAssetStoreTests PRIVATE CEngineAssets)
-    if(MSVC)
-        target_compile_options(CEngineAssetStoreTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
-    else()
-        target_compile_options(CEngineAssetStoreTests PRIVATE -Wall -Wextra -Wpedantic)
-    endif()
-    add_test(NAME asset_store COMMAND CEngineAssetStoreTests)
-    add_executable(CEngineCSceneReaderTests tests/assets/cscene_reader_tests.cpp)
-    target_link_libraries(CEngineCSceneReaderTests PRIVATE CEngineAssets)
-    if(MSVC)
-        target_compile_options(CEngineCSceneReaderTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
-    else()
-        target_compile_options(CEngineCSceneReaderTests PRIVATE -Wall -Wextra -Wpedantic)
-    endif()
-    add_test(NAME cscene_reader COMMAND CEngineCSceneReaderTests)
     set(CENGINE_PYTHON_CSCENE_FIXTURE "${CMAKE_CURRENT_BINARY_DIR}/python_fixture.cscene")
-    add_test(NAME generate_python_cscene_fixture
+    add_test(NAME generate_python_asset_fixtures
         COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/ceasset/tests/generate_cscene_fixture.py"
             --output "${CENGINE_PYTHON_CSCENE_FIXTURE}")
-    set_tests_properties(generate_python_cscene_fixture PROPERTIES FIXTURES_SETUP python_cscene)
-    add_test(NAME read_python_cscene_fixture
-        COMMAND CEngineCSceneReaderTests "${CENGINE_PYTHON_CSCENE_FIXTURE}")
-    set_tests_properties(read_python_cscene_fixture PROPERTIES FIXTURES_REQUIRED python_cscene)
+    set_tests_properties(generate_python_asset_fixtures PROPERTIES FIXTURES_SETUP python_assets)
+    add_test(NAME asset_runtime
+        COMMAND CEngineAssetTests "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(asset_runtime PROPERTIES FIXTURES_REQUIRED python_assets)
+    add_executable(CEngineStoreTests tests/assets/store_tests.cpp)
+    target_link_libraries(CEngineStoreTests PRIVATE CEngineAssets)
+    if(MSVC)
+        target_compile_options(CEngineStoreTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+    else()
+        target_compile_options(CEngineStoreTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME store COMMAND CEngineStoreTests "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(store PROPERTIES FIXTURES_REQUIRED python_assets)
     add_test(NAME load_python_cscene_fixture
         COMMAND CEngineSceneTests "${CENGINE_PYTHON_CSCENE_FIXTURE}")
-    set_tests_properties(load_python_cscene_fixture PROPERTIES FIXTURES_REQUIRED python_cscene)
+    set_tests_properties(load_python_cscene_fixture PROPERTIES FIXTURES_REQUIRED python_assets)
     if(CENGINE_ENABLE_OPENGL)
         add_executable(CEngineShadowSystemTests
             tests/renderer/shadow_system_tests.cpp

@@ -15,8 +15,8 @@ Author:
 
 from __future__ import annotations
 
-import struct
 import time
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
@@ -27,18 +27,15 @@ from ceassetlib.assetfile import (
 )
 from ceassetlib.collection_export import clean_asset_name
 from ceassetlib.formats import AssetType
+from ceassetlib.game_schema import load_bundled_game
 from ceassetlib.ids import guid_from_stable_name, hash_file
 from ceassetlib.paths import generic_path, output_dir_for_source
+from ceassetlib.wire import pack_record
 
 from .materials import default_material_name_for_object, object_slot_materials
 
 
-VERTEX = struct.Struct("<ffffffffff")
-SKINNED_VERTEX = struct.Struct("<ffffffffffHHHHHHHH")
-INDEX = struct.Struct("<I")
-MESH_METADATA = struct.Struct("<4sHHIIIIIffffffIIIII")
-MESH_METADATA_MAGIC = b"CEMH"
-MESH_METADATA_VERSION = 2
+GAME_SCHEMA = load_bundled_game()
 MESH_FLAG_SKINNED = 1 << 0
 MESH_FLAG_LIGHTMAP_UV = 1 << 1
 MAX_SKIN_INFLUENCES = 4
@@ -57,15 +54,21 @@ class MeshExport:
 class MeshBuffers:
     """TODO: Describe `MeshBuffers`."""
 
-    vertex_count: int
-    index_count: int
     bounds_min: tuple[float, float, float]
     bounds_max: tuple[float, float, float]
-    vertex_stride: int
     skinned: bool
     lightmap_uv: bool
     skeleton: str
-    data: bytes
+    vertices: tuple[dict[str, object], ...]
+    indices: tuple[int, ...]
+
+    @property
+    def vertex_count(self) -> int:
+        return len(self.vertices)
+
+    @property
+    def index_count(self) -> int:
+        return len(self.indices)
 
 
 def elapsed(start: float) -> str:
@@ -116,6 +119,9 @@ def mesh_objects(objects: Iterable[object]) -> list[object]:
     seen: set[int] = set()
     for obj in objects:
         if getattr(obj, "type", "") != "MESH":
+            continue
+        if re.match(r"^LOD[1-7]_", str(getattr(obj, "name", "")), re.IGNORECASE) and \
+                getattr(getattr(obj, "parent", None), "type", "") == "MESH":
             continue
         key = id(obj)
         if key in seen:
@@ -380,16 +386,13 @@ def mesh_buffers(
     uv_data = material_uv_data(mesh)
     uv1_data = lightmap_uv_data(mesh)
 
-    packed_vertices = bytearray()
-    packed_indices = bytearray()
-    vertex_indices: dict[bytes, int] = {}
+    cooked_vertices: list[dict[str, object]] = []
+    cooked_indices: list[int] = []
+    vertex_indices: dict[tuple[object, ...], int] = {}
     bounds_min = [float("inf"), float("inf"), float("inf")]
     bounds_max = [float("-inf"), float("-inf"), float("-inf")]
-    vertex_count = 0
-    index_count = 0
     bone_lookup = bone_indices(armature)
     skinned = armature is not None
-    vertex_stride = SKINNED_VERTEX.size if skinned else VERTEX.size
 
     for polygon in polygons:
         if material_index is not None and int(getattr(polygon, "material_index", 0)) != material_index:
@@ -409,73 +412,63 @@ def mesh_buffers(
 
                 if skinned:
                     skin_indices, skin_weights = skin_influences(obj, vertex, bone_lookup)
-                    packed_vertex = SKINNED_VERTEX.pack(
-                        *position, *normal, *uv, *uv1,
-                        *skin_indices, *skin_weights)
                 else:
-                    packed_vertex = VERTEX.pack(
-                        *position, *normal, *uv, *uv1)
-                vertex_index = vertex_indices.get(packed_vertex)
+                    skin_indices, skin_weights = [0, 0, 0, 0], [0, 0, 0, 0]
+                key = (
+                    *position, *normal, *uv, *uv1,
+                    *skin_indices, *skin_weights,
+                )
+                vertex_index = vertex_indices.get(key)
                 if vertex_index is None:
-                    vertex_index = vertex_count
-                    vertex_indices[packed_vertex] = vertex_index
-                    packed_vertices.extend(packed_vertex)
-                    vertex_count += 1
-                packed_indices.extend(INDEX.pack(vertex_index))
-                index_count += 1
+                    vertex_index = len(cooked_vertices)
+                    vertex_indices[key] = vertex_index
+                    cooked_vertices.append({
+                        "position": position,
+                        "normal": normal,
+                        "uv": uv,
+                        "lightmap_uv": uv1,
+                        "joints": skin_indices,
+                        "weights": [weight / 65535.0 for weight in skin_weights],
+                    })
+                cooked_indices.append(vertex_index)
 
-    if vertex_count == 0:
+    if not cooked_vertices:
         bounds = (0.0, 0.0, 0.0)
-        return MeshBuffers(0, 0, bounds, bounds, vertex_stride, skinned,
-            bool(uv1_data), getattr(armature, "name", ""), b"")
+        return MeshBuffers(bounds, bounds, skinned, bool(uv1_data),
+                           getattr(armature, "name", ""), (), ())
 
     return MeshBuffers(
-        vertex_count,
-        index_count,
         tuple(bounds_min),
         tuple(bounds_max),
-        vertex_stride,
         skinned,
         bool(uv1_data),
         getattr(armature, "name", ""),
-        bytes(packed_vertices + packed_indices),
+        tuple(cooked_vertices),
+        tuple(cooked_indices),
     )
 
 
-def mesh_metadata_payload(
+def mesh_payload(
     buffers: MeshBuffers,
-    material_slot_count: int,
-    geometry_offset: int,
+    lods: Iterable[tuple[float, MeshBuffers]] = (),
 ) -> bytes:
-    """TODO: Describe `mesh_metadata_payload`.
-
-    Args:
-        buffers: TODO: Describe this parameter.
-        material_slot_count: TODO: Describe this parameter.
-        geometry_offset: TODO: Describe this parameter.
-
-    Returns:
-        TODO: Describe the produced value.
-    """
+    """Serialize one mesh and its LODs through the shared game schema."""
     flags = (MESH_FLAG_SKINNED if buffers.skinned else 0) | \
         (MESH_FLAG_LIGHTMAP_UV if buffers.lightmap_uv else 0)
-    return MESH_METADATA.pack(
-        MESH_METADATA_MAGIC,
-        MESH_METADATA_VERSION,
-        MESH_METADATA.size,
-        flags,
-        buffers.vertex_count,
-        buffers.index_count,
-        buffers.vertex_stride,
-        INDEX.size,
-        *buffers.bounds_min,
-        *buffers.bounds_max,
-        material_slot_count,
-        geometry_offset,
-        0,
-        0,
-        0,
-    )
+    cooked_lods = [(1.0, buffers), *lods]
+    return pack_record(GAME_SCHEMA, "mesh", {
+        "flags": flags,
+        "bounds_min": buffers.bounds_min,
+        "bounds_max": buffers.bounds_max,
+        "lods": [
+            {
+                "screen_size": screen_size,
+                "vertices": lod.vertices,
+                "indices": lod.indices,
+            }
+            for screen_size, lod in cooked_lods
+        ],
+    })
 
 
 def write_mesh_asset(
@@ -524,6 +517,33 @@ def write_mesh_asset(
             f"material={export_material_name}, split={split_by_material}, skinned={armature is not None}"
         )
     buffers = mesh_buffers(mesh, obj, armature, material_index if split_by_material else None)
+    lods = []
+    for fallback, child in enumerate(sorted(
+            (value for value in getattr(obj, "children", ())
+             if getattr(value, "type", "") == "MESH" and
+             re.match(r"^LOD[1-7]_", str(getattr(value, "name", "")), re.IGNORECASE)),
+            key=lambda value: str(value.name)), start=1):
+        getter = getattr(child, "get", None)
+        screen_size = float(getter(
+            "ce_lod_screen_size", 0.5 ** fallback
+        ) if callable(getter) else 0.5 ** fallback)
+        child_armature = mesh_armature(child)
+        lods.append((
+            screen_size,
+            mesh_buffers(
+                child.data, child, child_armature,
+                material_index if split_by_material else None),
+        ))
+    lods.sort(key=lambda value: value[0], reverse=True)
+    previous = 1.0
+    for screen_size, lod in lods:
+        if not 0.0 <= screen_size < previous:
+            raise RuntimeError(
+                f"mesh LOD screen sizes must strictly descend below 1.0: {obj.name}")
+        if lod.skinned != buffers.skinned or lod.lightmap_uv != buffers.lightmap_uv:
+            raise RuntimeError(
+                f"mesh LOD vertex features must match LOD0: {obj.name}")
+        previous = screen_size
     output = mesh_output_path(blend_source, output_root, obj.name, export_material_name if split_by_material else None)
     asset_source_hash = source_hash if source_hash is not None else hash_file(blend_source)
     del material_output_path_for_name
@@ -533,7 +553,7 @@ def write_mesh_asset(
         guid=guid_from_stable_name(asset_path(output)),
         source_hash=asset_source_hash,
         platform_target="generic",
-        payload=mesh_metadata_payload(buffers, 1, MESH_METADATA.size) + buffers.data,
+        payload=mesh_payload(buffers, lods),
     )
     write_binary_asset(output, desc)
     if logger is not None:

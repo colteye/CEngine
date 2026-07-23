@@ -36,8 +36,8 @@ from ceassetlib.game_schema import load_game_schema, make_schema_entity
 class SchemaGeneratorTests(unittest.TestCase):
     """TODO: Describe `SchemaGeneratorTests`."""
 
-    def test_generated_cpp_is_standalone_standard_library_code(self) -> None:
-        """TODO: Describe `test_generated_cpp_is_standalone_standard_library_code`."""
+    def test_generated_cpp_uses_the_shared_asset_reader(self) -> None:
+        """Generated records own layout while primitive decoding stays shared."""
         with tempfile.TemporaryDirectory() as temporary:
             header = Path(temporary) / "entities.h"
             subprocess.run(
@@ -65,14 +65,21 @@ class SchemaGeneratorTests(unittest.TestCase):
             {
                 "#include <cstddef>",
                 "#include <cstdint>",
-                "#include <cstring>",
+                "#include <array>",
+                "#include <span>",
+                "#include <string>",
+                "#include <utility>",
+                "#include <vector>",
+                '#include "assets/reader.h"',
             },
         )
         self.assertNotIn("glm", source)
         self.assertNotIn("AssetHandle", source)
         self.assertNotIn("EntityFactory", source)
-        self.assertNotIn("BinaryReader", source)
-        self.assertIn("bytes[offset + 3u]) << 24u", source)
+        self.assertIn("CEngine::Assets::Reader reader", source)
+        self.assertIn("reader.U32", source)
+        self.assertIn("reader.F32", source)
+        self.assertNotIn("bytes[offset + 3u]) << 24u", source)
 
     def test_game_file_contains_data_not_cpp_bindings(self) -> None:
         """TODO: Describe `test_game_file_contains_data_not_cpp_bindings`."""
@@ -138,9 +145,11 @@ class SchemaGeneratorTests(unittest.TestCase):
             executable = root / "compile_test"
             subprocess.run([
                 compiler,
-                "-std=c++17",
+                "-std=c++20",
                 "-I", str(root),
+                "-I", str(ROOT / "src"),
                 str(source),
+                str(ROOT / "src" / "assets" / "reader.cpp"),
                 "-o", str(executable),
             ], check=True)
             subprocess.run([str(executable)], check=True)

@@ -97,6 +97,11 @@ class CeassetTests(unittest.TestCase):
             class FakeImage:
                 """TODO: Describe `FakeImage`."""
 
+                mode = "RGBA"
+
+                def __init__(self, size: tuple[int, int] = (4, 4)) -> None:
+                    self.size = size
+
                 def __enter__(self):
                     """TODO: Describe `__enter__`.
 
@@ -118,7 +123,13 @@ class CeassetTests(unittest.TestCase):
                     """
                     return False
 
-                def save(self, output: Path, format: str, pixel_format: str) -> None:
+                def resize(self, size: tuple[int, int], _resampling: int):
+                    return FakeImage(size)
+
+                def close(self) -> None:
+                    pass
+
+                def save(self, output: object, format: str, pixel_format: str) -> None:
                     """TODO: Describe `save`.
 
                     Args:
@@ -126,10 +137,14 @@ class CeassetTests(unittest.TestCase):
                         format: TODO: Describe this parameter.
                         pixel_format: TODO: Describe this parameter.
                     """
-                    output.write_bytes(b"DDS " + format.encode("ascii") + b":" + pixel_format.encode("ascii"))
+                    data = bytearray(144)
+                    data[:4] = b"DDS "
+                    data[84:88] = pixel_format.encode("ascii")
+                    output.write(data)
 
             image_module = types.ModuleType("PIL.Image")
             image_module.open = lambda _source: FakeImage()
+            image_module.Resampling = types.SimpleNamespace(LANCZOS=1)
             pil_module = types.ModuleType("PIL")
             pil_module.Image = image_module
 

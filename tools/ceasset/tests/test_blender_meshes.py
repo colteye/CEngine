@@ -26,22 +26,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "blender_addon"))
 
 from cengine_asset_exporter.meshes import (  # noqa: E402
     MESH_FLAG_SKINNED,
-    MESH_METADATA,
-    MESH_METADATA_MAGIC,
-    SKINNED_VERTEX,
-    VERTEX,
     blender_to_engine_vector,
     mesh_buffers,
-    mesh_metadata_payload,
+    mesh_payload,
     mesh_objects,
     mesh_output_path,
     polygon_triangles,
     write_mesh_asset,
     write_mesh_assets,
 )
+from ceassetlib.game_schema import load_bundled_game  # noqa: E402
+from ceassetlib.wire import unpack_record  # noqa: E402
 
 
 ASSET_HEADER = struct.Struct("<4sHHI16sQ16sQQQ")
+GAME = load_bundled_game()
 
 
 class FakeVertex:
@@ -361,11 +360,10 @@ class BlenderMeshesTests(unittest.TestCase):
         self.assertEqual(buffers.index_count, 3)
         self.assertEqual(buffers.bounds_min, (0.0, -1.0, 0.0))
         self.assertEqual(buffers.bounds_max, (2.0, -0.0, 0.0))
-        self.assertEqual(buffers.vertex_stride, VERTEX.size)
         self.assertFalse(buffers.skinned)
-        self.assertEqual(len(buffers.data), 3 * VERTEX.size + 3 * 4)
-        self.assertEqual(VERTEX.unpack_from(buffers.data, 0),
-            (0.0, -0.0, 0.0, 0.0, -0.0, 1.0, 0.0, 0.0, 0.0, 0.0))
+        self.assertEqual(buffers.vertices[0]["position"], (0.0, -0.0, 0.0))
+        self.assertEqual(buffers.vertices[0]["normal"], (0.0, -0.0, 1.0))
+        self.assertEqual(buffers.indices, (0, 1, 2))
 
     def test_blender_to_engine_vector_maps_to_x_forward_y_left_z_up(self) -> None:
         """TODO: Describe `test_blender_to_engine_vector_maps_to_x_forward_y_left_z_up`."""
@@ -380,7 +378,7 @@ class BlenderMeshesTests(unittest.TestCase):
         buffers = mesh_buffers(mesh)
 
         self.assertTrue(buffers.lightmap_uv)
-        self.assertEqual(VERTEX.unpack_from(buffers.data, 0)[8:10], (0.25, 0.5))
+        self.assertEqual(buffers.vertices[0]["lightmap_uv"], (0.25, 0.5))
 
     def test_lightmap_active_layer_is_never_exported_as_material_uv0(self) -> None:
         """TODO: Describe `test_lightmap_active_layer_is_never_exported_as_material_uv0`."""
@@ -393,12 +391,11 @@ class BlenderMeshesTests(unittest.TestCase):
 
         buffers = mesh_buffers(mesh)
 
-        first = VERTEX.unpack_from(buffers.data, 0)
-        second = VERTEX.unpack_from(buffers.data, VERTEX.size)
-        self.assertEqual(first[6:8], (0.0, 0.0))
-        self.assertEqual(second[6:8], (1.0, 0.0))
-        self.assertEqual(first[8:10], (0.25, 0.5))
-        self.assertEqual(second[8:10], (0.75, 0.5))
+        first, second = buffers.vertices[:2]
+        self.assertEqual(first["uv"], (0.0, 0.0))
+        self.assertEqual(second["uv"], (1.0, 0.0))
+        self.assertEqual(first["lightmap_uv"], (0.25, 0.5))
+        self.assertEqual(second["lightmap_uv"], (0.75, 0.5))
 
     def test_render_active_uv_wins_over_differently_named_edit_active_lightmap(self) -> None:
         """TODO: Describe `test_render_active_uv_wins_over_differently_named_edit_active_lightmap`."""
@@ -412,13 +409,12 @@ class BlenderMeshesTests(unittest.TestCase):
 
         buffers = mesh_buffers(mesh)
 
-        first = VERTEX.unpack_from(buffers.data, 0)
-        second = VERTEX.unpack_from(buffers.data, VERTEX.size)
-        self.assertEqual(first[6:8], tuple(material_uvs[0].uv))
-        self.assertEqual(second[6:8], tuple(material_uvs[1].uv))
-        for actual, expected in zip(first[8:10], old_lightmap_uvs[0].uv):
+        first, second = buffers.vertices[:2]
+        self.assertEqual(first["uv"], tuple(material_uvs[0].uv))
+        self.assertEqual(second["uv"], tuple(material_uvs[1].uv))
+        for actual, expected in zip(first["lightmap_uv"], old_lightmap_uvs[0].uv):
             self.assertAlmostEqual(actual, expected)
-        for actual, expected in zip(second[8:10], old_lightmap_uvs[1].uv):
+        for actual, expected in zip(second["lightmap_uv"], old_lightmap_uvs[1].uv):
             self.assertAlmostEqual(actual, expected)
 
     def test_mesh_buffers_pack_skin_indices_and_weights(self) -> None:
@@ -430,10 +426,9 @@ class BlenderMeshesTests(unittest.TestCase):
 
         self.assertTrue(buffers.skinned)
         self.assertEqual(buffers.skeleton, "ARM_Hero")
-        self.assertEqual(buffers.vertex_stride, SKINNED_VERTEX.size)
-        first = SKINNED_VERTEX.unpack_from(buffers.data, 0)
-        self.assertEqual(first[10:14], (0, 1, 0, 0))
-        self.assertEqual(sum(first[14:18]), 65535)
+        first = buffers.vertices[0]
+        self.assertEqual(first["joints"], [0, 1, 0, 0])
+        self.assertAlmostEqual(sum(first["weights"]), 1.0)
 
     def test_polygon_triangles_fans_quads_and_ngons(self) -> None:
         """TODO: Describe `test_polygon_triangles_fans_quads_and_ngons`."""
@@ -449,10 +444,7 @@ class BlenderMeshesTests(unittest.TestCase):
 
         self.assertEqual(buffers.vertex_count, 4)
         self.assertEqual(buffers.index_count, 6)
-        self.assertEqual(
-            struct.unpack_from(
-                "<6I", buffers.data, buffers.vertex_count * VERTEX.size),
-            (0, 1, 2, 0, 2, 3))
+        self.assertEqual(buffers.indices, (0, 1, 2, 0, 2, 3))
         self.assertEqual(buffers.bounds_min, (0.0, -1.0, 0.0))
         self.assertEqual(buffers.bounds_max, (2.0, -0.0, 0.0))
 
@@ -460,15 +452,10 @@ class BlenderMeshesTests(unittest.TestCase):
         """TODO: Describe `test_mesh_metadata_payload_is_binary_and_dependency_indexed`."""
         buffers = mesh_buffers(FakeMesh())
 
-        payload = mesh_metadata_payload(buffers, 2, MESH_METADATA.size)
-
-        header = MESH_METADATA.unpack_from(payload)
-        self.assertEqual(header[0], MESH_METADATA_MAGIC)
-        self.assertEqual(header[4], 3)
-        self.assertEqual(header[5], 3)
-        self.assertEqual(header[6], VERTEX.size)
-        self.assertEqual(header[14], 2)
-        self.assertEqual(header[15], MESH_METADATA.size)
+        decoded = unpack_record(GAME, "mesh", mesh_payload(buffers))
+        self.assertEqual(len(decoded["lods"]), 1)
+        self.assertEqual(len(decoded["lods"][0]["vertices"]), 3)
+        self.assertEqual(decoded["lods"][0]["indices"], [0, 1, 2])
 
     def test_write_mesh_asset_writes_binary_payload(self) -> None:
         """TODO: Describe `test_write_mesh_asset_writes_binary_payload`."""
@@ -490,18 +477,32 @@ class BlenderMeshesTests(unittest.TestCase):
             header = ASSET_HEADER.unpack_from(data)
             self.assertEqual(header[0], b"CEAF")
             self.assertEqual(header[3], 3)
-            payload_offset = header[7]
-            payload_size = header[8]
+            decoded = unpack_record(
+                GAME, "mesh", data[header[7]:header[7] + header[8]])
+            self.assertEqual(decoded["flags"], 0)
+            self.assertEqual(len(decoded["lods"]), 1)
+            self.assertEqual(decoded["lods"][0]["vertices"][0]["position"][0], 0.0)
 
-            metadata = MESH_METADATA.unpack_from(data, payload_offset)
-            self.assertEqual(metadata[0], MESH_METADATA_MAGIC)
-            self.assertEqual(metadata[3], 0)
-            self.assertEqual(metadata[6], VERTEX.size)
-            self.assertEqual(metadata[14], 1)
-            self.assertEqual(metadata[15], MESH_METADATA.size)
-            self.assertEqual(payload_size, MESH_METADATA.size + 3 * VERTEX.size + 3 * 4)
-            geometry_offset = payload_offset + metadata[15]
-            self.assertEqual(data[geometry_offset : geometry_offset + 4], struct.pack("<f", 0.0))
+    def test_child_lods_are_written_in_descending_screen_order(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            blend = root / "hero.blend"
+            blend.write_bytes(b"blend")
+            base = FakeObject("SM_Body", "MESH")
+            child = FakeObject("LOD1_SM_Body", "MESH")
+            child.parent = base
+            base.children = [child]
+            export = write_mesh_asset(
+                blend, root / "compiled", base,
+                lambda name: root / f"{name}.cmat",
+                lambda name: root / f"{name}.cskel",
+            )
+            data = export.output.read_bytes()
+            header = ASSET_HEADER.unpack_from(data)
+            decoded = unpack_record(
+                GAME, "mesh", data[header[7]:header[7] + header[8]])
+            self.assertEqual(
+                [lod["screen_size"] for lod in decoded["lods"]], [1.0, 0.5])
 
     def test_write_mesh_asset_generates_default_material_binding_for_empty_slots(self) -> None:
         """TODO: Describe `test_write_mesh_asset_generates_default_material_binding_for_empty_slots`."""
@@ -548,9 +549,10 @@ class BlenderMeshesTests(unittest.TestCase):
             for export in exports:
                 data = export.output.read_bytes()
                 header = ASSET_HEADER.unpack_from(data)
-                metadata = MESH_METADATA.unpack_from(data, header[7])
-                self.assertEqual(metadata[4], 3)
-                self.assertEqual(metadata[14], 1)
+                decoded = unpack_record(
+                    GAME, "mesh", data[header[7]:header[7] + header[8]])
+                self.assertEqual(len(decoded["lods"][0]["vertices"]), 3)
+                self.assertEqual(len(decoded["lods"]), 1)
 
     def test_write_skinned_mesh_asset_depends_on_skeleton(self) -> None:
         """TODO: Describe `test_write_skinned_mesh_asset_depends_on_skeleton`."""
@@ -571,12 +573,11 @@ class BlenderMeshesTests(unittest.TestCase):
 
             data = export.output.read_bytes()
             header = ASSET_HEADER.unpack_from(data)
-            metadata = MESH_METADATA.unpack_from(data, header[7])
-            self.assertEqual(metadata[3], MESH_FLAG_SKINNED)
-            self.assertEqual(metadata[6], SKINNED_VERTEX.size)
-            self.assertEqual(metadata[14], 1)
-            self.assertEqual(metadata[15], MESH_METADATA.size)
-            self.assertEqual(header[8], MESH_METADATA.size + 3 * SKINNED_VERTEX.size + 3 * 4)
+            decoded = unpack_record(
+                GAME, "mesh", data[header[7]:header[7] + header[8]])
+            self.assertEqual(decoded["flags"], MESH_FLAG_SKINNED)
+            self.assertEqual(len(decoded["lods"]), 1)
+            self.assertEqual(len(decoded["lods"][0]["vertices"]), 3)
 
 
 if __name__ == "__main__":

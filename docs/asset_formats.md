@@ -1,286 +1,173 @@
-# CEngine Asset Format Decisions
+# CEngine Asset Formats
 
-> **Status: current implementation and format reference.** The active milestone
-> and asset behavior are defined by `docs/arch/IMPLEMENTATION.md`. Entries for
-> unimplemented asset families preserve design information only; they do not add
-> those formats, streaming, packages, or runtime prefabs to the active scope.
+> **Status: current version-one format reference.** The architecture boundary is
+> defined by [`arch/IMPLEMENTATION.md`](arch/IMPLEMENTATION.md).
 
-This document records the current asset boundary decisions. The engine runtime
-should load only target assets. Standard source formats such as
-`.blend`, `.psd`, `.png`, `.tga`, and `.fbx` are tool inputs and should be
-preprocessed by Python tooling before the engine sees them. `.blend` files are
-handled only by the Blender add-on, not by `ceasset`.
+## One data path
 
-## Format Rule
-
-Use an OSS standard format when it is already the best runtime payload. Use a
-custom `.c*` format only when CEngine needs engine-specific layout, composition
-records, streaming/package tables, or data that can be loaded with fewer runtime
-allocations and less translation.
-
-The desired user-facing pipeline is direct:
+The engine reads cooked target assets only. Blender and Python tools turn source
+content into runtime files:
 
 ```text
-.blend via Blender add-on, .png/.tga/.psd/etc via Python tools -> target runtime assets
+Blender source -> Blender add-on -> .casset/.cscene and component assets
+images         -> Python tools   -> .dds
+audio          -> Python tools   -> .ogg/.opus
 ```
 
-Do not emit intermediate/debug assets as part of normal conversion. If a source
-format needs more implementation work, add a tested Python conversion path for
-that format before accepting it. Debugging should happen through tests,
-validation, and explicit assertions rather than hidden intermediate assets.
-Build-generated schema headers and the flattened game file are explicit CMake
-outputs described in [Game files and generated schemas](game_schema.md).
+Every engine-owned binary payload is declared in
+[`schemas/engine.game.json`](../schemas/engine.game.json). The schema generator
+emits:
 
-External OSS tools are acceptable conversion backends. They should be invoked
-explicitly by Python with argument lists, not through shell scripts or hidden
-generated state. Machine-local tool paths and options stay command-line inputs;
-the compact registry stores source path, target path, GUID, asset type, and source
-hash.
+- owned C++ `Wire::*` values;
+- complete bounded C++ readers using `Assets::Reader`;
+- the flattened JSON consumed by the Python exporter.
 
-## Current and Candidate Runtime Choices
+Python has one generic schema packer/unpacker. There are no handwritten payload
+headers, table records, disk mirrors, compatibility readers, or format-specific
+primitive decoders.
 
-“Current” describes an implemented format family. “Partial” preserves an
-implemented boundary whose advanced fields or runtime behavior remain deferred.
-“Candidate” records design information only and requires milestone promotion.
+Handwritten `*_asset.cpp` code is limited to semantic validation and conversion
+from generated data into a runtime object. DDS and Ogg/Opus are standard
+external formats and keep their own parsers.
 
-| Asset family | Runtime format | Status | Decision and reason |
-| --- | --- | --- | --- |
-| Textures | `.dds` | Current | Use Pillow in Python tools. DDS is already a direct GPU texture container for desktop block formats. A custom wrapper is justified only by real metadata or multiple target payloads. |
-| Materials | `.cmat` | Current | Materials are fixed engine shader contracts rather than imported DCC graphs. |
-| Mesh geometry | `.cmesh` | Current | Store load-ready geometry, bounds, submeshes, material slots, and supported skin streams without runtime interchange parsing. |
-| Skeletons/rig metadata | `.cskel` | Current | Keep shared hierarchy, reference pose, bind data, and current metadata separate from meshes and clips. Advanced sockets, masks, IK, retargeting, and jiggle data are promoted later. |
-| Animation/curves | `.canim` | Partial | Preserve independent clips and curves. Runtime compression, root motion, advanced events, morph/material tracks, and error settings remain deferred. |
-| Physics/collision | `.cphys` | Current | Store validated backend-neutral collision geometry separately from render meshes. The runtime builds Jolt shapes from boxes, spheres, capsules, cylinders, planes, convex hulls, triangle meshes, heightfields, and compounds; it never serializes Jolt objects. |
-| Reusable assemblies | current `.casset` | Partial/migrate | The current implementation records reusable composition. The target cooker may flatten authored assemblies into ordinary scene records; `.casset` does not require a public runtime prefab system. |
-| Scenes | `.cscene` | Current | Store scene composition and packed typed entity-class records while heavy payloads remain separate. Schema/layout migration follows `docs/arch/SYSTEMS.md#assets-and-scenes`. |
-| Audio | `.opus`/`.ogg`, optional `.caudio` metadata | Candidate | Use standard payloads first. Add metadata only for required loop, attenuation, subtitle, dialogue, bank, or streaming contracts. |
-| VFX | `.cvfx` | Candidate | Introduce only after a selected game effect demonstrates a stable engine-authored vocabulary. |
-| Navigation | `.cnav` | Candidate | Introduce only after the navigation promotion criteria are met. |
-| Shaders | backend-native blobs plus optional `.cshader` metadata | Candidate | Add a container only for required variants, reflection, layouts, or multi-backend payload identity. |
-| Packages | `.cpak` | Candidate | Loose complete assets are the development and initial-release path. Packaging follows a measured deployment, locality, patching, or streaming requirement. |
+## Common envelope
 
-## Character Import Path
-
-The intended character path is:
+All `.c*` files use common envelope version `1`:
 
 ```text
-Blender .blend
-  -> CEngine Blender add-on
-  -> .cmesh + .cskel + .canim + .cmat + .cphys + textures/audio/VFX
-  -> .casset root asset
+magic "CEAF"
+u16 version = 1
+u16 header size
+u32 asset type
+16-byte GUID
+u64 source hash
+16-byte platform name
+u64 payload offset
+u64 payload size
+u64 file size
 ```
 
-The engine should not import `.blend`, `.glb`, `.gltf`, `.fbx`, `.png`, `.psd`,
-or similar authoring/interchange formats at runtime. It should load the target
-runtime outputs only.
+The payload is exactly one generated schema record. Multi-version runtime
+compatibility is intentionally absent: format changes require recooking.
 
-A character is not a separate asset family. It is a prefab with a rich component
-set: mesh components, skeletal/animation components, material bindings, physics
-bodies, sockets, VFX emitters, audio emitters, script/gameplay data, and other
-component records as needed.
+A reference is always the complete value:
 
-The first Blender add-on export contract is selected-root-collection based:
+```text
+Reference {
+  guid
+  type
+  normalized project-relative path
+}
+```
 
-- `PREFAB_<name>` collections export hierarchy/component target assets as
-  `.casset`.
-- `SCENE_<name>` collections export complete scenes as `.cscene`.
-- Collection custom properties may use `ce_asset_type = prefab|scene` and
-  `ce_asset_name = <name>` when naming prefixes are inconvenient.
+`Store` validates references and shares immutable decoded assets through
+`shared_ptr<const T>`.
 
-The add-on exports only the active top-level collection selected for export. It
-walks nested child collections through that root and ignores orphan datablocks,
-unrelated collections, and image datablocks not referenced by selected-object
-materials.
+## Implemented families
 
-This path emits target files directly under `assets/compiled/<blend-name>/` and
-updates the compact asset registry/cache. It does not write manifests,
-intermediate assets, debug files, or command-line `.blend` conversion reports.
-The add-on currently writes `.casset` hierarchy/composition payloads, `.cmesh`
-triangle geometry buffers with optional skinning streams, `.cmat` material
-payloads, `.cskel` skeleton metadata, `.canim` action F-curves, `.cphys`
-collision geometry, and `.dds` textures discovered from Blender image
-datablocks. Runtime pose-track
-compression and sampling-friendly animation buffers are future explicit
-additions.
+| Family | Runtime file | Schema record / behavior |
+| --- | --- | --- |
+| Texture | `.dds` | Standard DDS, loaded directly |
+| Material | `.cmat` | name, shader/render mode, texture references, PBR constants |
+| Mesh | `.cmesh` | bounds, feature flags, 1–8 ordered LODs, vertices, indices, UV0/UV1, joints, weights |
+| Skeleton | `.cskel` | armature name and ordered bone hierarchy |
+| Animation | `.canim` | skeleton reference, clip range/FPS, tracks and keys |
+| Physics | `.cphys` | backend-neutral primitive, hull, triangle, heightfield, and compound nodes |
+| Composition | `.casset` | reusable named object hierarchy and component references |
+| Scene | `.cscene` | whole-map settings, references, entity rows, class records, connections |
+| Particle | `.cparticle` | emission, lifetime, speed/spread, gravity, size/color curves, texture, blend, looping |
+| Audio | `.ogg`/`.opus` | Standard Ogg/Opus stream, loaded directly |
 
-The common `.c*` file header is intentionally small: magic, version, asset type,
-GUID, source hash, platform target, payload offset, payload size, and file size.
-There is exactly one typed binary payload. There is no common dependency table,
-payload table, JSON payload, sidecar manifest, or debug output.
+Deferred navigation, shader-package, and deployment-package formats are not
+implemented.
 
-The initial `.casset` payload is binary composition data. It stores a fixed
-header, sorted object rows, component rows, and a UTF-8 string table. Object rows
-contain object name, role id, Blender object type id, parent name, first
-component row, component count, and a row-major `world_from_local` matrix.
-Component rows store component kind ids and paths relative to the `.casset`
-bundle, such as `meshes/SM_Body.cmesh`. Heavy mesh, material, skeleton,
-animation, and texture data stays in those component target assets. Scene files
-reference their final runtime entities directly rather than retaining mutable
-prefab-instance entities.
+## Meshes and LODs
 
-The current `.cmat` v4 payload is binary material data. It stores a fixed header,
-texture binding rows, and a UTF-8 string table. The header carries base-color,
-metalness, roughness, and ambient-occlusion constants. The shader is an explicit
-id mapped to `MaterialShaderType`; the format is not hardcoded to PBR. Texture
-rows store engine slot ids and exported `.dds` target paths.
+Each mesh contains a descending list of screen-size thresholds. LOD0 has
+threshold `1.0`; `Mesh::Lod(screen_size)` selects the first satisfied threshold
+and falls back to the last LOD.
 
-The active PBR cooker reads only the inputs used by the current shader: base
-color, normal, metalness, roughness, and ambient occlusion. Base color and normal
-are optional slots. If any metalness, roughness, or AO image is connected, the
-cooker builds one packed slot-3 MRA DDS with metalness in red, roughness in green,
-and ambient occlusion in blue. Missing packed channels are white and are
-multiplied by their stored constants. With no authored M/R/AO image, no MRA DDS
-is emitted and all three values come from constants. A grayscale image that
-reaches Principled Normal through a Blender Bump or Normal Map node is treated
-as height data and converted to a tangent-space normal DDS at cook time. A
-non-grayscale Normal Map image is used directly. Specular, transmission,
-emission, alpha, and arbitrary node
-graphs are outside this basic shader contract and are not serialized. Runtime
-fallbacks are neutral white and flat normal, never a generic checkerboard. The
-runtime intentionally rejects older `.cmat` payload versions.
+The Blender exporter recognizes child mesh objects named `LOD1_*` through
+`LOD7_*`. Their optional `ce_lod_screen_size` value defaults to `0.5`,
+`0.25`, and so on. Thresholds must strictly descend, and every LOD must use the
+same skin/lightmap feature set as LOD0.
 
-The asset layer validates and reads DDS files into backend-neutral
-`Renderer::Texture` values containing a format and mip byte arrays. Materials
-contain those loaded texture values; lightmaps and sky panoramas use the same
-type. The OpenGL backend uploads this data and performs no game-asset file I/O.
+Vertices contain position, normal, material UV, lightmap UV, four joint
+indices, and four normalized weights. Unused skin data is zero. Indices are
+`uint32` triangles. The exporter triangulates polygons and deduplicates complete
+vertex values.
 
-Blender light energy is serialized directly. The PBR shader consumes that value
-as scene-linear intensity; there is no legacy renderer-side brightness
-multiplier. Non-directional lights retain inverse-square distance attenuation
-and the authored cutoff range.
+## Materials and textures
 
-The initial `.cskel` payload contains a fixed skeleton header, fixed bone rows,
-and a UTF-8 string table for armature and bone names. Bone rows contain parent
-index and the row-major Blender `matrix_local` value as `armature_from_bone`.
-`SkeletonAsset` validates the binary payload and exposes bone rows and names
-without parsing text.
+Materials use explicit shader and render-mode ids. The current PBR contract
+supports base color, normal, and packed metalness/roughness/AO texture slots
+plus their scalar factors and alpha cutoff.
 
-The initial `.cmesh` payload contains a fixed mesh header followed by geometry
-bytes. Metadata records vertex/index counts, bounds, vertex stride, index size,
-skinned/lightmap-UV flags, material slot count, and geometry offset. Static
-vertices are tightly packed as `float3 position, float3 normal, float2 uv0,
-float2 uv1`. Skinned vertices append `uint16x4 bone_indices` and `unorm16x4
-bone_weights`, normalized to 65535. UV1 is the normalized per-mesh lightmap
-unwrap; placement-specific atlas scale/offset stays in `.cscene`. All mesh blobs
-end with `uint32` triangle indices. The exporter triangulates Blender polygons
-and deduplicates complete packed vertex values, including UV and skin data, so
-shared vertices use an actual index stream. `LoadMeshAsset`
-validates the payload and fills the renderer `Mesh` using explicit material
-slots supplied by the caller. Morph deltas, LOD tables, animation tracks, and
-optimized vertex/index reordering are future explicit additions. The loader
-accepts only the current v2 layouts: 40-byte static vertices and 56-byte skinned
-vertices. Older pre-UV1 layouts are intentionally rejected rather than migrated
-at runtime.
+Blender converts source images into DDS. If any metalness, roughness, or AO
+image exists, the cooker builds one packed MRA texture. Missing packed channels
+are white. Grayscale height input connected through a Bump/Normal Map node is
+converted to a tangent-space normal DDS.
 
-The initial `.canim` payload is binary animation data. It stores a fixed header,
-track rows, keyframe rows, and a UTF-8 string table. Track rows contain Blender
-`data_path`, `array_index`, first keyframe, and keyframe count. Keyframe rows
-store frame, value, and interpolation id. Runtime track compression and
-sampling-friendly animation buffers are future explicit additions.
+Lightmaps and sky panoramas are ordinary texture references. The renderer
+uploads decoded texture values and performs no game-asset file I/O.
 
-## OSS Dependency Bias
+## Skeletons and animation
 
-Preferred dependencies and formats:
+Skeleton bones are ordered parent-before-child and carry a row-major
+`armature_from_bone` matrix. Animation clips reference their skeleton and store
+ordered scalar key tracks with interpolation ids. Mesh skin streams use the
+same bone order.
 
-- Blender Python API for direct artist export tooling.
-- glTF 2.0 as a reference model for nodes, materials, skins, morphs, and
-  animation semantics.
-- meshoptimizer/gltfpack-style algorithms for vertex cache optimization,
-  overdraw optimization, quantization, simplification, and animation resampling.
-- DDS for desktop GPU-ready texture payloads. The current Pillow path writes
-  DXT1/DXT3/DXT5/BC5.
-- Opus or Ogg/Vorbis for open audio payloads.
-- Jolt as the physics backend, with `.cphys` remaining backend-neutral first.
+Compression, root motion, retargeting, animation events, and morph tracks remain
+future schema additions.
 
-Avoid dependencies whose runtime behavior depends on unavailable proprietary
-source, opaque build steps, or undocumented binary formats.
+## Physics
 
-## `.cscene` v4 Contract
+Physics assets store a flat parent-before-child node list. Runtime construction
+turns that generated data into a `PhysicsShape` tree and validates
+shape-specific requirements. Supported nodes are box, sphere, capsule,
+cylinder, plane, convex hull, triangle mesh, heightfield, and compound.
 
-`.cscene` is a complete world; `.casset` remains a reusable prefab hierarchy.
-Runtime code never interprets Blender object types. A scene uses the common
-`DiskAssetHeader` with `AssetType::Scene`, followed by a little-endian `CSCN`
-payload. Fixed structures are packed to one-byte alignment. All 64-bit offsets
-are relative to the start of the scene payload. Writers align non-empty tables
-and class payloads to 16 bytes; readers validate bounds and integer overflow
-and do not rely on that alignment.
+The format is backend-neutral and never serializes Jolt objects.
 
-The payload order is: header, settings, asset references, entity declarations,
-class-block descriptors, per-class entity-index and fixed-record arrays,
-per-class auxiliary arrays, connections, and a UTF-8 string table. Strings are
-offset/size byte ranges without a terminator. Every entity declaration belongs
-to exactly one class block.
+## Compositions and scenes
 
-Class record layouts come from the game schema packaged for the executable.
-The current viewer records are `prop`, `player`, `light`, `skybox`,
-`exponential_height_fog`, `post_process`, and `physics_constraint`. `prop` is
-one class for visible mesh instances with optional physics. Its generated v2
-record stores transform; mesh, material, optional lightmap, and optional
-collision-asset references; visibility and shadow flags; lightmap placement;
-and the complete rigid-body settings used by the runtime. Render geometry and
-collision geometry are deliberately independent assets. Only static props may
-carry baked lightmaps.
+`.casset` is a reusable collection such as a character or prop. It contains
+named object hierarchy rows, transforms, and complete component references.
+Heavy payloads remain separate assets.
 
-`physics_constraint` stores semantic references to two scene entities plus the
-settings for fixed, point, hinge, slider, distance, or cone constraints.
-References resolve only after all scene entities have been created. Hinge and
-slider constraints may also configure velocity or position motors.
+`.cscene` is a complete map. Its generated record contains:
 
-Blender/Cycles bakes two albedo-independent diffuse passes into the lightmap:
-indirect illumination from `baked` and `mixed` lights, plus direct illumination
-from fully `baked` lights. Mixed lights remain active for realtime direct light
-and shadows; baked lights are omitted from the runtime light list. The shader
-multiplies decoded lightmap irradiance by material albedo before adding realtime
-direct lighting.
+- scene settings;
+- complete asset references;
+- entity declarations;
+- per-class entity indices and generated property bytes;
+- auxiliary asset indices;
+- entity event/action connections.
 
-Entity flag bit `1` is enabled. Class-block flag bit `1` marks a required block.
-The current runtime rejects unknown classnames and unsupported class record
-versions. References use zero-based indices and `0xffffffff` for no reference.
-UUIDs/GUIDs are raw 16-byte values. Deterministic writers sort normalized asset
-references and class blocks, sort connections by their stable fields, use
-deterministic entity order supplied by the normalized scene, and zero alignment
-padding.
+Entity property layouts are generated from the same game schema. All current
+entity class versions are `1`. Runtime scene code only resolves dependencies
+and instantiates entities from the decoded values.
 
-The common asset header, `.cscene` tables, class indices, auxiliary asset
-indices, and generated entity records are decoded explicitly as little-endian
-values. Runtime readers do not cast these serialized byte ranges to host
-structures.
+## Particles and audio
 
-The final word of a `light` record is a flag mask: bit `1` enables the light and
-bit `2` makes realtime and mixed lights cast shadows. The Blender exporter maps
-the light datablock's shadow setting to the cast-shadow bit. A shadow-casting Sun
-is rendered through the directional-light cascade path.
+The Blender add-on exports a simplified standard particle vocabulary from
+particle systems or `ce_particle` objects. Optional `ce_particle_*` properties
+override texture, emission rate, lifetime, speed, spread, gravity, start/end
+size, start/end color, blend mode, loop, and world-space behavior.
 
-A `skybox` record references one cooked 2:1 equirectangular HDR texture and
-stores intensity, Z-axis rotation in radians, and an enabled flag. The Blender
-exporter accepts `.exr` and `.hdr` panorama sources and cooks them to the
-runtime's linear RGBE DDS representation. The renderer derives the display
-cubemap, diffuse irradiance cubemap, and roughness-prefiltered specular cubemap
-when the active environment changes. The same intensity and rotation apply to
-both the visible background and image-based lighting.
+Audio stays in Ogg/Opus rather than acquiring an engine wrapper before loop,
+attenuation, subtitle, dialogue, or streaming metadata is actually required.
 
-An `exponential_height_fog` record stores its base height in the entity
-transform and fixed fields for inscattering color, density, height falloff,
-start distance, maximum opacity, cutoff distance, and enabled state. Density,
-falloff, and distances use meters. A scene may contain at most one enabled
-skybox and one enabled exponential-height-fog entity.
+## Sponza
 
-## Sources
+The checked-in Sponza scene, materials, and meshes are cooked in the current
+generated version-one formats. The existing
+`assets/compiled/sponza/lightmaps/Sponza_0.dds` is retained byte-for-byte.
 
-- Khronos glTF describes scenes, nodes, meshes, buffers, materials, textures,
-  skins, and animations, which are useful reference semantics:
-  https://www.khronos.org/gltf/
-- glTF 2.0 specifies skins, joint hierarchies, inverse bind matrices, and PBR
-  materials: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
-- meshoptimizer/gltfpack documents mesh optimization, quantization, and animation
-  resampling options:
-  https://github.com/zeux/meshoptimizer/blob/master/gltf/README.md
-- Microsoft documents DDS as a binary container for compressed/uncompressed
-  texture data and mip/cube/array payloads:
-  https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dx-graphics-dds-pguide
-- Pillow documents DDS read/write support:
-  https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#dds
-- Opus is open, royalty-free, and suitable for storage/streaming:
-  https://www.opus-codec.org/
-- Ogg is an open stream-oriented multimedia container:
-  https://www.xiph.org/ogg/
+## Reference formats
+
+- [glTF 2.0](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html)
+- [DDS programming guide](https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dx-graphics-dds-pguide)
+- [Opus](https://www.opus-codec.org/)
+- [Ogg](https://www.xiph.org/ogg/)

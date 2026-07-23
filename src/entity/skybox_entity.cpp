@@ -15,7 +15,7 @@
 
 #include "entity/skybox_entity.h"
 
-#include "assets/asset_store.h"
+#include "assets/store.h"
 #include "context.h"
 #include "renderer/render_system.h"
 #include "scene/scene.h"
@@ -45,8 +45,8 @@ void SkyboxEntity::Initialize(Context &context)
     {
         throw std::runtime_error("skybox requires scene assets");
     }
-    const Assets::AssetReference *panorama_asset = context.scene->AssetReference(panorama.index);
-    if (panorama_asset == nullptr || panorama_asset->type != Assets::AssetType::Texture)
+    const Assets::Reference *panorama_asset = context.scene->AssetReference(panorama.index);
+    if (panorama_asset == nullptr || panorama_asset->type != Assets::Type::Texture)
     {
         throw std::runtime_error("skybox panorama reference is invalid");
     }

@@ -33,6 +33,7 @@ class GameSchema:
     game: dict[str, Any]
     content: dict[str, Any]
     asset_types: tuple[dict[str, Any], ...]
+    wire_records: tuple[dict[str, Any], ...]
     entities: tuple[dict[str, Any], ...]
 
     def entity(self, classname: str) -> dict[str, Any] | None:
@@ -47,6 +48,14 @@ class GameSchema:
         return next(
             (entity for entity in self.entities
              if entity.get("classname") == classname),
+            None,
+        )
+
+    def wire(self, name: str) -> dict[str, Any] | None:
+        """Return a cooked-wire record by name."""
+        return next(
+            (record for record in self.wire_records
+             if record.get("name") == name),
             None,
         )
 
@@ -212,8 +221,14 @@ def load_game_schema(path: Path) -> GameSchema:
         for document in documents
         for asset_type in document.get("asset_types", [])
     ]
+    wire_records = [
+        record
+        for document in documents
+        for record in document.get("wire_records", [])
+    ]
     if not isinstance(game, dict) or not isinstance(entities, list) or \
-            not isinstance(asset_types, list):
+            not isinstance(asset_types, list) or \
+            not isinstance(wire_records, list):
         raise ValueError(f"CEngine game file is incomplete: {path}")
     classnames = [entity.get("classname") for entity in entities]
     if any(not isinstance(name, str) or not name for name in classnames) or \
@@ -224,6 +239,7 @@ def load_game_schema(path: Path) -> GameSchema:
         game=game,
         content=root.get("content", {}),
         asset_types=tuple(asset_types),
+        wire_records=tuple(wire_records),
         entities=tuple(entities),
     )
 

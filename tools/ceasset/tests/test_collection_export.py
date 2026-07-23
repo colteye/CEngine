@@ -25,10 +25,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ceassetlib.collection_export import (
-    CASSET_COMPONENT,
-    CASSET_HEADER,
-    CASSET_MAGIC,
-    CASSET_OBJECT,
     blender_to_engine_matrix_rows,
     bundle_relative_path,
     collection_export_spec,
@@ -37,9 +33,16 @@ from ceassetlib.collection_export import (
     write_collection_assets,
 )
 from ceassetlib.formats import AssetType
+from ceassetlib.game_schema import load_bundled_game
+from ceassetlib.wire import unpack_record
 
 
 ASSET_HEADER = struct.Struct("<4sHHI16sQ16sQQQ")
+GAME_SCHEMA = load_bundled_game()
+
+
+def decode_casset(payload: bytes) -> dict[str, object]:
+    return unpack_record(GAME_SCHEMA, "casset", payload)
 
 
 class FakeObject:
@@ -166,21 +169,19 @@ class CollectionExportTests(unittest.TestCase):
             lambda obj: {"mesh": "compiled/hero/meshes/SM_Body.cmesh"} if obj.name == "SM_Body" else {},
         )
 
-        header = CASSET_HEADER.unpack_from(payload)
-        self.assertEqual(header[0], CASSET_MAGIC)
-        self.assertEqual(header[4], 3)
-        strings = payload[header[8] : header[8] + header[9]]
-        first_object = CASSET_OBJECT.unpack_from(payload, header[5])
-        third_object = CASSET_OBJECT.unpack_from(payload, header[5] + 2 * CASSET_OBJECT.size)
-        component = CASSET_COMPONENT.unpack_from(payload, header[7])
-        self.assertEqual(strings[first_object[0] : first_object[0] + first_object[1]], b"ARM_Hero")
-        self.assertEqual(first_object[2], 3)
-        self.assertEqual(first_object[11], 20.0)
-        self.assertEqual(first_object[15], -10.0)
-        self.assertEqual(first_object[19], 30.0)
-        self.assertEqual(strings[third_object[4] : third_object[4] + third_object[5]], b"ARM_Hero")
-        self.assertEqual(component[0], 1)
-        self.assertEqual(strings[component[1] : component[1] + component[2]], b"compiled/hero/meshes/SM_Body.cmesh")
+        decoded = decode_casset(payload)
+        objects = decoded["objects"]
+        components = decoded["components"]
+        self.assertEqual(decoded["name"], "PREFAB_Hero")
+        self.assertEqual(len(objects), 3)
+        self.assertEqual(objects[0]["name"], "ARM_Hero")
+        self.assertEqual(objects[0]["role"], 3)
+        self.assertEqual(objects[0]["world_from_local"][3], 20.0)
+        self.assertEqual(objects[0]["world_from_local"][7], -10.0)
+        self.assertEqual(objects[0]["world_from_local"][11], 30.0)
+        self.assertEqual(objects[2]["parent"], 0)
+        self.assertEqual(components[0]["asset"]["type"], int(AssetType.MESH))
+        self.assertEqual(components[0]["asset"]["path"], "compiled/hero/meshes/SM_Body.cmesh")
 
     def test_blender_to_engine_matrix_rows_maps_to_x_forward_y_left_z_up(self) -> None:
         """TODO: Describe `test_blender_to_engine_matrix_rows_maps_to_x_forward_y_left_z_up`."""
@@ -232,11 +233,10 @@ class CollectionExportTests(unittest.TestCase):
             self.assertEqual(header[3], int(AssetType.ASSET))
 
             payload = data[header[7] : header[7] + header[8]]
-            casset = CASSET_HEADER.unpack_from(payload)
-            strings = payload[casset[8] : casset[8] + casset[9]]
-            self.assertEqual(strings[casset[12] : casset[12] + casset[13]], b"PREFAB_Hero")
-            second_object = CASSET_OBJECT.unpack_from(payload, casset[5] + CASSET_OBJECT.size)
-            self.assertEqual(second_object[2], 1)
+            decoded = decode_casset(payload)
+            self.assertEqual(decoded["name"], "PREFAB_Hero")
+            self.assertEqual(decoded["objects"][1]["role"], 1)
+            self.assertEqual(decoded["components"], [])
 
     def test_collection_export_writes_component_paths(self) -> None:
         """TODO: Describe `test_collection_export_writes_component_paths`."""
@@ -261,10 +261,9 @@ class CollectionExportTests(unittest.TestCase):
             data = outputs[0].read_bytes()
             header = ASSET_HEADER.unpack_from(data)
             payload = data[header[7] : header[7] + header[8]]
-            casset = CASSET_HEADER.unpack_from(payload)
-            strings = payload[casset[8] : casset[8] + casset[9]]
-            component = CASSET_COMPONENT.unpack_from(payload, casset[7])
-            self.assertEqual(strings[component[1] : component[1] + component[2]], b"meshes/SM_Body.cmesh")
+            components = decode_casset(payload)["components"]
+            self.assertEqual(components[0]["asset"]["type"], int(AssetType.MESH))
+            self.assertEqual(components[0]["asset"]["path"], "meshes/SM_Body.cmesh")
 
 
 if __name__ == "__main__":

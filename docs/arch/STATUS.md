@@ -7,15 +7,15 @@
 ## Current initiative result
 
 Standard 3D physics is implemented across Jolt, cooked assets, scenes, and the
-Blender add-on. The same change set completed the rendering, asset, input, and
-identity cleanup described below.
+Blender add-on. Cooked asset payloads have also been reset to one schema-owned
+version-one format.
 
 ## Current implementation
 
 ### Rendering
 
-- `Mesh` is immutable indexed geometry with AoS `MeshVertex` data and local
-  bounds.
+- `Mesh` is immutable indexed geometry with ordered LODs, AoS `MeshVertex`
+  data, skin weights, local bounds, and screen-size selection.
 - `MeshInstance` is the only retained mesh placement record. It contains shared
   immutable mesh/material/texture ownership, transform, lightmap binding, and
   flags.
@@ -27,24 +27,33 @@ identity cleanup described below.
   indexed geometry.
 - OpenGL implementation types live under `Renderer::OpenGL`; cascade fitting
   and shadow resource management are consolidated in `ShadowSystem`.
-- Particles will be a separate presentation path, not a generic mesh/renderable
-  variant.
+- `.cparticle` is a separate generated asset type; a renderer simulation path
+  remains separate from meshes.
 - Vulkan still compiles as an incomplete backend; it does not yet implement the
   full mesh rendering path.
 
 ### Assets and schemas
 
-- `AssetStore` replaced `AssetDatabase` and `AssetHandle`.
-- Cooked assets use validated `AssetReference` values and
+- `Store` replaced `AssetDatabase`, `AssetHandle`, and the longer
+  `AssetStore`/`AssetReference` names.
+- Cooked assets use validated `Reference` values and
   `shared_ptr<const T>` ownership.
-- Typed caches directly hold materials, meshes, texture orientations, and
-  collision shapes; the old variant-like cached record is gone.
-- Scene entity properties are generated from game schemas. Handwritten duplicate
-  prop/light/skybox property records and flag types are gone.
+- Typed caches directly hold every decoded runtime asset: materials, meshes,
+  texture orientations, collision, skeletons, animations, compositions, and
+  particles. Standard Ogg/Opus audio is loaded directly.
+- `schemas/engine.game.json` owns every cooked payload record. The generator
+  emits owned `Wire::*` values and complete C++ readers; Python exports all
+  payloads through one generic schema packer.
+- Handwritten disk records, `asset_io`, `binary.h`, payload-specific readers,
+  and compatibility versions are gone.
 - Semantic schema fields include assets, asset lists, and scene entity
   references.
 - Blender mesh cooking deduplicates complete packed vertices and emits a real
   index buffer.
+- Blender exports skeletons, animations, physics, compositions, scenes, and
+  simplified particle settings through the same schema path.
+- Sponza scene, material, and mesh files are recooked to the new format; its
+  existing `Sponza_0.dds` lightmap is preserved.
 
 ### Identity and pointers
 
@@ -85,7 +94,7 @@ identity cleanup described below.
 
 - `.cphys` is a deterministic engine-neutral format with strict envelope,
   range, finite-value, topology, hierarchy, and shape-specific validation.
-- `prop` schema version 2 carries an optional collision asset, explicit motion,
+- `prop` schema version 1 carries an optional collision asset, explicit motion,
   body parameters, collision layer, sensor/CCD/sleep flags, and axis locks.
 - Blender cooks primitives, planes, convex hulls, triangle meshes, height
   fields, and compounds. Movable concave/infinite geometry is rejected.
@@ -129,8 +138,8 @@ git diff --check
 ```
 
 - `cmake --build --preset mac-debug -j 6`: passed;
-- `ctest --test-dir build/mac-debug --output-on-failure`: 11/11 passed;
-- `python3 -m unittest discover tools/ceasset/tests`: 121 tests passed with one
+- `ctest --test-dir build/mac-debug --output-on-failure`: 9/9 passed;
+- `python3 -m unittest discover tools/ceasset/tests`: 124 tests passed with one
   intentional skip;
 - `git diff --check`: passed;
 - both game-schema JSON files parse successfully;

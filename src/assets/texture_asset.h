@@ -8,13 +8,13 @@
 //                      |___/
 
 /**
- * @file src/assets/texture_loader.h
- * @brief TODO: Describe the purpose of this file.
+ * @file src/assets/texture_asset.h
+ * @brief Loads a DDS texture asset into its renderer value.
  * @author Erik Coltey
  */
 
-#ifndef CENGINE_ASSETS_TEXTURE_LOADER_H
-#define CENGINE_ASSETS_TEXTURE_LOADER_H
+#ifndef CENGINE_ASSETS_TEXTURE_ASSET_H
+#define CENGINE_ASSETS_TEXTURE_ASSET_H
 
 #include "renderer/texture.h"
 

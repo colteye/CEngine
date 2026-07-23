@@ -25,7 +25,7 @@
 The application owns the concrete long-lived systems:
 
 ```text
-AssetStore
+Store
 InputSystem
 PhysicsSystem
 RenderSystem
@@ -62,23 +62,24 @@ The representation follows lifetime:
 | reusable entity, mesh-instance, light, body, constraint, character slot | tagged 64-bit `Handle<Tag>` packing a 32-bit index and generation | stale references must fail after slot reuse and unrelated handle domains must not mix |
 | append-only input action | tagged `ActionHandle` with a fixed generation | actions share the typed handle representation but are never removed or reused |
 | serialized entity or asset table position | `uint32_t` | it is a file-local index, not a live runtime identity |
-| cooked asset identity | validated `AssetReference{path, guid, type}` | immutable assets do not need mutable runtime handles |
+| cooked asset identity | validated `Reference{path, guid, type}` | immutable assets do not need mutable runtime handles |
 | immutable decoded asset ownership | `shared_ptr<const T>` | scenes and render records may safely share one decoded value |
 | backend lookup key | raw `const T*` | call-scoped or backend-private observation of an asset retained by a public `shared_ptr` owner |
 | subsystem composition | raw pointer in `Context` | explicitly non-owning and bounded by application lifetime |
 | compile-selected subsystem backend | `unique_ptr<I*Backend>` | keeps graphics, input, and physics implementations replaceable without runtime registries |
 
-Do not introduce an asset handle in parallel with `AssetReference` and
+Do not introduce an asset handle in parallel with `Reference` and
 `shared_ptr`. Do not use a bare integer for a reusable slot. Do not place
 owning raw pointers in public records.
 
 ## Assets and scenes
 
-`AssetStore` has two jobs that justify its existence:
+`Store` has two jobs that justify its existence:
 
 - resolve project-relative references and enforce their declared type and
   per-path identity;
-- cache immutable decoded material, mesh, texture, and collision values.
+- cache immutable decoded material, mesh, texture, collision, skeleton,
+  animation, composition, particle, and standard-audio values.
 
 It is not an asset database, dependency graph, mutable registry, or second
 lifetime system. Each loader accepts one concrete target file and produces one
@@ -88,11 +89,18 @@ type; standard external payloads such as DDS validate their own format while
 the store still rejects conflicting GUIDs for the same resolved path. Failed
 decodes are not published.
 
-`.cscene` stores fixed tables of asset references, entities, generated class
-records, auxiliary asset indices, settings, and connections. The schema
-generator owns entity field layouts and C++ readers. The supported field
-vocabulary includes semantic `asset`, `asset_list`, and `entity` references;
-tooling validates those references before writing.
+Every engine container uses one version-one envelope and a generated owned
+payload from `schemas/engine.game.json`. `Reader` owns bounded little-endian
+primitives; generated `Wire::Read` functions own layout and structural
+validation. Python uses the same flattened schema through one generic
+packer/unpacker. Handwritten `*_asset.cpp` files contain only semantic
+validation and construction. DDS and Ogg/Opus remain standard external files.
+
+`.cscene` contains generated settings, references, entity rows, generated class
+records, auxiliary asset indices, and connections. The same schema generator
+owns entity property layouts. The supported field vocabulary includes semantic
+`asset`, `asset_list`, and `entity` references; tooling validates those
+references before writing.
 
 `Scene` owns entity objects in generation-checked slots. Native entity classes
 inherit their generated property record directly, so there is no parallel
@@ -105,8 +113,10 @@ back initialized entities in reverse order on failure. Shutdown is symmetric.
 
 ```text
 Mesh
-  vertices: MeshVertex[]
-  indices: uint32[]
+  lods: MeshLod[]
+    screen_size
+    vertices: MeshVertex[]
+    indices: uint32[]
   local_bounds
   has_lightmap_uv
 ```
@@ -190,7 +200,7 @@ actions. `Key` covers every standard GLFW keyboard key. Game code consumes
 - Add a handle only for a reusable mutable slot with independent lifetime.
 - Add a renderer presentation kind beside `MeshInstance`, not inside a generic
   renderable union.
-- Add an asset cache only to `AssetStore` and keep it typed.
+- Add an asset cache only to `Store` and keep it typed.
 - Keep backend resources private and derived from engine-owned immutable values.
 
 ## Document routing

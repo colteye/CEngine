@@ -40,6 +40,8 @@ WIRE_SIZES = {
     "flags": 4,
 }
 
+RECORD_SCALARS = {"u8", "u16", "u32", "u64", "i32", "f32", "string", "bytes", "guid"}
+
 
 @dataclass(frozen=True)
 class LoadedManifest:
@@ -234,7 +236,53 @@ def _validate_entity(entity: dict[str, Any], source: Path) -> None:
         raise ValueError(f"{classname} must define exactly one transform field")
 
 
-def load_game(path: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
+def _validate_wire_field(field: dict[str, Any], record: str) -> None:
+    """Validate one field in an owned cooked-wire record."""
+    name = _require_string(field.get("name"), f"{record} wire field name")
+    if _identifier(name) != name:
+        raise ValueError(f"{record}.{name} is not a C++ identifier")
+    field_type = _require_string(field.get("type"), f"{record}.{name} wire field type")
+    if field_type not in RECORD_SCALARS | {"array", "list", "record"}:
+        raise ValueError(f"{record}.{name} uses unsupported wire type {field_type}")
+    if field_type in {"array", "list"}:
+        item = _require_string(field.get("item"), f"{record}.{name} item type")
+        if item not in RECORD_SCALARS and _identifier(item) != item:
+            raise ValueError(f"{record}.{name} has an invalid item type")
+    if field_type == "array":
+        count = field.get("count")
+        if not isinstance(count, int) or count <= 0:
+            raise ValueError(f"{record}.{name} array count must be positive")
+    if field_type == "list":
+        maximum = field.get("max_count")
+        if not isinstance(maximum, int) or maximum <= 0:
+            raise ValueError(f"{record}.{name} list requires a positive max_count")
+    if field_type == "record":
+        _require_string(field.get("record"), f"{record}.{name} record type")
+    if field_type in {"string", "bytes"}:
+        maximum = field.get("max_size")
+        if not isinstance(maximum, int) or maximum <= 0:
+            raise ValueError(f"{record}.{name} requires a positive max_size")
+
+
+def _validate_wire_record(record: dict[str, Any], source: Path) -> None:
+    """Validate one schema-owned cooked-wire record."""
+    name = _require_string(record.get("name"), f"wire record name in {source}")
+    if _identifier(name) != name:
+        raise ValueError(f"wire record {name} is not an identifier")
+    fields = record.get("fields")
+    if not isinstance(fields, list) or not fields:
+        raise ValueError(f"wire record {name} must define fields")
+    names: set[str] = set()
+    for field in fields:
+        if not isinstance(field, dict):
+            raise ValueError(f"wire record {name} field must be an object")
+        _validate_wire_field(field, name)
+        if field["name"] in names:
+            raise ValueError(f"wire record {name} repeats field {field['name']}")
+        names.add(field["name"])
+
+
+def load_game(path: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
     """TODO: Describe `load_game`.
 
     Args:
@@ -247,9 +295,11 @@ def load_game(path: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[str
     root = manifests[-1].document
     entities: list[dict[str, Any]] = []
     asset_types: list[dict[str, Any]] = []
+    wire_records: list[dict[str, Any]] = []
     entity_names: set[str] = set()
     asset_names: set[str] = set()
     extensions: set[str] = set()
+    record_names: set[str] = set()
     for manifest in manifests:
         owner = manifest.document["module"]["id"]
         for entity in manifest.document.get("entities", []):
@@ -271,14 +321,33 @@ def load_game(path: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[str
             asset_names.add(name)
             extensions.add(extension)
             asset_types.append({**asset_type, "owner": owner})
+        for record in manifest.document.get("wire_records", []):
+            if not isinstance(record, dict):
+                raise ValueError(f"wire record entry must be an object: {manifest.path}")
+            _validate_wire_record(record, manifest.path)
+            name = record["name"]
+            if name in record_names:
+                raise ValueError(f"duplicate wire record {name}")
+            record_names.add(name)
+            wire_records.append({**record, "owner": owner})
+    for record in wire_records:
+        for field in record["fields"]:
+            referenced: str | None = None
+            if field["type"] == "record":
+                referenced = field["record"]
+            elif field["type"] in {"array", "list"} and field["item"] not in RECORD_SCALARS:
+                referenced = field["item"]
+            if referenced is not None and referenced not in record_names:
+                raise ValueError(f"{record['name']}.{field['name']} references unknown record {referenced}")
     flattened = {
         "format_version": FORMAT_VERSION,
         "game": root.get("game", root["module"]),
         "content": root.get("content", {}),
         "asset_types": asset_types,
+        "wire_records": wire_records,
         "entities": entities,
     }
-    return root, flattened, list(root.get("entities", []))
+    return root, flattened, list(root.get("entities", [])), list(root.get("wire_records", []))
 
 
 def _cpp_float(value: Any) -> str:
@@ -395,7 +464,7 @@ def _bounds(field: dict[str, Any], expression: str) -> list[str]:
     Returns:
         TODO: Describe the produced value.
     """
-    checks = [f"!Detail::IsFinite({expression})"]
+    checks = [f"!CEngine::Assets::IsFinite({expression})"]
     if "min" in field:
         op = "<=" if field.get("min_exclusive", False) else "<"
         checks.append(f"{expression} {op} {_cpp_float(field['min'])}")
@@ -421,7 +490,7 @@ def _emit_read(lines: list[str], entity: dict[str, Any]) -> None:
             "{",
             f"    if (bytes == nullptr || size != {symbol}Size) return false;",
             f"    {symbol} value{{}};",
-            "    std::size_t offset = 0;",
+            "    CEngine::Assets::Reader reader(std::span(bytes, size));",
             "    (void)auxiliary_base;",
         ]
     )
@@ -433,30 +502,30 @@ def _emit_read(lines: list[str], entity: dict[str, Any]) -> None:
         if field_type == "transform":
             for index in range(3):
                 lines.append(
-                    f"    if (!Detail::ReadF32(bytes, size, offset, "
+                    f"    if (!reader.F32("
                     f"value.transform.position[{index}])) return false;"
                 )
-                final_checks.append(f"!Detail::IsFinite(value.transform.position[{index}])")
+                final_checks.append(f"!CEngine::Assets::IsFinite(value.transform.position[{index}])")
             for index in range(4):
                 lines.append(
-                    f"    if (!Detail::ReadF32(bytes, size, offset, "
+                    f"    if (!reader.F32("
                     f"value.transform.rotation[{index}])) return false;"
                 )
-                final_checks.append(f"!Detail::IsFinite(value.transform.rotation[{index}])")
+                final_checks.append(f"!CEngine::Assets::IsFinite(value.transform.rotation[{index}])")
             for index in range(3):
                 lines.append(
-                    f"    if (!Detail::ReadF32(bytes, size, offset, "
+                    f"    if (!reader.F32("
                     f"value.transform.scale[{index}])) return false;"
                 )
-                final_checks.append(f"!Detail::IsFinite(value.transform.scale[{index}])")
+                final_checks.append(f"!CEngine::Assets::IsFinite(value.transform.scale[{index}])")
         elif field_type == "f32":
             lines.append(
-                f"    if (!Detail::ReadF32(bytes, size, offset, {target})) return false;"
+                f"    if (!reader.F32({target})) return false;"
             )
             final_checks.extend(_bounds(field, target))
         elif field_type in ("u32", "entity"):
             lines.append(
-                f"    if (!Detail::ReadU32(bytes, size, offset, {target})) return false;"
+                f"    if (!reader.U32({target})) return false;"
             )
             if field_type == "entity" and not field.get("optional", False):
                 final_checks.append(f"{target} == InvalidIndex")
@@ -471,7 +540,7 @@ def _emit_read(lines: list[str], entity: dict[str, Any]) -> None:
             lines.extend(
                 [
                     f"    std::uint32_t {name}_value = 0;",
-                    f"    if (!Detail::ReadU32(bytes, size, offset, {name}_value) ||",
+                    f"    if (!reader.U32({name}_value) ||",
                     f"        {name}_value > 1u) return false;",
                     f"    {target} = {name}_value != 0u;",
                 ]
@@ -484,7 +553,7 @@ def _emit_read(lines: list[str], entity: dict[str, Any]) -> None:
             lines.extend(
                 [
                     f"    std::uint32_t {name}_value = 0;",
-                    f"    if (!Detail::ReadU32(bytes, size, offset, {name}_value) ||",
+                    f"    if (!reader.U32({name}_value) ||",
                     f"        ({allowed})) return false;",
                     f"    {target} = static_cast<{field['enum']}>({name}_value);",
                 ]
@@ -493,13 +562,13 @@ def _emit_read(lines: list[str], entity: dict[str, Any]) -> None:
             components = ("x", "y") if field_type == "vec2" else ("x", "y", "z")
             for component in components:
                 lines.append(
-                    f"    if (!Detail::ReadF32(bytes, size, offset, "
+                    f"    if (!reader.F32("
                     f"{target}.{component})) return false;"
                 )
                 final_checks.extend(_bounds(field, f"{target}.{component}"))
         elif field_type == "asset":
             lines.append(
-                f"    if (!Detail::ReadU32(bytes, size, offset, {target}.index)) "
+                f"    if (!reader.U32({target}.index)) "
                 "return false;"
             )
             if not field.get("optional", False):
@@ -507,8 +576,8 @@ def _emit_read(lines: list[str], entity: dict[str, Any]) -> None:
         elif field_type == "asset_list":
             lines.extend(
                 [
-                    f"    if (!Detail::ReadU32(bytes, size, offset, {target}.first) ||",
-                    f"        !Detail::ReadU32(bytes, size, offset, {target}.count)) "
+                    f"    if (!reader.U32({target}.first) ||",
+                    f"        !reader.U32({target}.count)) "
                     "return false;",
                     f"    if ({target}.count == 0u) {target}.first = 0u;",
                     f"    else if ({target}.first == InvalidIndex ||",
@@ -521,7 +590,7 @@ def _emit_read(lines: list[str], entity: dict[str, Any]) -> None:
             lines.extend(
                 [
                     f"    std::uint32_t {name}_value = 0;",
-                    f"    if (!Detail::ReadU32(bytes, size, offset, {name}_value) ||",
+                    f"    if (!reader.U32({name}_value) ||",
                     f"        ({name}_value & ~0x{mask:x}u) != 0u) return false;",
                 ]
             )
@@ -538,12 +607,178 @@ def _emit_read(lines: list[str], entity: dict[str, Any]) -> None:
             )
     if final_checks:
         lines.append("    if (" + "\n        || ".join(final_checks) + ") return false;")
-    lines.extend(["    output = value;", "    return true;", "}", ""])
+    lines.extend(["    if (!reader.Done()) return false;", "    output = value;", "    return true;", "}", ""])
+
+
+def _wire_cpp_type(field_type: str) -> str:
+    """Return the generated C++ host type for a wire scalar or record name."""
+    scalar = {
+        "u8": "std::uint8_t",
+        "u16": "std::uint16_t",
+        "u32": "std::uint32_t",
+        "u64": "std::uint64_t",
+        "i32": "std::int32_t",
+        "f32": "float",
+        "string": "std::string",
+        "bytes": "std::vector<std::byte>",
+        "guid": "std::array<std::uint8_t, 16>",
+    }
+    return scalar.get(field_type, _pascal(field_type))
+
+
+def _wire_field_type(field: dict[str, Any]) -> str:
+    """Return the complete generated C++ type for a wire field."""
+    field_type = field["type"]
+    if field_type == "record":
+        return _pascal(field["record"])
+    if field_type == "array":
+        return f"std::array<{_wire_cpp_type(field['item'])}, {int(field['count'])}>"
+    if field_type == "list":
+        return f"std::vector<{_wire_cpp_type(field['item'])}>"
+    return _wire_cpp_type(field_type)
+
+
+def _emit_wire_checks(
+    lines: list[str], field: dict[str, Any], expression: str, indent: str
+) -> None:
+    """Emit schema constraints after one scalar has been decoded."""
+    checks: list[str] = []
+    if field.get("finite", False) or field["type"] == "f32":
+        checks.append(f"!CEngine::Assets::IsFinite({expression})")
+    if "value" in field:
+        checks.append(f"{expression} != {field['value']}")
+    if "min" in field:
+        checks.append(f"{expression} < {field['min']}")
+    if "max" in field:
+        checks.append(f"{expression} > {field['max']}")
+    if "mask" in field:
+        checks.append(f"({expression} & ~{field['mask']}u) != 0u")
+    if "values" in field:
+        checks.append(
+            "("
+            + " && ".join(f"{expression} != {value}" for value in field["values"])
+            + ")"
+        )
+    if checks:
+        lines.append(f"{indent}if (" + " || ".join(checks) + ") return false;")
+
+
+def _emit_wire_value(
+    lines: list[str],
+    field: dict[str, Any],
+    expression: str,
+    token: str,
+    indent: str = "    ",
+) -> None:
+    """Emit one generated read operation, including nested owned containers."""
+    field_type = field["type"]
+    methods = {
+        "u8": "U8",
+        "u16": "U16",
+        "u32": "U32",
+        "u64": "U64",
+        "i32": "I32",
+        "f32": "F32",
+    }
+    if field_type in methods:
+        lines.append(f"{indent}if (!reader.{methods[field_type]}({expression})) return false;")
+        _emit_wire_checks(lines, field, expression, indent)
+        return
+    if field_type == "guid":
+        lines.append(
+            f"{indent}if (!reader.Read(std::as_writable_bytes(std::span({expression})))) return false;"
+        )
+        return
+    if field_type in {"string", "bytes"}:
+        size = f"{token}_size"
+        data = f"{token}_bytes"
+        lines.append(f"{indent}std::uint32_t {size} = 0;")
+        lines.append(
+            f"{indent}if (!reader.U32({size}) || {size} > {int(field['max_size'])}u) return false;"
+        )
+        lines.append(f"{indent}const auto {data} = reader.Take({size});")
+        lines.append(f"{indent}if ({data}.size() != {size}) return false;")
+        if field_type == "string":
+            lines.append(
+                f"{indent}{expression}.assign(reinterpret_cast<const char*>({data}.data()), {data}.size());"
+            )
+            if field.get("non_empty", False):
+                lines.append(f"{indent}if ({expression}.empty()) return false;")
+        else:
+            lines.append(f"{indent}{expression}.assign({data}.begin(), {data}.end());")
+        return
+    if field_type == "record":
+        lines.append(f"{indent}if (!Read(reader, {expression})) return false;")
+        return
+    if field_type == "array":
+        index = f"{token}_index"
+        lines.append(f"{indent}for (std::size_t {index} = 0; {index} < {expression}.size(); ++{index}) {{")
+        nested = {**field, "type": field["item"]}
+        _emit_wire_value(lines, nested, f"{expression}[{index}]", f"{token}_item", indent + "    ")
+        lines.append(f"{indent}}}")
+        return
+    if field_type == "list":
+        count = f"{token}_count"
+        index = f"{token}_index"
+        item = f"{token}_item"
+        lines.append(f"{indent}std::uint32_t {count} = 0;")
+        minimum = int(field.get("min_count", 0))
+        lines.append(
+            f"{indent}if (!reader.U32({count}) || {count} < {minimum}u || "
+            f"{count} > {int(field['max_count'])}u) return false;"
+        )
+        lines.append(f"{indent}{expression}.clear();")
+        lines.append(f"{indent}{expression}.reserve({count});")
+        lines.append(f"{indent}for (std::uint32_t {index} = 0; {index} < {count}; ++{index}) {{")
+        lines.append(f"{indent}    {_wire_cpp_type(field['item'])} {item}{{}};")
+        nested = {**field, "type": field["item"]}
+        _emit_wire_value(lines, nested, item, f"{token}_item", indent + "    ")
+        lines.append(f"{indent}    {expression}.push_back(std::move({item}));")
+        lines.append(f"{indent}}}")
+        return
+    if field_type not in RECORD_SCALARS:
+        lines.append(f"{indent}if (!Read(reader, {expression})) return false;")
+        return
+    raise ValueError(f"cannot emit wire type {field_type}")
+
+
+def _emit_wire_records(lines: list[str], records: list[dict[str, Any]]) -> None:
+    """Emit owned schema records and their shared-runtime readers."""
+    if not records:
+        return
+    lines.append("namespace Wire {")
+    lines.append("")
+    for record in records:
+        symbol = _pascal(record["name"])
+        lines.append(f"struct {symbol} {{")
+        for field in record["fields"]:
+            lines.append(f"    {_wire_field_type(field)} {field['name']} = {{}};")
+        lines.extend(["};", ""])
+    for record in records:
+        symbol = _pascal(record["name"])
+        lines.append(f"inline bool Read(CEngine::Assets::Reader& reader, {symbol}& output)")
+        lines.append("{")
+        lines.append(f"    {symbol} value{{}};")
+        for field in record["fields"]:
+            _emit_wire_value(
+                lines,
+                field,
+                f"value.{field['name']}",
+                f"{record['name']}_{field['name']}",
+            )
+        lines.extend(["    output = std::move(value);", "    return true;", "}", ""])
+        lines.append(f"inline bool Read(std::span<const std::byte> bytes, {symbol}& output)")
+        lines.append("{")
+        lines.append("    CEngine::Assets::Reader reader(bytes);")
+        lines.append("    return Read(reader, output) && reader.Done();")
+        lines.extend(["}", ""])
+    lines.extend(["} // namespace Wire", ""])
 
 
 def generate_cpp(
     root: dict[str, Any],
     entities: list[dict[str, Any]],
+    wire_records: list[dict[str, Any]],
     namespace: str,
     header_path: Path,
 ) -> None:
@@ -577,7 +812,12 @@ def generate_cpp(
         "",
         "#include <cstddef>",
         "#include <cstdint>",
-        "#include <cstring>",
+        "#include <array>",
+        "#include <span>",
+        "#include <string>",
+        "#include <utility>",
+        "#include <vector>",
+        '#include "assets/reader.h"',
         "",
     ]
     lines.extend(f"namespace {part} {{" for part in namespace_parts)
@@ -608,6 +848,7 @@ def generate_cpp(
             "",
         ]
     )
+    _emit_wire_records(lines, wire_records)
     for name, values in enums.items():
         members = ", ".join(f"{key} = {value}" for key, value in values.items())
         lines.append(f"enum class {name} : std::uint32_t {{ {members} }};")
@@ -633,38 +874,6 @@ def generate_cpp(
             f"EntityData<{symbol}Properties, {int(entity['version'])}u>;",
             "",
         ])
-    lines.extend(
-        [
-            "namespace Detail {",
-            "inline bool ReadU32(const std::uint8_t* bytes, std::size_t size,",
-            "    std::size_t& offset, std::uint32_t& value)",
-            "{",
-            "    if (offset > size || size - offset < 4u) return false;",
-            "    value = static_cast<std::uint32_t>(bytes[offset])",
-            "        | (static_cast<std::uint32_t>(bytes[offset + 1u]) << 8u)",
-            "        | (static_cast<std::uint32_t>(bytes[offset + 2u]) << 16u)",
-            "        | (static_cast<std::uint32_t>(bytes[offset + 3u]) << 24u);",
-            "    offset += 4u;",
-            "    return true;",
-            "}",
-            "inline bool ReadF32(const std::uint8_t* bytes, std::size_t size,",
-            "    std::size_t& offset, float& value)",
-            "{",
-            "    std::uint32_t bits = 0;",
-            "    if (!ReadU32(bytes, size, offset, bits)) return false;",
-            "    std::memcpy(&value, &bits, sizeof(value));",
-            "    return true;",
-            "}",
-            "inline bool IsFinite(float value)",
-            "{",
-            "    std::uint32_t bits = 0;",
-            "    std::memcpy(&bits, &value, sizeof(bits));",
-            "    return (bits & 0x7f800000u) != 0x7f800000u;",
-            "}",
-            "} // namespace Detail",
-            "",
-        ]
-    )
     for entity in entities:
         _emit_read(lines, entity)
     lines.extend(
@@ -708,9 +917,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.cpp_header is None and args.bundle is None:
         parser.error("at least one output must be requested")
     try:
-        root, bundle, owned_entities = load_game(args.manifest)
+        root, bundle, owned_entities, owned_wire_records = load_game(args.manifest)
         if args.cpp_header is not None:
-            generate_cpp(root, owned_entities, args.namespace, args.cpp_header)
+            generate_cpp(root, owned_entities, owned_wire_records, args.namespace, args.cpp_header)
         if args.bundle is not None:
             write_bundle(bundle, args.bundle)
     except ValueError as error:

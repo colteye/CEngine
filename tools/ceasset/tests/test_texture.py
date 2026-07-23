@@ -49,7 +49,10 @@ class TextureTests(unittest.TestCase):
             data = output.read_bytes()
             self.assertEqual(data[:4], b"DDS ")
             self.assertEqual(data[84:88], b"DXT5")
-            self.assertEqual(len(data), 128 + 16)
+            self.assertEqual(struct.unpack_from("<I", data, 28)[0], 3)
+            self.assertEqual(struct.unpack_from("<I", data, 8)[0] & 0x00020000, 0x00020000)
+            self.assertEqual(struct.unpack_from("<I", data, 108)[0] & 0x00400008, 0x00400008)
+            self.assertEqual(len(data), 128 + 16 * 3)
 
     def test_pillow_conversion_accepts_one_bit_source_images(self) -> None:
         """TODO: Describe `test_pillow_conversion_accepts_one_bit_source_images`."""
@@ -65,7 +68,9 @@ class TextureTests(unittest.TestCase):
 
             convert_texture_to_dds(source, output, "DXT5")
 
-            self.assertEqual(output.read_bytes()[:4], b"DDS ")
+            data = output.read_bytes()
+            self.assertEqual(data[:4], b"DDS ")
+            self.assertEqual(struct.unpack_from("<I", data, 28)[0], 3)
 
     def test_builtin_rgbexp32_writer_emits_tagged_uncompressed_texture(self) -> None:
         """TODO: Describe `test_builtin_rgbexp32_writer_emits_tagged_uncompressed_texture`."""
@@ -77,7 +82,9 @@ class TextureTests(unittest.TestCase):
             data = output.read_bytes()
             self.assertEqual(data[:4], b"DDS ")
             self.assertEqual(data[84:88], b"RGBE")
-            self.assertEqual(data[128:], pixels)
+            self.assertEqual(struct.unpack_from("<I", data, 28)[0], 2)
+            self.assertEqual(data[128:136], pixels)
+            self.assertEqual(len(data), 128 + 8 + 4)
 
 
 if __name__ == "__main__":

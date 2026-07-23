@@ -253,6 +253,7 @@ class BlenderSceneTests(unittest.TestCase):
             {"id": "test"},
             {},
             ({"name": "mesh", "extension": ".cmesh"},),
+            (),
             ({
                 "classname": "pickup",
                 "version": 1,

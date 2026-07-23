@@ -27,7 +27,7 @@ from .game_schema import (
 )
 from .ids import guid_from_stable_name
 from .scene_export import (
-    AssetReference, EntityDescription,
+    Reference, EntityDescription,
     SceneDescription, SceneSettings, Transform,
 )
 
@@ -306,7 +306,7 @@ def object_transform(obj: object) -> Transform:
     )
 
 
-def _reference(asset_type: AssetType, path: Path, asset_path: Callable[[Path], str]) -> AssetReference:
+def _reference(asset_type: AssetType, path: Path, asset_path: Callable[[Path], str]) -> Reference:
     """TODO: Describe `_reference`.
 
     Args:
@@ -318,7 +318,7 @@ def _reference(asset_type: AssetType, path: Path, asset_path: Callable[[Path], s
         TODO: Describe the produced value.
     """
     relative = asset_path(path)
-    return AssetReference(asset_type, relative, guid_from_stable_name(relative))
+    return Reference(asset_type, relative, guid_from_stable_name(relative))
 
 
 def scene_description(

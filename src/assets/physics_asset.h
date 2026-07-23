@@ -8,15 +8,15 @@
 //                      |___/
 
 /**
- * @file src/assets/material_loader.h
- * @brief TODO: Describe the purpose of this file.
+ * @file src/assets/physics_asset.h
+ * @brief Loads a cooked collision-shape asset.
  * @author Erik Coltey
  */
 
-#ifndef CENGINE_MATERIAL_LOADER_H
-#define CENGINE_MATERIAL_LOADER_H
+#ifndef CENGINE_ASSETS_PHYSICS_ASSET_H
+#define CENGINE_ASSETS_PHYSICS_ASSET_H
 
-#include "renderer/material.h"
+#include "physics/physics_types.h"
 
 #include <filesystem>
 
@@ -24,13 +24,13 @@ namespace CEngine::Assets
 {
 
 /**
- * @brief TODO: Describe LoadMaterialAsset.
+ * @brief TODO: Describe LoadPhysicsAsset.
  *
  * @param path TODO: Describe this parameter.
- * @param material TODO: Describe this parameter.
+ * @param shape TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-bool LoadMaterialAsset(const std::filesystem::path &path, CEngine::Renderer::Material &material);
+bool LoadPhysicsAsset(const std::filesystem::path &path, PhysicsShape &shape);
 
 } // namespace CEngine::Assets
 

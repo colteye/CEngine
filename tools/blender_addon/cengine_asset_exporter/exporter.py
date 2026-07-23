@@ -48,6 +48,7 @@ from .authoring import load_lightmap_bindings
 from .lightmaps import encode_rgbexp32
 from .meshes import write_mesh_assets
 from .physics import write_physics_assets
+from .particles import write_particle_assets
 from .skeletons import write_skeleton_assets
 
 
@@ -76,6 +77,7 @@ class ExportResult:
     animations: int
     scenes: int = 0
     physics: int = 0
+    particles: int = 0
 
 
 @dataclass(frozen=True)
@@ -777,6 +779,7 @@ def object_component_assets(
     skeleton_outputs: dict[str, Path],
     animation_outputs: dict[str, list[Path]],
     asset_path: Callable[[Path], str],
+    particle_outputs: dict[str, Path] | None = None,
 ) -> dict[str, object]:
     """TODO: Describe `object_component_assets`.
 
@@ -811,6 +814,9 @@ def object_component_assets(
     animations = [asset_path(output) for output in animation_outputs.get(obj.name, ())]
     if animations:
         assets["animations"] = animations
+    particle = (particle_outputs or {}).get(obj.name)
+    if particle is not None:
+        assets["particle"] = asset_path(particle)
     return assets
 
 
@@ -1044,16 +1050,24 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
     log(
         f"Physics export complete: {len(physics_outputs)} .cphys in "
         f"{elapsed(phase_start)}")
+    phase_start = time.perf_counter()
+    particle_outputs = write_particle_assets(
+        source, root, objects, asset_path, source_hash)
+    particle_outputs_by_name = {
+        str(particle.source.name): particle.output for particle in particle_outputs
+    }
+    log(
+        f"Particle export complete: {len(particle_outputs)} .cparticle in "
+        f"{elapsed(phase_start)}")
 
     collection_outputs: list[Path] = []
     scene_outputs: list[Path] = []
     collection_output_dir = output_dir_for_source(source, root)
-    casset_asset_path = lambda output: asset_path_relative_to(collection_output_dir, output)
     phase_start = time.perf_counter()
     object_assets = lambda obj: object_component_assets(
         obj, mesh_outputs_by_name, material_outputs_by_name,
         skeleton_outputs_by_name, animation_outputs_by_armature,
-        casset_asset_path)
+        asset_path, particle_outputs_by_name)
     if is_scene:
         scene_output = collection_output_dir / f"{collection_spec.asset_name}.cscene"
         description = scene_description(
@@ -1088,6 +1102,7 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         + [skeleton.output for skeleton in skeleton_outputs]
         + [animation.output for animation in animation_outputs]
         + [physics.output for physics in physics_outputs]
+        + [particle.output for particle in particle_outputs]
 		+ lightmap_outputs,
         log,
         source_hash,
@@ -1119,6 +1134,7 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         len(animation_outputs),
         len(scene_outputs),
         len(physics_outputs),
+        len(particle_outputs),
     )
     log(f"Export finished: {export_summary(result, root)} in {elapsed(export_start)}")
     return result
@@ -1161,6 +1177,7 @@ def export_summary(result: ExportResult, output_root: Path | None) -> str:
     return (
         f"Exported {result.scenes} .cscene, {result.collections} .casset, {result.meshes} .cmesh, "
         f"{result.materials} .cmat, {result.skeletons} .cskel, "
-        f"{result.animations} .canim, {result.physics} .cphys, and "
+        f"{result.animations} .canim, {result.physics} .cphys, "
+        f"{result.particles} .cparticle, and "
         f"{result.textures} .dds assets{destination}"
     )

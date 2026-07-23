@@ -15,7 +15,6 @@ Author:
 
 from __future__ import annotations
 
-import struct
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,14 +23,13 @@ from typing import Callable, Iterable
 from ceassetlib.assetfile import AssetWriteDesc, write_binary_asset
 from ceassetlib.collection_export import clean_asset_name
 from ceassetlib.formats import AssetType
+from ceassetlib.game_schema import load_bundled_game
 from ceassetlib.ids import guid_from_stable_name, hash_file
 from ceassetlib.paths import generic_path, output_dir_for_source
+from ceassetlib.wire import pack_record
 
 
-SKELETON_HEADER = struct.Struct("<4sHHIIIIII")
-SKELETON_BONE = struct.Struct("<iII16f")
-SKELETON_MAGIC = b"CESK"
-SKELETON_VERSION = 1
+GAME_SCHEMA = load_bundled_game()
 
 
 @dataclass(frozen=True)
@@ -109,44 +107,6 @@ def matrix_rows(matrix: object | None) -> list[float]:
     return [float(matrix[row][column]) for row in range(4) for column in range(4)]
 
 
-def append_string(strings: bytearray, text: str) -> tuple[int, int]:
-    """TODO: Describe `append_string`.
-
-    Args:
-        strings: TODO: Describe this parameter.
-        text: TODO: Describe this parameter.
-
-    Returns:
-        TODO: Describe the produced value.
-    """
-    encoded = text.encode("utf-8")
-    offset = len(strings)
-    strings.extend(encoded)
-    return offset, len(encoded)
-
-
-def bone_record(bone: object, bone_indices: dict[str, int], strings: bytearray) -> bytes:
-    """TODO: Describe `bone_record`.
-
-    Args:
-        bone: TODO: Describe this parameter.
-        bone_indices: TODO: Describe this parameter.
-        strings: TODO: Describe this parameter.
-
-    Returns:
-        TODO: Describe the produced value.
-    """
-    parent = getattr(bone, "parent", None)
-    parent_name = getattr(parent, "name", "") if parent is not None else ""
-    name_offset, name_size = append_string(strings, bone.name)
-    return SKELETON_BONE.pack(
-        bone_indices.get(parent_name, -1),
-        name_offset,
-        name_size,
-        *matrix_rows(getattr(bone, "matrix_local", None)),
-    )
-
-
 def skeleton_payload(source: Path, armature: object) -> bytes:
     """TODO: Describe `skeleton_payload`.
 
@@ -161,25 +121,21 @@ def skeleton_payload(source: Path, armature: object) -> bytes:
     bone_indices = {bone.name: index for index, bone in enumerate(bones)}
     del source
 
-    strings = bytearray()
-    armature_name_offset, armature_name_size = append_string(strings, armature.name)
-    bone_rows = bytearray()
-    for bone in bones:
-        bone_rows.extend(bone_record(bone, bone_indices, strings))
-
-    string_table_offset = SKELETON_HEADER.size + len(bone_rows)
-    header = SKELETON_HEADER.pack(
-        SKELETON_MAGIC,
-        SKELETON_VERSION,
-        SKELETON_HEADER.size,
-        len(bones),
-        SKELETON_HEADER.size,
-        string_table_offset,
-        len(strings),
-        armature_name_offset,
-        armature_name_size,
-    )
-    return bytes(header + bone_rows + strings)
+    return pack_record(GAME_SCHEMA, "skeleton", {
+        "name": armature.name,
+        "bones": [
+            {
+                "name": bone.name,
+                "parent": bone_indices.get(
+                    getattr(getattr(bone, "parent", None), "name", ""), -1
+                ),
+                "armature_from_bone": matrix_rows(
+                    getattr(bone, "matrix_local", None)
+                ),
+            }
+            for bone in bones
+        ],
+    })
 
 
 def write_skeleton_asset(

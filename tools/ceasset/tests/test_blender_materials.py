@@ -25,10 +25,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "blender_addon"))
 
 from cengine_asset_exporter.materials import (  # noqa: E402
-    MATERIAL_HEADER,
-    MATERIAL_MAGIC,
-    MATERIAL_VERSION,
-    MATERIAL_TEXTURE,
     material_factors,
     material_output_path,
     material_payload,
@@ -38,9 +34,12 @@ from cengine_asset_exporter.materials import (  # noqa: E402
     supported_material_images,
     write_material_asset,
 )
+from ceassetlib.game_schema import load_bundled_game  # noqa: E402
+from ceassetlib.wire import unpack_record  # noqa: E402
 
 
 ASSET_HEADER = struct.Struct("<4sHHI16sQ16sQQQ")
+GAME = load_bundled_game()
 
 
 class FakeImage:
@@ -334,15 +333,12 @@ class BlenderMaterialsTests(unittest.TestCase):
             [type("Binding", (), {"slot": "base_color", "output": Path("compiled/hero/textures/albedo.dds")})()],
         )
 
-        header = MATERIAL_HEADER.unpack_from(payload)
-        self.assertEqual(header[0], MATERIAL_MAGIC)
-        self.assertEqual(header[1], MATERIAL_VERSION)
-        self.assertEqual(header[4], 0)
-        self.assertEqual(header[5], 1)
-        texture = MATERIAL_TEXTURE.unpack_from(payload, header[6])
-        strings = payload[header[7] : header[7] + header[8]]
-        self.assertEqual(texture[0], 1)
-        self.assertEqual(strings[texture[1] : texture[1] + texture[2]], b"compiled/hero/textures/albedo.dds")
+        material = unpack_record(GAME, "material", payload)
+        self.assertEqual(material["render_mode"], 0)
+        self.assertEqual(len(material["textures"]), 1)
+        texture = material["textures"][0]
+        self.assertEqual(texture["slot"], 1)
+        self.assertEqual(texture["asset"]["path"], "compiled/hero/textures/albedo.dds")
 
     def test_material_payload_does_not_invent_source_texture_bindings(self) -> None:
         """TODO: Describe `test_material_payload_does_not_invent_source_texture_bindings`."""
@@ -357,13 +353,13 @@ class BlenderMaterialsTests(unittest.TestCase):
             [],
         )
 
-        header = MATERIAL_HEADER.unpack_from(payload)
-        self.assertEqual(header[5], 0)
-        for actual, expected in zip(header[11:15], (0.2, 0.4, 0.6, 1.0)):
+        decoded = unpack_record(GAME, "material", payload)
+        self.assertEqual(decoded["textures"], [])
+        for actual, expected in zip(decoded["base_color"], (0.2, 0.4, 0.6, 1.0)):
             self.assertAlmostEqual(actual, expected)
-        self.assertAlmostEqual(header[15], 0.25)
-        self.assertAlmostEqual(header[16], 0.75)
-        self.assertAlmostEqual(header[17], 1.0)
+        self.assertAlmostEqual(decoded["metallic"], 0.25)
+        self.assertAlmostEqual(decoded["roughness"], 0.75)
+        self.assertAlmostEqual(decoded["ao"], 1.0)
 
     def test_linked_principled_alpha_exports_alpha_hash_mode(self) -> None:
         """TODO: Describe `test_linked_principled_alpha_exports_alpha_hash_mode`."""
@@ -378,11 +374,11 @@ class BlenderMaterialsTests(unittest.TestCase):
 
         surface = material_surface(material, 1)
         payload = material_payload(Path("foliage.blend"), material, [])
-        header = MATERIAL_HEADER.unpack_from(payload)
+        decoded = unpack_record(GAME, "material", payload)
 
         self.assertEqual(surface.render_mode, 2)
-        self.assertEqual(header[4], 2)
-        self.assertAlmostEqual(header[18], 0.5)
+        self.assertEqual(decoded["render_mode"], 2)
+        self.assertAlmostEqual(decoded["alpha_cutoff"], 0.5)
 
     def test_textured_material_preserves_principled_alpha_factor(self) -> None:
         """TODO: Describe `test_textured_material_preserves_principled_alpha_factor`."""
@@ -440,11 +436,9 @@ class BlenderMaterialsTests(unittest.TestCase):
             self.assertEqual(header[3], 2)
 
             payload = data[header[7] : header[7] + header[8]]
-            material_header = MATERIAL_HEADER.unpack_from(payload)
-            texture = MATERIAL_TEXTURE.unpack_from(payload, material_header[6])
-            strings = payload[material_header[7] : material_header[7] + material_header[8]]
-            self.assertEqual(strings[material_header[9] : material_header[9] + material_header[10]], b"HeroSkin")
-            self.assertEqual(texture[0], 1)
+            material_data = unpack_record(GAME, "material", payload)
+            self.assertEqual(material_data["name"], "HeroSkin")
+            self.assertEqual(material_data["textures"][0]["slot"], 1)
             self.assertEqual(export.generated_textures, ())
             self.assertFalse((root / "compiled" / "hero" / "textures" / "HeroSkin_mra.dds").exists())
 

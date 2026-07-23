@@ -8,13 +8,13 @@
 //                      |___/
 
 /**
- * @file src/assets/scene_loader.h
- * @brief TODO: Describe the purpose of this file.
+ * @file src/assets/scene_asset.h
+ * @brief Instantiates a scene from its generated asset schema.
  * @author Erik Coltey
  */
 
-#ifndef CENGINE_ASSETS_SCENE_LOADER_H
-#define CENGINE_ASSETS_SCENE_LOADER_H
+#ifndef CENGINE_ASSETS_SCENE_ASSET_H
+#define CENGINE_ASSETS_SCENE_ASSET_H
 
 #include <filesystem>
 #include <memory>
@@ -31,7 +31,7 @@ class Scene;
 namespace CEngine::Assets
 {
 
-class AssetStore;
+class Store;
 
 /**
  * @brief TODO: Describe LoadScene.
@@ -40,7 +40,7 @@ class AssetStore;
  * @param store TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-std::unique_ptr<Scene::Scene> LoadScene(const std::filesystem::path &path, AssetStore &store);
+std::unique_ptr<Scene::Scene> LoadScene(const std::filesystem::path &path, Store &store);
 /**
  * @brief TODO: Describe LoadScene.
  *
@@ -49,7 +49,7 @@ std::unique_ptr<Scene::Scene> LoadScene(const std::filesystem::path &path, Asset
  * @param entity_factory TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-std::unique_ptr<Scene::Scene> LoadScene(const std::filesystem::path &path, AssetStore &store,
+std::unique_ptr<Scene::Scene> LoadScene(const std::filesystem::path &path, Store &store,
                                         Entities::EntityFactory &entity_factory);
 
 } // namespace CEngine::Assets

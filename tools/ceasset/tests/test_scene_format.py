@@ -23,33 +23,19 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from ceassetlib.formats import AssetType, asset_type_for_extension
-from ceassetlib.scene_format import (
-    ASSET_REFERENCE,
-    ENTITY_CLASS_BLOCK,
-    ENTITY_CONNECTION,
-    SCENE_ENTITY,
-    SCENE_HEADER,
-    SCENE_SETTINGS,
-    TRANSFORM,
-)
+from ceassetlib.game_schema import load_bundled_game
 
 
 class SceneFormatTests(unittest.TestCase):
     """TODO: Describe `SceneFormatTests`."""
 
-    def test_cpp_and_python_fixed_layout_sizes_match(self) -> None:
-        """TODO: Describe `test_cpp_and_python_fixed_layout_sizes_match`."""
+    def test_scene_layout_is_owned_by_the_schema(self) -> None:
+        game = load_bundled_game()
+        scene = game.wire("scene")
+        self.assertIsNotNone(scene)
         self.assertEqual(
-            (
-                SCENE_HEADER.size,
-                SCENE_SETTINGS.size,
-                ASSET_REFERENCE.size,
-                SCENE_ENTITY.size,
-                ENTITY_CLASS_BLOCK.size,
-                ENTITY_CONNECTION.size,
-                TRANSFORM.size,
-            ),
-            (96, 48, 32, 20, 52, 28, 40),
+            [field["name"] for field in scene["fields"]],
+            ["settings", "assets", "entities", "classes", "connections"],
         )
 
     def test_scene_extension_has_a_distinct_asset_type(self) -> None:

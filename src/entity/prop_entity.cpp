@@ -15,7 +15,7 @@
 
 #include "entity/prop_entity.h"
 
-#include "assets/asset_store.h"
+#include "assets/store.h"
 #include "context.h"
 #include "physics/physics_system.h"
 #include "renderer/render_system.h"
@@ -91,8 +91,8 @@ void PropEntity::Initialize(Context &context)
             {
                 throw std::runtime_error("prop rendering requires scene assets");
             }
-            const Assets::AssetReference *mesh_asset = context.scene->AssetReference(mesh.index);
-            if (mesh_asset == nullptr || mesh_asset->type != Assets::AssetType::Mesh)
+            const Assets::Reference *mesh_asset = context.scene->AssetReference(mesh.index);
+            if (mesh_asset == nullptr || mesh_asset->type != Assets::Type::Mesh)
             {
                 throw std::runtime_error("prop mesh reference is invalid");
             }
@@ -101,17 +101,17 @@ void PropEntity::Initialize(Context &context)
             {
                 throw std::runtime_error("prop requires exactly one material in this phase");
             }
-            const Assets::AssetReference *material_asset = context.scene->AuxiliaryAsset(materials.first);
-            if (material_asset == nullptr || material_asset->type != Assets::AssetType::Material)
+            const Assets::Reference *material_asset = context.scene->AuxiliaryAsset(materials.first);
+            if (material_asset == nullptr || material_asset->type != Assets::Type::Material)
             {
                 throw std::runtime_error("prop material reference is invalid");
             }
 
-            const Assets::AssetReference *lightmap_asset = nullptr;
+            const Assets::Reference *lightmap_asset = nullptr;
             if (lightmap)
             {
                 lightmap_asset = context.scene->AssetReference(lightmap.index);
-                if (lightmap_asset == nullptr || lightmap_asset->type != Assets::AssetType::Texture)
+                if (lightmap_asset == nullptr || lightmap_asset->type != Assets::Type::Texture)
                 {
                     throw std::runtime_error("prop lightmap reference is invalid");
                 }
@@ -148,8 +148,8 @@ void PropEntity::Initialize(Context &context)
             {
                 throw std::runtime_error("prop physics requires scene assets");
             }
-            const Assets::AssetReference *collision_asset = context.scene->AssetReference(collision.index);
-            if (collision_asset == nullptr || collision_asset->type != Assets::AssetType::Physics)
+            const Assets::Reference *collision_asset = context.scene->AssetReference(collision.index);
+            if (collision_asset == nullptr || collision_asset->type != Assets::Type::Physics)
             {
                 throw std::runtime_error("prop collision reference is invalid");
             }

@@ -581,6 +581,7 @@ MeshResources RenderBackend::UploadMesh(const Mesh &mesh)
     {
         return buffers;
     }
+    const MeshLod &lod = mesh.lods.front();
 
     while (glGetError() != GL_NO_ERROR)
     {
@@ -591,8 +592,8 @@ MeshResources RenderBackend::UploadMesh(const Mesh &mesh)
 
     glGenBuffers(1, &buffers.vertex_buffer);
     glBindBuffer(GL_ARRAY_BUFFER, buffers.vertex_buffer);
-    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(mesh.vertices.size() * sizeof(MeshVertex)),
-                 mesh.vertices.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(lod.vertices.size() * sizeof(MeshVertex)),
+                 lod.vertices.data(), GL_STATIC_DRAW);
     const GLsizei stride = sizeof(MeshVertex);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void *>(offsetof(MeshVertex, position)));
@@ -608,8 +609,8 @@ MeshResources RenderBackend::UploadMesh(const Mesh &mesh)
 
     glGenBuffers(1, &buffers.index_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers.index_buffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(mesh.indices.size() * sizeof(std::uint32_t)),
-                 mesh.indices.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(lod.indices.size() * sizeof(std::uint32_t)),
+                 lod.indices.data(), GL_STATIC_DRAW);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
@@ -618,7 +619,7 @@ MeshResources RenderBackend::UploadMesh(const Mesh &mesh)
         buffers.Destroy();
         return {};
     }
-    buffers.index_count = static_cast<GLsizei>(mesh.indices.size());
+    buffers.index_count = static_cast<GLsizei>(lod.indices.size());
     return buffers;
 }
 

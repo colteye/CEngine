@@ -42,6 +42,7 @@ class AssetType(IntEnum):
     SHADER = 12
     PACKAGE = 13
     ASSET = 14
+    PARTICLE = 15
 
 
 ASSET_TYPE_NAMES = {
@@ -59,6 +60,7 @@ ASSET_TYPE_NAMES = {
     AssetType.SHADER: "shader",
     AssetType.PACKAGE: "package",
     AssetType.ASSET: "asset",
+    AssetType.PARTICLE: "particle",
 }
 
 RUNTIME_EXTENSIONS = {
@@ -76,6 +78,7 @@ RUNTIME_EXTENSIONS = {
     ".cpak": AssetType.PACKAGE,
     ".casset": AssetType.ASSET,
     ".cscene": AssetType.SCENE,
+    ".cparticle": AssetType.PARTICLE,
 }
 
 

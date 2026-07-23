@@ -13,8 +13,8 @@
  * @author Erik Coltey
  */
 
-#include "assets/asset_store.h"
-#include "assets/scene_loader.h"
+#include "assets/store.h"
+#include "assets/scene_asset.h"
 #include "context.h"
 #include "entity/entity_factory.h"
 #include "entity/fog_entity.h"
@@ -339,7 +339,7 @@ int main(int argc, char **argv)
 {
     if (argc == 2)
     {
-        CEngine::Assets::AssetStore assets(std::filesystem::path(argv[1]).parent_path());
+        CEngine::Assets::Store assets(std::filesystem::path(argv[1]).parent_path());
         auto scene = CEngine::Assets::LoadScene(argv[1], assets);
         const bool loaded =
             Expect(scene != nullptr, "scene should load") &&

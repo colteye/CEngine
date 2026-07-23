@@ -21,17 +21,13 @@ import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .assetfile import align_up, make_asset_desc, write_binary_asset
+from .assetfile import make_asset_desc, write_binary_asset
 from .formats import AssetType
-from .game_schema import SchemaEntity, entity_struct
-from .scene_format import (
-    ASSET_REFERENCE, ENTITY_CLASS_BLOCK,
-    ENTITY_CONNECTION, ENTITY_CLASS_BLOCK_REQUIRED,
-    SCENE_ENTITY, SCENE_HEADER, SCENE_MAGIC,
-    SCENE_SETTINGS, SCENE_VERSION, INVALID_INDEX,
-)
+from .game_schema import SchemaEntity, entity_struct, load_bundled_game
+from .scene_format import INVALID_INDEX
+from .wire import pack_record
 
-TABLE_ALIGNMENT = 16
+GAME_SCHEMA = load_bundled_game()
 
 
 def normalize_asset_path(path: str) -> str:
@@ -50,14 +46,14 @@ def normalize_asset_path(path: str) -> str:
 
 
 @dataclass(frozen=True)
-class AssetReference:
-    """TODO: Describe `AssetReference`."""
+class Reference:
+    """A complete project-relative asset reference."""
 
     asset_type: AssetType
     path: str
     guid: bytes
 
-    def normalized(self) -> "AssetReference":
+    def normalized(self) -> "Reference":
         """TODO: Describe `normalized`.
 
         Returns:
@@ -67,7 +63,7 @@ class AssetReference:
             raise ValueError("asset GUID must contain 16 bytes")
         if self.asset_type in (AssetType.UNKNOWN, AssetType.SCENE):
             raise ValueError("scene reference has an invalid asset type")
-        return AssetReference(self.asset_type, normalize_asset_path(self.path), self.guid)
+        return Reference(self.asset_type, normalize_asset_path(self.path), self.guid)
 
 
 @dataclass(frozen=True)
@@ -132,32 +128,6 @@ def _class_info(value: SchemaEntity) -> tuple[str, struct.Struct]:
     return value.classname, entity_struct(value.schema)
 
 
-class StringTable:
-    """TODO: Describe `StringTable`."""
-
-    def __init__(self) -> None:
-        """TODO: Describe `__init__`."""
-        self.data = bytearray()
-        self.ranges: dict[str, tuple[int, int]] = {}
-
-    def add(self, value: str) -> tuple[int, int]:
-        """TODO: Describe `add`.
-
-        Args:
-            value: TODO: Describe this parameter.
-
-        Returns:
-            TODO: Describe the produced value.
-        """
-        if value in self.ranges:
-            return self.ranges[value]
-        encoded = value.encode("utf-8")
-        result = (len(self.data), len(encoded))
-        self.data.extend(encoded)
-        self.ranges[value] = result
-        return result
-
-
 def _transform_values(value: Transform) -> tuple[float, ...]:
     """TODO: Describe `_transform_values`.
 
@@ -170,23 +140,7 @@ def _transform_values(value: Transform) -> tuple[float, ...]:
     return (*value.position, *value.rotation, *value.scale)
 
 
-def _append_aligned(output: bytearray, data: bytes) -> int:
-    """TODO: Describe `_append_aligned`.
-
-    Args:
-        output: TODO: Describe this parameter.
-        data: TODO: Describe this parameter.
-
-    Returns:
-        TODO: Describe the produced value.
-    """
-    offset = align_up(len(output), TABLE_ALIGNMENT)
-    output.extend(bytes(offset - len(output)))
-    output.extend(data)
-    return offset
-
-
-def _references(value: SchemaEntity) -> tuple[AssetReference, ...]:
+def _references(value: SchemaEntity) -> tuple[Reference, ...]:
     """TODO: Describe `_references`.
 
     Args:
@@ -195,7 +149,7 @@ def _references(value: SchemaEntity) -> tuple[AssetReference, ...]:
     Returns:
         TODO: Describe the produced value.
     """
-    result: list[AssetReference] = []
+    result: list[Reference] = []
     for field in value.schema["fields"]:
         field_type = field["type"]
         if field_type == "asset":
@@ -207,7 +161,7 @@ def _references(value: SchemaEntity) -> tuple[AssetReference, ...]:
     return tuple(result)
 
 
-def _collect_assets(entities: list[EntityDescription]) -> tuple[list[AssetReference], dict[AssetReference, int]]:
+def _collect_assets(entities: list[EntityDescription]) -> tuple[list[Reference], dict[Reference, int]]:
     """TODO: Describe `_collect_assets`.
 
     Args:
@@ -216,7 +170,7 @@ def _collect_assets(entities: list[EntityDescription]) -> tuple[list[AssetRefere
     Returns:
         TODO: Describe the produced value.
     """
-    by_path: dict[str, AssetReference] = {}
+    by_path: dict[str, Reference] = {}
     for entity in entities:
         for reference in _references(entity.data):
             normalized = reference.normalized()
@@ -228,7 +182,7 @@ def _collect_assets(entities: list[EntityDescription]) -> tuple[list[AssetRefere
     return assets, {asset: index for index, asset in enumerate(assets)}
 
 
-def _asset_index(reference: AssetReference, indices: dict[AssetReference, int]) -> int:
+def _asset_index(reference: Reference, indices: dict[Reference, int]) -> int:
     """TODO: Describe `_asset_index`.
 
     Args:
@@ -288,7 +242,7 @@ def _validate_schema_scalar(
 
 def _pack_schema_entity(
     value: SchemaEntity,
-    assets: dict[AssetReference, int],
+    assets: dict[Reference, int],
     auxiliary_assets: list[int],
     entity_count: int,
 ) -> bytes:
@@ -452,55 +406,42 @@ def build_scene_payload(scene: SceneDescription) -> bytes:
             raise ValueError("active player entity must reference a player")
         active_player = scene.settings.active_player_entity
 
-    strings = StringTable()
-    asset_rows = bytearray()
-    for asset in assets:
-        path_offset, path_size = strings.add(asset.path)
-        asset_rows.extend(ASSET_REFERENCE.pack(asset.guid, int(asset.asset_type), 0, path_offset, path_size))
-
-    entity_rows = bytearray()
+    asset_rows = [
+        {"guid": asset.guid, "type": int(asset.asset_type), "path": asset.path}
+        for asset in assets
+    ]
+    entity_rows: list[dict[str, object]] = []
     grouped: dict[str, tuple[struct.Struct, list[tuple[int, EntityDescription]]]] = {}
     for index, entity in enumerate(entities):
         classname, record_struct = _class_info(entity.data)
-        class_offset, class_size = strings.add(classname)
-        name_offset, name_size = strings.add(entity.name)
-        entity_rows.extend(SCENE_ENTITY.pack(class_offset, class_size,
-                                             name_offset, name_size, entity.flags))
+        entity_rows.append({
+            "class_name": classname,
+            "name": entity.name,
+            "flags": entity.flags,
+        })
         if classname not in grouped:
             grouped[classname] = (record_struct, [])
         elif grouped[classname][0].format != record_struct.format:
             raise ValueError(f"entity classname has conflicting schemas: {classname}")
         grouped[classname][1].append((index, entity))
 
-    output = bytearray(SCENE_HEADER.size)
-    settings_offset = _append_aligned(output, SCENE_SETTINGS.pack(
-        *scene.settings.ambient_color, scene.settings.exposure, *scene.settings.gravity,
-        active_player, 0, 0, 0, 0))
-    asset_offset = _append_aligned(output, asset_rows) if asset_rows else 0
-    entity_offset = _append_aligned(output, entity_rows)
     groups = sorted(grouped.items())
-    class_offset = align_up(len(output), TABLE_ALIGNMENT)
-    output.extend(bytes(class_offset - len(output) + len(groups) * ENTITY_CLASS_BLOCK.size))
-
-    class_rows = bytearray()
+    class_rows: list[dict[str, object]] = []
     for classname, (record_struct, rows) in groups:
-        classname_offset, classname_size = strings.add(classname)
-        indices = struct.pack(f"<{len(rows)}I", *(row[0] for row in rows))
-        indices_offset = _append_aligned(output, indices)
         materials: list[int] = []
         records = b"".join(_pack_schema_entity(
             row[1].data, asset_indices, materials, len(entities))
             for row in rows)
-        records_offset = _append_aligned(output, records)
-        auxiliary = struct.pack(f"<{len(materials)}I", *materials) if materials else b""
-        auxiliary_offset = _append_aligned(output, auxiliary) if auxiliary else 0
-        class_rows.extend(ENTITY_CLASS_BLOCK.pack(classname_offset, classname_size,
-            int(rows[0][1].data.schema["version"]),
-            ENTITY_CLASS_BLOCK_REQUIRED, len(rows), record_struct.size,
-            indices_offset, records_offset, auxiliary_offset, len(auxiliary)))
-    output[class_offset:class_offset + len(class_rows)] = class_rows
+        class_rows.append({
+            "class_name": classname,
+            "version": int(rows[0][1].data.schema["version"]),
+            "stride": record_struct.size,
+            "entities": [row[0] for row in rows],
+            "records": records,
+            "assets": materials,
+        })
 
-    connection_rows = bytearray()
+    connection_rows: list[dict[str, object]] = []
     for connection in sorted(scene.connections,
             key=lambda item: (item.source_entity, item.event, item.target_entity, item.action, item.delay_seconds)):
         if not 0 <= connection.source_entity < len(entities) or not 0 <= connection.target_entity < len(entities):
@@ -509,22 +450,26 @@ def build_scene_payload(scene: SceneDescription) -> bytes:
             raise ValueError("scene connection names must not be empty")
         if not math.isfinite(connection.delay_seconds) or connection.delay_seconds < 0.0:
             raise ValueError("scene connection delay must be finite and nonnegative")
-        event_offset, event_size = strings.add(connection.event)
-        action_offset, action_size = strings.add(connection.action)
-        connection_rows.extend(ENTITY_CONNECTION.pack(
-            connection.source_entity, connection.target_entity,
-            event_offset, event_size, action_offset, action_size,
-            connection.delay_seconds))
-    connection_offset = _append_aligned(output, connection_rows) if connection_rows else 0
+        connection_rows.append({
+            "source": connection.source_entity,
+            "target": connection.target_entity,
+            "event": connection.event,
+            "action": connection.action,
+            "delay": connection.delay_seconds,
+        })
 
-    strings_offset = _append_aligned(output, strings.data)
-    SCENE_HEADER.pack_into(output, 0, SCENE_MAGIC, SCENE_VERSION, SCENE_HEADER.size,
-        settings_offset, asset_offset, len(assets), ASSET_REFERENCE.size if assets else 0,
-        entity_offset, len(entities), SCENE_ENTITY.size,
-        class_offset, len(groups), ENTITY_CLASS_BLOCK.size,
-        connection_offset, len(scene.connections), ENTITY_CONNECTION.size if scene.connections else 0,
-        strings_offset, len(strings.data))
-    return bytes(output)
+    return pack_record(GAME_SCHEMA, "scene", {
+        "settings": {
+            "ambient_color": scene.settings.ambient_color,
+            "exposure": scene.settings.exposure,
+            "gravity": scene.settings.gravity,
+            "active_entity": active_player,
+        },
+        "assets": asset_rows,
+        "entities": entity_rows,
+        "classes": class_rows,
+        "connections": connection_rows,
+    })
 
 
 def write_scene(path: Path, scene: SceneDescription, stable_name: str, source_hash: int = 0) -> None:

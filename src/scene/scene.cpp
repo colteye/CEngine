@@ -279,7 +279,7 @@ const Entity *Scene::GetEntity(EntityHandle entity) const
  *
  * @param references TODO: Describe this parameter.
  */
-void Scene::SetAssetReferences(std::vector<Assets::AssetReference> references)
+void Scene::SetAssetReferences(std::vector<Assets::Reference> references)
 {
     asset_references_ = std::move(references);
 }
@@ -290,7 +290,7 @@ void Scene::SetAssetReferences(std::vector<Assets::AssetReference> references)
  * @param index TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-const Assets::AssetReference *Scene::AssetReference(std::uint32_t index) const
+const Assets::Reference *Scene::AssetReference(std::uint32_t index) const
 {
     return index < asset_references_.size() ? &asset_references_[index] : nullptr;
 }
@@ -300,7 +300,7 @@ const Assets::AssetReference *Scene::AssetReference(std::uint32_t index) const
  *
  * @param asset TODO: Describe this parameter.
  */
-void Scene::AppendAuxiliaryAsset(const Assets::AssetReference &asset)
+void Scene::AppendAuxiliaryAsset(const Assets::Reference &asset)
 {
     auxiliary_assets_.push_back(asset);
 }
@@ -311,7 +311,7 @@ void Scene::AppendAuxiliaryAsset(const Assets::AssetReference &asset)
  * @param index TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-const Assets::AssetReference *Scene::AuxiliaryAsset(std::uint32_t index) const
+const Assets::Reference *Scene::AuxiliaryAsset(std::uint32_t index) const
 {
     return index < auxiliary_assets_.size() ? &auxiliary_assets_[index] : nullptr;
 }

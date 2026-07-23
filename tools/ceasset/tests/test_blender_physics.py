@@ -26,10 +26,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "blender_addon"))
 
 from cengine_asset_exporter.physics import (  # noqa: E402
-    INVALID_SHAPE,
-    PHYSICS_HEADER,
-    PHYSICS_MAGIC,
-    PHYSICS_SHAPE,
     CollisionShape,
     ShapeType,
     collision_shape_for_object,
@@ -39,9 +35,12 @@ from cengine_asset_exporter.physics import (  # noqa: E402
     write_physics_asset,
     write_physics_assets,
 )
+from ceassetlib.game_schema import load_bundled_game
+from ceassetlib.wire import unpack_record
 
 
 ASSET_HEADER = struct.Struct("<4sHHI16sQ16sQQQ")
+GAME_SCHEMA = load_bundled_game()
 
 
 class FakeVertex:
@@ -122,18 +121,14 @@ class BlenderPhysicsTests(unittest.TestCase):
             ],
         )
         payload = physics_payload(root)
-        header = PHYSICS_HEADER.unpack_from(payload)
-        self.assertEqual(header[0], PHYSICS_MAGIC)
-        self.assertEqual(header[3], 3)
-        root_record = PHYSICS_SHAPE.unpack_from(payload, header[5])
-        first_child = PHYSICS_SHAPE.unpack_from(
-            payload, header[5] + PHYSICS_SHAPE.size)
-        second_child = PHYSICS_SHAPE.unpack_from(
-            payload, header[5] + PHYSICS_SHAPE.size * 2)
-        self.assertEqual(root_record[0:2],
-            (int(ShapeType.COMPOUND), INVALID_SHAPE))
-        self.assertEqual(first_child[1], 0)
-        self.assertEqual(second_child[1], 0)
+        decoded = unpack_record(GAME_SCHEMA, "physics", payload)
+        self.assertEqual(len(decoded["nodes"]), 3)
+        self.assertEqual(
+            (decoded["nodes"][0]["type"], decoded["nodes"][0]["parent"]),
+            (int(ShapeType.COMPOUND), -1),
+        )
+        self.assertEqual(decoded["nodes"][1]["parent"], 0)
+        self.assertEqual(decoded["nodes"][2]["parent"], 0)
 
     def test_invalid_triangle_index_is_rejected(self) -> None:
         """TODO: Describe `test_invalid_triangle_index_is_rejected`."""
@@ -218,7 +213,11 @@ class BlenderPhysicsTests(unittest.TestCase):
             [child.shape_type for child in compound.children],
             [ShapeType.BOX, ShapeType.SPHERE])
         self.assertEqual(
-            PHYSICS_HEADER.unpack_from(physics_payload(compound))[3], 3)
+            len(unpack_record(
+                GAME_SCHEMA, "physics", physics_payload(compound)
+            )["nodes"]),
+            3,
+        )
 
     def test_explicit_collision_mesh_is_cooked_for_parent_body(self) -> None:
         """TODO: Describe `test_explicit_collision_mesh_is_cooked_for_parent_body`."""

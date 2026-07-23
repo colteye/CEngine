@@ -104,6 +104,32 @@ def write_binary_asset(path: Path, desc: AssetWriteDesc) -> None:
     atomic_write_bytes(path, out)
 
 
+def read_binary_asset(
+    path: Path, expected_type: AssetType | None = None
+) -> tuple[AssetWriteDesc, bytes]:
+    """Read and validate the one shared cooked-asset envelope."""
+    data = path.read_bytes()
+    if len(data) < ASSET_HEADER.size:
+        raise ValueError("asset header is truncated")
+    header = ASSET_HEADER.unpack_from(data)
+    magic, version, size, type_value = header[:4]
+    payload_offset, payload_size, file_size = header[7:10]
+    if magic != ASSET_MAGIC or version != ASSET_VERSION or size != ASSET_HEADER.size:
+        raise ValueError("asset header is unsupported")
+    try:
+        asset_type = AssetType(type_value)
+    except ValueError as error:
+        raise ValueError("asset type is invalid") from error
+    if expected_type is not None and asset_type != expected_type:
+        raise ValueError("asset type does not match")
+    if file_size != len(data) or payload_offset > len(data) or \
+            payload_size > len(data) - payload_offset:
+        raise ValueError("asset payload range is invalid")
+    platform = bytes(header[6]).split(b"\0", 1)[0].decode("utf-8")
+    desc = AssetWriteDesc(asset_type, header[4], header[5], platform, b"")
+    return desc, data[payload_offset:payload_offset + payload_size]
+
+
 def make_asset_desc(
     asset_type: AssetType,
     stable_name: str,

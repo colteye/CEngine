@@ -16,7 +16,6 @@ Author:
 from __future__ import annotations
 
 import math
-import struct
 import types
 from dataclasses import dataclass, field
 from enum import IntEnum
@@ -27,20 +26,15 @@ from ceassetlib.assetfile import AssetWriteDesc, write_binary_asset
 from ceassetlib.collection_export import clean_asset_name
 from ceassetlib.blender_scene import object_transform
 from ceassetlib.formats import AssetType
+from ceassetlib.game_schema import load_bundled_game
 from ceassetlib.ids import guid_from_stable_name
 from ceassetlib.paths import generic_path, output_dir_for_source
+from ceassetlib.wire import pack_record
 
 from .meshes import blender_to_engine_vector
 
 
-PHYSICS_MAGIC = b"CEPH"
-PHYSICS_VERSION = 2
-INVALID_SHAPE = 0xFFFFFFFF
-PHYSICS_HEADER = struct.Struct("<4sHHIIQIIIIQQQ")
-PHYSICS_SHAPE = struct.Struct("<IIIIIIIIIII3f4f3fff3f3f")
-VEC3 = struct.Struct("<3f")
-INDEX = struct.Struct("<I")
-HEIGHT = struct.Struct("<f")
+GAME_SCHEMA = load_bundled_game()
 
 
 class ShapeType(IntEnum):
@@ -196,50 +190,27 @@ def physics_payload(root: CollisionShape) -> bytes:
         for child in shape.children:
             visit(child, index)
 
-    visit(root, INVALID_SHAPE)
-    vertices: list[tuple[float, float, float]] = []
-    indices: list[int] = []
-    heights: list[float] = []
-    records = bytearray()
+    visit(root, -1)
+    records: list[dict[str, object]] = []
     for shape, parent in flattened:
-        first_vertex = len(vertices)
-        first_index = len(indices)
-        first_height = len(heights)
-        vertices.extend(shape.vertices)
-        indices.extend(shape.indices)
-        heights.extend(shape.heights)
-        records.extend(PHYSICS_SHAPE.pack(
-            int(shape.shape_type), parent, 0, 0,
-            first_vertex, len(shape.vertices),
-            first_index, len(shape.indices),
-            first_height, len(shape.heights),
-            shape.samples_per_side,
-            *shape.local_position,
-            *shape.local_rotation,
-            *shape.half_extents,
-            shape.radius,
-            shape.half_height,
-            *shape.height_field_offset,
-            *shape.height_field_scale,
-        ))
-
-    shape_offset = PHYSICS_HEADER.size
-    vertex_offset = shape_offset + len(records)
-    index_offset = vertex_offset + len(vertices) * VEC3.size
-    height_offset = index_offset + len(indices) * INDEX.size
-    header = PHYSICS_HEADER.pack(
-        PHYSICS_MAGIC, PHYSICS_VERSION, PHYSICS_HEADER.size,
-        len(flattened), PHYSICS_SHAPE.size, shape_offset,
-        len(vertices), len(indices), len(heights), 0,
-        vertex_offset, index_offset, height_offset,
-    )
-    return b"".join((
-        header,
-        bytes(records),
-        b"".join(VEC3.pack(*vertex) for vertex in vertices),
-        b"".join(INDEX.pack(index) for index in indices),
-        b"".join(HEIGHT.pack(value) for value in heights),
-    ))
+        records.append({
+            "type": int(shape.shape_type),
+            "parent": parent,
+            "position": shape.local_position,
+            "rotation": shape.local_rotation,
+            "half_extents": shape.half_extents,
+            "radius": shape.radius,
+            "half_height": shape.half_height,
+            "vertices": [
+                component for vertex in shape.vertices for component in vertex
+            ],
+            "indices": shape.indices,
+            "heights": shape.heights,
+            "samples_per_side": shape.samples_per_side,
+            "height_offset": shape.height_field_offset,
+            "height_scale": shape.height_field_scale,
+        })
+    return pack_record(GAME_SCHEMA, "physics", {"nodes": records})
 
 
 def physics_output_path(

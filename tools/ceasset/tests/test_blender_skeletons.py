@@ -25,17 +25,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "blender_addon"))
 
 from cengine_asset_exporter.skeletons import (  # noqa: E402
-    SKELETON_BONE,
-    SKELETON_HEADER,
-    SKELETON_MAGIC,
     armature_objects,
     skeleton_output_path,
     skeleton_payload,
     write_skeleton_asset,
 )
+from ceassetlib.game_schema import load_bundled_game
+from ceassetlib.wire import unpack_record
 
 
 ASSET_HEADER = struct.Struct("<4sHHI16sQ16sQQQ")
+GAME_SCHEMA = load_bundled_game()
 
 
 class FakeBone:
@@ -117,18 +117,14 @@ class BlenderSkeletonTests(unittest.TestCase):
 
         payload = skeleton_payload(Path("hero.blend"), armature)
 
-        header = SKELETON_HEADER.unpack_from(payload)
-        self.assertEqual(header[0], SKELETON_MAGIC)
-        self.assertEqual(header[3], 2)
-        self.assertEqual(header[4], SKELETON_HEADER.size)
-        root_row = SKELETON_BONE.unpack_from(payload, header[4])
-        child_row = SKELETON_BONE.unpack_from(payload, header[4] + SKELETON_BONE.size)
-        strings = payload[header[5] : header[5] + header[6]]
-        self.assertEqual(root_row[0], -1)
-        self.assertEqual(root_row[6], 1.0)
-        self.assertEqual(strings[root_row[1] : root_row[1] + root_row[2]], b"root")
-        self.assertEqual(child_row[0], 0)
-        self.assertEqual(strings[child_row[1] : child_row[1] + child_row[2]], b"spine")
+        decoded = unpack_record(GAME_SCHEMA, "skeleton", payload)
+        self.assertEqual(decoded["name"], "ARM_Hero")
+        self.assertEqual(len(decoded["bones"]), 2)
+        self.assertEqual(decoded["bones"][0]["parent"], -1)
+        self.assertEqual(decoded["bones"][0]["armature_from_bone"][3], 1.0)
+        self.assertEqual(decoded["bones"][0]["name"], "root")
+        self.assertEqual(decoded["bones"][1]["parent"], 0)
+        self.assertEqual(decoded["bones"][1]["name"], "spine")
 
     def test_write_skeleton_asset_writes_common_cskel(self) -> None:
         """TODO: Describe `test_write_skeleton_asset_writes_common_cskel`."""
@@ -146,11 +142,9 @@ class BlenderSkeletonTests(unittest.TestCase):
             self.assertEqual(header[3], 4)
 
             payload = data[header[7] : header[7] + header[8]]
-            skeleton = SKELETON_HEADER.unpack_from(payload)
-            bone = SKELETON_BONE.unpack_from(payload, skeleton[4])
-            strings = payload[skeleton[5] : skeleton[5] + skeleton[6]]
-            self.assertEqual(strings[skeleton[7] : skeleton[7] + skeleton[8]], b"ARM_Hero")
-            self.assertEqual(strings[bone[1] : bone[1] + bone[2]], b"root")
+            skeleton = unpack_record(GAME_SCHEMA, "skeleton", payload)
+            self.assertEqual(skeleton["name"], "ARM_Hero")
+            self.assertEqual(skeleton["bones"][0]["name"], "root")
 
 
 if __name__ == "__main__":

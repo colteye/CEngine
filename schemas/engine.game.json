@@ -7,18 +7,235 @@
   },
   "asset_types": [
     {"name": "texture", "extension": ".dds"},
-    {"name": "material", "extension": ".cmat"},
-    {"name": "mesh", "extension": ".cmesh"},
-    {"name": "skeleton", "extension": ".cskel"},
-    {"name": "animation", "extension": ".canim"},
-    {"name": "physics", "extension": ".cphys"},
-    {"name": "scene", "extension": ".cscene"},
-    {"name": "asset", "extension": ".casset"}
+    {"name": "material", "extension": ".cmat", "record": "material"},
+    {"name": "mesh", "extension": ".cmesh", "record": "mesh"},
+    {"name": "skeleton", "extension": ".cskel", "record": "skeleton"},
+    {"name": "animation", "extension": ".canim", "record": "animation"},
+    {"name": "physics", "extension": ".cphys", "record": "physics"},
+    {"name": "scene", "extension": ".cscene", "record": "scene"},
+    {"name": "asset", "extension": ".casset", "record": "casset"},
+    {"name": "particle", "extension": ".cparticle", "record": "particle"}
+  ],
+  "wire_records": [
+    {
+      "name": "reference",
+      "fields": [
+        {"name": "guid", "type": "guid"},
+        {"name": "type", "type": "u32", "min": 1, "max": 15},
+        {"name": "path", "type": "string", "max_size": 4096, "non_empty": true}
+      ]
+    },
+    {
+      "name": "material_texture",
+      "fields": [
+        {"name": "slot", "type": "u32", "values": [1, 2, 3]},
+        {"name": "asset", "type": "record", "record": "reference"}
+      ]
+    },
+    {
+      "name": "material",
+      "fields": [
+        {"name": "name", "type": "string", "max_size": 1024, "non_empty": true},
+        {"name": "shader", "type": "u32", "values": [1, 2]},
+        {"name": "render_mode", "type": "u32", "values": [0, 1, 2, 3, 4]},
+        {"name": "textures", "type": "list", "item": "material_texture", "max_count": 16},
+        {"name": "base_color", "type": "array", "item": "f32", "count": 4, "min": 0.0, "max": 1.0},
+        {"name": "metallic", "type": "f32", "min": 0.0, "max": 1.0},
+        {"name": "roughness", "type": "f32", "min": 0.0, "max": 1.0},
+        {"name": "ao", "type": "f32", "min": 0.0, "max": 1.0},
+        {"name": "alpha_cutoff", "type": "f32", "min": 0.0, "max": 1.0}
+      ]
+    },
+    {
+      "name": "mesh_vertex",
+      "fields": [
+        {"name": "position", "type": "array", "item": "f32", "count": 3},
+        {"name": "normal", "type": "array", "item": "f32", "count": 3},
+        {"name": "uv", "type": "array", "item": "f32", "count": 2},
+        {"name": "lightmap_uv", "type": "array", "item": "f32", "count": 2},
+        {"name": "joints", "type": "array", "item": "u16", "count": 4},
+        {"name": "weights", "type": "array", "item": "f32", "count": 4, "min": 0.0, "max": 1.0}
+      ]
+    },
+    {
+      "name": "mesh_lod",
+      "fields": [
+        {"name": "screen_size", "type": "f32", "min": 0.0, "max": 1.0},
+        {"name": "vertices", "type": "list", "item": "mesh_vertex", "max_count": 4194304},
+        {"name": "indices", "type": "list", "item": "u32", "max_count": 12582912}
+      ]
+    },
+    {
+      "name": "mesh",
+      "fields": [
+        {"name": "flags", "type": "u32", "mask": 3},
+        {"name": "bounds_min", "type": "array", "item": "f32", "count": 3},
+        {"name": "bounds_max", "type": "array", "item": "f32", "count": 3},
+        {"name": "lods", "type": "list", "item": "mesh_lod", "min_count": 1, "max_count": 8}
+      ]
+    },
+    {
+      "name": "skeleton_bone",
+      "fields": [
+        {"name": "name", "type": "string", "max_size": 1024, "non_empty": true},
+        {"name": "parent", "type": "i32"},
+        {"name": "armature_from_bone", "type": "array", "item": "f32", "count": 16}
+      ]
+    },
+    {
+      "name": "skeleton",
+      "fields": [
+        {"name": "name", "type": "string", "max_size": 1024, "non_empty": true},
+        {"name": "bones", "type": "list", "item": "skeleton_bone", "max_count": 65536}
+      ]
+    },
+    {
+      "name": "animation_key",
+      "fields": [
+        {"name": "frame", "type": "f32"},
+        {"name": "value", "type": "f32"},
+        {"name": "interpolation", "type": "u32", "values": [1, 2, 3]}
+      ]
+    },
+    {
+      "name": "animation_track",
+      "fields": [
+        {"name": "path", "type": "string", "max_size": 4096, "non_empty": true},
+        {"name": "component", "type": "i32", "min": 0, "max": 3},
+        {"name": "keys", "type": "list", "item": "animation_key", "max_count": 1048576}
+      ]
+    },
+    {
+      "name": "animation",
+      "fields": [
+        {"name": "name", "type": "string", "max_size": 1024, "non_empty": true},
+        {"name": "skeleton", "type": "record", "record": "reference"},
+        {"name": "fps", "type": "f32", "min": 0.001},
+        {"name": "start", "type": "f32"},
+        {"name": "end", "type": "f32"},
+        {"name": "tracks", "type": "list", "item": "animation_track", "max_count": 1048576}
+      ]
+    },
+    {
+      "name": "physics_node",
+      "fields": [
+        {"name": "type", "type": "u32", "min": 0, "max": 8},
+        {"name": "parent", "type": "i32"},
+        {"name": "position", "type": "array", "item": "f32", "count": 3},
+        {"name": "rotation", "type": "array", "item": "f32", "count": 4},
+        {"name": "half_extents", "type": "array", "item": "f32", "count": 3},
+        {"name": "radius", "type": "f32"},
+        {"name": "half_height", "type": "f32"},
+        {"name": "vertices", "type": "list", "item": "f32", "max_count": 12582912},
+        {"name": "indices", "type": "list", "item": "u32", "max_count": 12582912},
+        {"name": "heights", "type": "list", "item": "f32", "max_count": 4194304},
+        {"name": "samples_per_side", "type": "u32"},
+        {"name": "height_offset", "type": "array", "item": "f32", "count": 3},
+        {"name": "height_scale", "type": "array", "item": "f32", "count": 3}
+      ]
+    },
+    {
+      "name": "physics",
+      "fields": [
+        {"name": "nodes", "type": "list", "item": "physics_node", "min_count": 1, "max_count": 1024}
+      ]
+    },
+    {
+      "name": "casset_object",
+      "fields": [
+        {"name": "name", "type": "string", "max_size": 1024, "non_empty": true},
+        {"name": "role", "type": "u32"},
+        {"name": "type", "type": "u32"},
+        {"name": "parent", "type": "i32"},
+        {"name": "first_component", "type": "u32"},
+        {"name": "component_count", "type": "u32"},
+        {"name": "world_from_local", "type": "array", "item": "f32", "count": 16}
+      ]
+    },
+    {
+      "name": "casset_component",
+      "fields": [
+        {"name": "asset", "type": "record", "record": "reference"}
+      ]
+    },
+    {
+      "name": "casset",
+      "fields": [
+        {"name": "name", "type": "string", "max_size": 1024, "non_empty": true},
+        {"name": "objects", "type": "list", "item": "casset_object", "max_count": 1048576},
+        {"name": "components", "type": "list", "item": "casset_component", "max_count": 4194304}
+      ]
+    },
+    {
+      "name": "scene_settings",
+      "fields": [
+        {"name": "ambient_color", "type": "array", "item": "f32", "count": 3},
+        {"name": "exposure", "type": "f32", "min": 0.0},
+        {"name": "gravity", "type": "array", "item": "f32", "count": 3},
+        {"name": "active_entity", "type": "u32"}
+      ]
+    },
+    {
+      "name": "scene_entity",
+      "fields": [
+        {"name": "class_name", "type": "string", "max_size": 1024, "non_empty": true},
+        {"name": "name", "type": "string", "max_size": 1024, "non_empty": true},
+        {"name": "flags", "type": "u32"}
+      ]
+    },
+    {
+      "name": "scene_class",
+      "fields": [
+        {"name": "class_name", "type": "string", "max_size": 1024, "non_empty": true},
+        {"name": "version", "type": "u16", "value": 1},
+        {"name": "stride", "type": "u32", "min": 1},
+        {"name": "entities", "type": "list", "item": "u32", "max_count": 1048576},
+        {"name": "records", "type": "bytes", "max_size": 268435456},
+        {"name": "assets", "type": "list", "item": "u32", "max_count": 4194304}
+      ]
+    },
+    {
+      "name": "scene_connection",
+      "fields": [
+        {"name": "source", "type": "u32"},
+        {"name": "target", "type": "u32"},
+        {"name": "event", "type": "string", "max_size": 1024, "non_empty": true},
+        {"name": "action", "type": "string", "max_size": 1024, "non_empty": true},
+        {"name": "delay", "type": "f32", "min": 0.0}
+      ]
+    },
+    {
+      "name": "scene",
+      "fields": [
+        {"name": "settings", "type": "record", "record": "scene_settings"},
+        {"name": "assets", "type": "list", "item": "reference", "max_count": 4194304},
+        {"name": "entities", "type": "list", "item": "scene_entity", "max_count": 1048576},
+        {"name": "classes", "type": "list", "item": "scene_class", "max_count": 65536},
+        {"name": "connections", "type": "list", "item": "scene_connection", "max_count": 4194304}
+      ]
+    },
+    {
+      "name": "particle",
+      "fields": [
+        {"name": "name", "type": "string", "max_size": 1024, "non_empty": true},
+        {"name": "textures", "type": "list", "item": "reference", "max_count": 1},
+        {"name": "flags", "type": "u32", "mask": 3},
+        {"name": "blend_mode", "type": "u32", "values": [0, 1, 2]},
+        {"name": "rate", "type": "f32", "min": 0.0},
+        {"name": "lifetime", "type": "array", "item": "f32", "count": 2, "min": 0.0},
+        {"name": "speed", "type": "array", "item": "f32", "count": 2},
+        {"name": "spread", "type": "f32", "min": 0.0, "max": 3.1415927},
+        {"name": "gravity", "type": "array", "item": "f32", "count": 3},
+        {"name": "size", "type": "array", "item": "f32", "count": 2, "min": 0.0},
+        {"name": "start_color", "type": "array", "item": "f32", "count": 4, "min": 0.0, "max": 1.0},
+        {"name": "end_color", "type": "array", "item": "f32", "count": 4, "min": 0.0, "max": 1.0}
+      ]
+    }
   ],
   "entities": [
     {
       "classname": "prop",
-      "version": 2,
+      "version": 1,
       "fields": [
         {"name": "transform", "type": "transform"},
         {"name": "mesh", "type": "asset", "asset_type": "mesh"},

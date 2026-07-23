@@ -18,7 +18,7 @@
 
 namespace CEngine::Assets
 {
-class AssetStore;
+class Store;
 }
 namespace CEngine::Input
 {
@@ -42,7 +42,7 @@ namespace CEngine
  */
 struct Context
 {
-    Assets::AssetStore *assets = nullptr;
+    Assets::Store *assets = nullptr;
     Scene::Scene *scene = nullptr;
     Renderer::RenderSystem *rendering = nullptr;
     PhysicsSystem *physics = nullptr;

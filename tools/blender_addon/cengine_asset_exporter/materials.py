@@ -15,7 +15,6 @@ Author:
 
 from __future__ import annotations
 
-import struct
 import time
 import re
 from dataclasses import dataclass
@@ -26,9 +25,11 @@ from typing import Callable, Iterable
 from ceassetlib.assetfile import make_asset_desc, write_binary_asset
 from ceassetlib.collection_export import clean_asset_name
 from ceassetlib.formats import AssetType
+from ceassetlib.game_schema import load_bundled_game
 from ceassetlib.ids import guid_from_stable_name, hash_file
 from ceassetlib.paths import generic_path, output_dir_for_source
-from ceassetlib.texture import normalize_pillow_dds_format
+from ceassetlib.texture import write_image_to_dds
+from ceassetlib.wire import pack_record
 
 
 MATERIAL_TEXTURE_SLOTS = {
@@ -41,10 +42,7 @@ MATERIAL_TEXTURE_SLOTS = {
     "occlusion": "ao",
 }
 
-MATERIAL_HEADER = struct.Struct("<4sHHIIIIIIIIffffffff")
-MATERIAL_TEXTURE = struct.Struct("<III")
-MATERIAL_MAGIC = b"CEMA"
-MATERIAL_VERSION = 4
+GAME_SCHEMA = load_bundled_game()
 MATERIAL_SHADER_IDS = {
     "pbr": 1,
     "pbr_standard": 1,
@@ -404,15 +402,10 @@ def write_mra_texture(bindings: list[TextureBinding], output: Path) -> None:
             channel(ao, 255),
             alpha,
         ))
-        output.parent.mkdir(parents=True, exist_ok=True)
-        temporary = output.with_name(output.name + ".tmp")
         try:
-            packed.save(temporary, format="DDS", pixel_format=normalize_pillow_dds_format("DXT5"))
-            temporary.replace(output)
+            write_image_to_dds(packed, output, "DXT5")
         finally:
             packed.close()
-            if temporary.exists():
-                temporary.unlink()
     finally:
         for image in channels:
             image.close()
@@ -454,16 +447,10 @@ def write_bump_normal_texture(binding: TextureBinding, output: Path, dds_format:
             alpha = Image.new("L", height.size, 255)
             try:
                 normal = Image.merge("RGBA", (red, green, blue, alpha))
-                output.parent.mkdir(parents=True, exist_ok=True)
-                temporary = output.with_name(output.name + ".tmp")
                 try:
-                    normal.save(temporary, format="DDS",
-                                pixel_format=normalize_pillow_dds_format(dds_format))
-                    temporary.replace(output)
+                    write_image_to_dds(normal, output, dds_format)
                 finally:
                     normal.close()
-                    if temporary.exists():
-                        temporary.unlink()
             finally:
                 red.close()
                 green.close()
@@ -511,14 +498,7 @@ def write_base_alpha_texture(
                     opacity_alpha.close()
                     opacity_alpha = resized
                 packed.putalpha(opacity_alpha)
-                output.parent.mkdir(parents=True, exist_ok=True)
-                temporary = output.with_name(output.name + ".tmp")
-                try:
-                    packed.save(temporary, format="DDS", pixel_format=normalize_pillow_dds_format(dds_format))
-                    temporary.replace(output)
-                finally:
-                    if temporary.exists():
-                        temporary.unlink()
+                write_image_to_dds(packed, output, dds_format)
             finally:
                 packed.close()
         finally:
@@ -834,51 +814,32 @@ def material_payload(
     del source
     factors = factors if factors is not None else material_factors(material, bindings)
     surface = material_surface(material, shader_id)
-    strings = bytearray()
-
-    def append_string(text: str) -> tuple[int, int]:
-        """TODO: Describe `append_string`.
-
-        Args:
-            text: TODO: Describe this parameter.
-
-        Returns:
-            TODO: Describe the produced value.
-        """
-        encoded = text.encode("utf-8")
-        offset = len(strings)
-        strings.extend(encoded)
-        return offset, len(encoded)
-
-    name_offset, name_size = append_string(material.name)
-    texture_rows = bytearray()
+    textures: list[dict[str, object]] = []
     for binding in bindings:
         slot_id = MATERIAL_TEXTURE_SLOT_IDS.get(binding.slot)
-        if slot_id is None:
+        if slot_id not in (1, 2, 3):
             continue
-        path_offset, path_size = append_string(asset_path(binding.output))
-        texture_rows.extend(MATERIAL_TEXTURE.pack(slot_id, path_offset, path_size))
+        path = asset_path(binding.output)
+        textures.append({
+            "slot": slot_id,
+            "asset": {
+                "guid": guid_from_stable_name(path),
+                "type": int(AssetType.TEXTURE),
+                "path": path,
+            },
+        })
 
-    string_table_offset = MATERIAL_HEADER.size + len(texture_rows)
-    header = MATERIAL_HEADER.pack(
-        MATERIAL_MAGIC,
-        MATERIAL_VERSION,
-        MATERIAL_HEADER.size,
-        shader_id,
-        surface.render_mode,
-        len(texture_rows) // MATERIAL_TEXTURE.size,
-        MATERIAL_HEADER.size,
-        string_table_offset,
-        len(strings),
-        name_offset,
-        name_size,
-        *factors.base_color,
-        factors.metallic,
-        factors.roughness,
-        factors.ao,
-        surface.alpha_cutoff,
-    )
-    return bytes(header + texture_rows + strings)
+    return pack_record(GAME_SCHEMA, "material", {
+        "name": material.name,
+        "shader": shader_id,
+        "render_mode": surface.render_mode,
+        "textures": textures,
+        "base_color": factors.base_color,
+        "metallic": factors.metallic,
+        "roughness": factors.roughness,
+        "ao": factors.ao,
+        "alpha_cutoff": surface.alpha_cutoff,
+    })
 
 
 def write_material_asset(

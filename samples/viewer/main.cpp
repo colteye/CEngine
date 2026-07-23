@@ -13,8 +13,8 @@
  * @author Erik Coltey
  */
 
-#include "assets/asset_store.h"
-#include "assets/scene_loader.h"
+#include "assets/store.h"
+#include "assets/scene_asset.h"
 #include "context.h"
 #include "entity/entity_factory.h"
 #include "entity/player_entity.h"
@@ -389,7 +389,7 @@ void EndTuningFrame()
 int RunScene(GLFWwindow *window, const std::filesystem::path &scene_path, const std::filesystem::path &project_root,
              Renderer::RenderSystem &renderer)
 {
-    CEngine::Assets::AssetStore assets(project_root);
+    CEngine::Assets::Store assets(project_root);
     CEngine::Input::InputSystem input(std::make_unique<CEngine::Input::GlfwInputBackend>(window));
     const Viewer::Actions actions = Viewer::RegisterActions(input);
     CEngine::Entities::EntityFactory entity_factory;

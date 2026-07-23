@@ -16,7 +16,6 @@ Author:
 from __future__ import annotations
 
 import re
-import struct
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,8 +23,10 @@ from typing import Callable, Iterable, Protocol
 
 from .assetfile import make_asset_desc, write_binary_asset
 from .formats import AssetType
-from .ids import hash_file
+from .game_schema import load_bundled_game
+from .ids import guid_from_stable_name, hash_file
 from .paths import generic_path, output_dir_for_source, stored_path
+from .wire import pack_record
 
 
 COLLECTION_PREFIXES = {
@@ -55,22 +56,14 @@ OBJECT_ROLE_PREFIXES = (
     ("OCC_", "occluder"),
 )
 
-CASSET_HEADER = struct.Struct("<4sHHIIIIIIIIIII")
-CASSET_OBJECT = struct.Struct("<IIIIIIII16f")
-CASSET_COMPONENT = struct.Struct("<III")
-CASSET_MAGIC = b"CECA"
-CASSET_VERSION = 2
-COMPOSITION_TYPE_IDS = {
-    AssetType.PREFAB: 1,
-    AssetType.SCENE: 2,
-}
-COMPONENT_KIND_IDS = {
-    "mesh": 1,
-    "materials": 2,
-    "material": 2,
-    "skeleton": 3,
-    "animations": 4,
-    "animation": 4,
+COMPONENT_TYPES = {
+    "mesh": AssetType.MESH,
+    "materials": AssetType.MATERIAL,
+    "material": AssetType.MATERIAL,
+    "skeleton": AssetType.SKELETON,
+    "animations": AssetType.ANIMATION,
+    "animation": AssetType.ANIMATION,
+    "particle": AssetType.PARTICLE,
 }
 OBJECT_ROLE_IDS = {
     "object": 0,
@@ -95,6 +88,8 @@ OBJECT_TYPE_IDS = {
     "LIGHT": 4,
     "CAMERA": 5,
 }
+
+GAME_SCHEMA = load_bundled_game()
 
 
 class BlenderObjectLike(Protocol):
@@ -475,78 +470,49 @@ def collection_payload(
         TODO: Describe the produced value.
     """
     object_list = sorted(list(objects), key=lambda obj: obj.name)
+    del source
     object_names = {obj.name for obj in object_list}
-    strings = bytearray()
-
-    def append_string(text: str) -> tuple[int, int]:
-        """TODO: Describe `append_string`.
-
-        Args:
-            text: TODO: Describe this parameter.
-
-        Returns:
-            TODO: Describe the produced value.
-        """
-        encoded = text.encode("utf-8")
-        offset = len(strings)
-        strings.extend(encoded)
-        return offset, len(encoded)
-
-    source_offset, source_size = append_string(generic_path(source))
-    collection_offset, collection_size = append_string(spec.collection_name)
-    object_rows = bytearray()
-    component_rows = bytearray()
+    object_indices = {obj.name: index for index, obj in enumerate(object_list)}
+    objects_out: list[dict[str, object]] = []
+    components: list[dict[str, object]] = []
 
     for obj in object_list:
         assets = object_assets(obj)
-        first_component = len(component_rows) // CASSET_COMPONENT.size
+        first_component = len(components)
         for key in sorted(assets):
-            kind = COMPONENT_KIND_IDS.get(key, 0)
+            asset_type = COMPONENT_TYPES.get(key, AssetType.UNKNOWN)
             values = assets[key]
             paths = values if isinstance(values, list) else [values]
             for path in paths:
-                if not isinstance(path, str):
+                if not isinstance(path, str) or asset_type == AssetType.UNKNOWN:
                     continue
-                path_offset, path_size = append_string(bundle_relative_path(path, bundle_dir))
-                component_rows.extend(CASSET_COMPONENT.pack(kind, path_offset, path_size))
+                stored = bundle_relative_path(path, bundle_dir)
+                components.append({
+                    "asset": {
+                        "guid": guid_from_stable_name(stored),
+                        "type": int(asset_type),
+                        "path": stored,
+                    },
+                })
 
-        component_count = len(component_rows) // CASSET_COMPONENT.size - first_component
-        name_offset, name_size = append_string(obj.name)
-        parent_offset, parent_size = append_string(parent_name(obj, object_names))
+        component_count = len(components) - first_component
         role = object_role(obj)
-        object_rows.extend(
-            CASSET_OBJECT.pack(
-                name_offset,
-                name_size,
-                OBJECT_ROLE_IDS.get(role, 0),
-                OBJECT_TYPE_IDS.get(obj.type, 0),
-                parent_offset,
-                parent_size,
-                first_component,
-                component_count,
-                *matrix_rows(obj),
-            )
-        )
+        parent = parent_name(obj, object_names)
+        objects_out.append({
+            "name": obj.name,
+            "role": OBJECT_ROLE_IDS.get(role, 0),
+            "type": OBJECT_TYPE_IDS.get(obj.type, 0),
+            "parent": object_indices.get(parent, -1),
+            "first_component": first_component,
+            "component_count": component_count,
+            "world_from_local": matrix_rows(obj),
+        })
 
-    component_table_offset = CASSET_HEADER.size + len(object_rows)
-    string_table_offset = component_table_offset + len(component_rows)
-    header = CASSET_HEADER.pack(
-        CASSET_MAGIC,
-        CASSET_VERSION,
-        CASSET_HEADER.size,
-        COMPOSITION_TYPE_IDS[spec.asset_type],
-        len(object_list),
-        CASSET_HEADER.size,
-        len(component_rows) // CASSET_COMPONENT.size,
-        component_table_offset,
-        string_table_offset,
-        len(strings),
-        source_offset,
-        source_size,
-        collection_offset,
-        collection_size,
-    )
-    return bytes(header + object_rows + component_rows + strings)
+    return pack_record(GAME_SCHEMA, "casset", {
+        "name": spec.collection_name,
+        "objects": objects_out,
+        "components": components,
+    })
 
 
 def write_collection_asset(

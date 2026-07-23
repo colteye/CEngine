@@ -13,8 +13,8 @@
  * @author Erik Coltey
  */
 
-#include "assets/asset_store.h"
-#include "assets/scene_loader.h"
+#include "assets/store.h"
+#include "assets/scene_asset.h"
 #include "context.h"
 #include "entity/entity_factory.h"
 #include "entity/fog_entity.h"
@@ -239,7 +239,7 @@ bool JoltQueriesAndContactsWork()
  */
 bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::filesystem::path &project_root)
 {
-    CEngine::Assets::AssetStore assets(project_root);
+    CEngine::Assets::Store assets(project_root);
     CEngine::Input::InputSystem input;
     const Viewer::Actions actions = Viewer::RegisterActions(input);
     CEngine::Entities::EntityFactory factory;
@@ -415,8 +415,9 @@ int main(int argc, char **argv)
     }
     CEngine::Renderer::RenderSystem renderer;
     auto mesh = std::make_shared<CEngine::Renderer::Mesh>();
-    mesh->vertices.resize(3);
-    mesh->indices = {0, 1, 2};
+    mesh->lods.resize(1);
+    mesh->lods.front().vertices.resize(3);
+    mesh->lods.front().indices = {0, 1, 2};
     mesh->local_bounds = {{-1.0f, -1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, true};
     mesh->name = "HandleTest";
     auto material = std::make_shared<CEngine::Renderer::Material>();

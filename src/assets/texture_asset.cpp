@@ -8,16 +8,15 @@
 //                      |___/
 
 /**
- * @file src/assets/texture_loader.cpp
- * @brief TODO: Describe the purpose of this file.
+ * @file src/assets/texture_asset.cpp
+ * @brief Loads a DDS texture asset into its renderer value.
  * @author Erik Coltey
  */
 
-#include "assets/texture_loader.h"
+#include "assets/texture_asset.h"
 
-#include "assets/asset_error.h"
-#include "assets/asset_io.h"
-#include "assets/binary.h"
+#include "assets/reader.h"
+#include "logging/logger.h"
 
 #include <algorithm>
 #include <array>
@@ -61,9 +60,10 @@ constexpr std::size_t DdsHeaderSize = 128;
  * @param value TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-bool ReadU32At(ByteView bytes, std::size_t offset, std::uint32_t &value)
+bool ReadU32At(std::span<const std::byte> bytes, std::size_t offset, std::uint32_t &value)
 {
-    return ReadU32LE(bytes, offset, value);
+    Reader reader(bytes.subspan(offset));
+    return reader.U32(value);
 }
 
 /**
@@ -170,7 +170,8 @@ bool FlipDxt(Renderer::TextureMip &mip, Renderer::TextureFormat format)
 {
     if (mip.height > 4 && mip.height % 4 != 0)
     {
-        return AssetError("vertically flipped DDS height must be a multiple of four");
+        Logging::Logger::Get().Error("assets", "vertically flipped DDS height must be a multiple of four");
+        return false;
     }
 
     const std::uint32_t block_size = format == Renderer::TextureFormat::Dxt1 ? 8u : 16u;
@@ -231,25 +232,27 @@ void FlipRgbe(Renderer::TextureMip &mip)
  */
 bool LoadTextureAsset(const std::filesystem::path &path, Renderer::Texture &texture, bool flip_vertical)
 {
-    std::vector<std::uint8_t> bytes;
-    if (!LoadFileBytes(path, bytes))
+    std::vector<std::byte> bytes;
+    if (!ReadFile(path, bytes))
     {
         return false;
     }
     if (bytes.size() < DdsHeaderSize)
     {
-        return AssetError("texture is smaller than a DDS header");
+        Logging::Logger::Get().Error("assets", "texture is smaller than a DDS header");
+        return false;
     }
 
-    const ByteView view{bytes.data(), bytes.size()};
-    std::size_t offset = 0;
+    const std::span<const std::byte> view = bytes;
+    Reader reader(view);
     std::uint32_t magic = 0;
     std::uint32_t header_size = 0;
     std::uint32_t pixel_header_size = 0;
-    if (!ReadU32LE(view, offset, magic) || !ReadU32LE(view, offset, header_size) ||
+    if (!reader.U32(magic) || !reader.U32(header_size) ||
         !ReadU32At(view, 76, pixel_header_size) || magic != DdsMagic || header_size != 124 || pixel_header_size != 32)
     {
-        return AssetError("DDS header signature or size is invalid");
+        Logging::Logger::Get().Error("assets", "DDS header signature or size is invalid");
+        return false;
     }
 
     std::uint32_t height = 0;
@@ -261,11 +264,13 @@ bool LoadTextureAsset(const std::filesystem::path &path, Renderer::Texture &text
     if (!ReadU32At(view, 12, height) || !ReadU32At(view, 16, width) || !ReadU32At(view, 24, depth) ||
         !ReadU32At(view, 28, declared_mips) || !ReadU32At(view, 84, four_cc) || !ReadU32At(view, 112, caps2))
     {
-        return AssetError("DDS header is truncated");
+        Logging::Logger::Get().Error("assets", "DDS header is truncated");
+        return false;
     }
     if (width == 0 || height == 0 || width > 16384 || height > 16384 || depth > 1 || caps2 != 0)
     {
-        return AssetError("only bounded 2D DDS textures are supported");
+        Logging::Logger::Get().Error("assets", "only bounded 2D DDS textures are supported");
+        return false;
     }
 
     std::uint32_t max_mips = 1;
@@ -276,7 +281,8 @@ bool LoadTextureAsset(const std::filesystem::path &path, Renderer::Texture &text
     const std::uint32_t mip_count = declared_mips == 0 ? 1 : declared_mips;
     if (mip_count > max_mips)
     {
-        return AssetError("DDS mip count exceeds its complete mip chain");
+        Logging::Logger::Get().Error("assets", "DDS mip count exceeds its complete mip chain");
+        return false;
     }
 
     Renderer::Texture loaded;
@@ -296,13 +302,15 @@ bool LoadTextureAsset(const std::filesystem::path &path, Renderer::Texture &text
         loaded.format = Renderer::TextureFormat::Dxt5;
         block_size = 16;
     }
-    else if (four_cc == Rgbe && mip_count == 1)
+    else if (four_cc == Rgbe)
     {
         loaded.format = Renderer::TextureFormat::Rgbe8;
     }
     else
     {
-        return AssetError("only DXT1, DXT3, DXT5, and single-level RGBExp32 DDS textures are supported");
+        Logging::Logger::Get().Error(
+            "assets", "only DXT1, DXT3, DXT5, and RGBExp32 DDS textures are supported");
+        return false;
     }
 
     std::size_t payload_offset = DdsHeaderSize;
@@ -316,15 +324,17 @@ bool LoadTextureAsset(const std::filesystem::path &path, Renderer::Texture &text
                             : static_cast<std::uint64_t>((mip_width + 3u) / 4u) * ((mip_height + 3u) / 4u) * block_size;
         if (data_size > bytes.size() - std::min(payload_offset, bytes.size()))
         {
-            return AssetError("DDS payload is truncated");
+            Logging::Logger::Get().Error("assets", "DDS payload is truncated");
+            return false;
         }
 
         Renderer::TextureMip mip;
         mip.width = mip_width;
         mip.height = mip_height;
-        mip.data.assign(bytes.begin() + static_cast<std::ptrdiff_t>(payload_offset),
-                        bytes.begin() +
-                            static_cast<std::ptrdiff_t>(payload_offset + static_cast<std::size_t>(data_size)));
+        const auto source = view.subspan(payload_offset, static_cast<std::size_t>(data_size));
+        mip.data.resize(source.size());
+        std::transform(source.begin(), source.end(), mip.data.begin(),
+                       [](std::byte value) { return std::to_integer<std::uint8_t>(value); });
         if (flip_vertical)
         {
             if (loaded.format == Renderer::TextureFormat::Rgbe8)

@@ -25,19 +25,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "blender_addon"))
 
 from cengine_asset_exporter.animations import (  # noqa: E402
-    ANIMATION_HEADER,
-    ANIMATION_KEYFRAME,
-    ANIMATION_MAGIC,
-    ANIMATION_TRACK,
     action_targets,
     animation_output_path,
     animation_payload,
     armature_actions,
     write_animation_asset,
 )
+from ceassetlib.game_schema import load_bundled_game
+from ceassetlib.wire import unpack_record
 
 
 ASSET_HEADER = struct.Struct("<4sHHI16sQ16sQQQ")
+GAME_SCHEMA = load_bundled_game()
 
 
 class FakeKeyframe:
@@ -175,20 +174,21 @@ class BlenderAnimationTests(unittest.TestCase):
         action = FakeAction("Walk")
         armature = FakeObject("ARM_Hero", "ARMATURE", FakeAnimationData(action))
 
-        payload = animation_payload(Path("hero.blend"), armature, action, 24.0)
+        payload = animation_payload(
+            Path("hero.blend"), armature, action, 24.0,
+            "assets/compiled/hero/skeletons/ARM_Hero.cskel",
+        )
 
-        header = ANIMATION_HEADER.unpack_from(payload)
-        self.assertEqual(header[0], ANIMATION_MAGIC)
-        self.assertEqual(header[3], 24.0)
-        self.assertEqual(header[4], 1.0)
-        self.assertEqual(header[6], 1)
-        track = ANIMATION_TRACK.unpack_from(payload, header[7])
-        keyframe = ANIMATION_KEYFRAME.unpack_from(payload, header[8] + ANIMATION_KEYFRAME.size)
-        strings = payload[header[9] : header[9] + header[10]]
-        self.assertEqual(strings[header[13] : header[13] + header[14]], b"Walk")
-        self.assertEqual(strings[header[15] : header[15] + header[16]], b"ARM_Hero")
-        self.assertEqual(strings[track[0] : track[0] + track[1]], b'pose.bones["root"].location')
-        self.assertEqual(keyframe[2], 2)
+        decoded = unpack_record(GAME_SCHEMA, "animation", payload)
+        self.assertEqual(decoded["fps"], 24.0)
+        self.assertEqual(decoded["start"], 1.0)
+        self.assertEqual(decoded["name"], "Walk")
+        self.assertEqual(decoded["skeleton"]["path"],
+                         "assets/compiled/hero/skeletons/ARM_Hero.cskel")
+        self.assertEqual(len(decoded["tracks"]), 1)
+        self.assertEqual(decoded["tracks"][0]["path"],
+                         'pose.bones["root"].location')
+        self.assertEqual(decoded["tracks"][0]["keys"][1]["interpolation"], 2)
 
     def test_write_animation_asset_writes_common_canim(self) -> None:
         """TODO: Describe `test_write_animation_asset_writes_common_canim`."""
@@ -214,9 +214,8 @@ class BlenderAnimationTests(unittest.TestCase):
             self.assertEqual(header[3], 5)
 
             payload = data[header[7] : header[7] + header[8]]
-            animation = ANIMATION_HEADER.unpack_from(payload)
-            strings = payload[animation[9] : animation[9] + animation[10]]
-            self.assertEqual(strings[animation[13] : animation[13] + animation[14]], b"Walk")
+            animation = unpack_record(GAME_SCHEMA, "animation", payload)
+            self.assertEqual(animation["name"], "Walk")
 
 
 if __name__ == "__main__":

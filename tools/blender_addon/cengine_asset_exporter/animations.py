@@ -15,7 +15,6 @@ Author:
 
 from __future__ import annotations
 
-import struct
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,15 +23,13 @@ from typing import Callable, Iterable
 from ceassetlib.assetfile import make_asset_desc, write_binary_asset
 from ceassetlib.collection_export import clean_asset_name
 from ceassetlib.formats import AssetType
-from ceassetlib.ids import hash_file
+from ceassetlib.game_schema import load_bundled_game
+from ceassetlib.ids import guid_from_stable_name, hash_file
 from ceassetlib.paths import generic_path, output_dir_for_source
+from ceassetlib.wire import pack_record
 
 
-ANIMATION_HEADER = struct.Struct("<4sHHfffIIIIIIIIIII")
-ANIMATION_TRACK = struct.Struct("<IIiII")
-ANIMATION_KEYFRAME = struct.Struct("<ffI")
-ANIMATION_MAGIC = b"CEAN"
-ANIMATION_VERSION = 1
+GAME_SCHEMA = load_bundled_game()
 INTERPOLATION_IDS = {
     "CONSTANT": 1,
     "LINEAR": 2,
@@ -155,23 +152,13 @@ def keyframe_record(keyframe: object) -> tuple[float, float, int]:
     return (float(co[0]), float(co[1]), INTERPOLATION_IDS.get(interpolation, 0))
 
 
-def append_string(strings: bytearray, text: str) -> tuple[int, int]:
-    """TODO: Describe `append_string`.
-
-    Args:
-        strings: TODO: Describe this parameter.
-        text: TODO: Describe this parameter.
-
-    Returns:
-        TODO: Describe the produced value.
-    """
-    encoded = text.encode("utf-8")
-    offset = len(strings)
-    strings.extend(encoded)
-    return offset, len(encoded)
-
-
-def animation_payload(source: Path, armature: object, action: object, fps: float) -> bytes:
+def animation_payload(
+    source: Path,
+    armature: object,
+    action: object,
+    fps: float,
+    skeleton_path: str,
+) -> bytes:
     """TODO: Describe `animation_payload`.
 
     Args:
@@ -184,55 +171,34 @@ def animation_payload(source: Path, armature: object, action: object, fps: float
         TODO: Describe the produced value.
     """
     start, end = frame_range(action)
-    strings = bytearray()
-    source_offset, source_size = append_string(strings, generic_path(source))
-    name_offset, name_size = append_string(strings, action.name)
-    armature_offset, armature_size = append_string(strings, armature.name)
-
-    track_rows = bytearray()
-    keyframe_rows = bytearray()
+    del source, armature
+    tracks: list[dict[str, object]] = []
     fcurves = sorted(
         getattr(action, "fcurves", ()),
         key=lambda item: (str(getattr(item, "data_path", "")), int(getattr(item, "array_index", 0))),
     )
     for fcurve in fcurves:
-        data_path_offset, data_path_size = append_string(strings, str(getattr(fcurve, "data_path", "")))
-        keyframe_offset = len(keyframe_rows) // ANIMATION_KEYFRAME.size
         keyframes = [keyframe_record(keyframe) for keyframe in getattr(fcurve, "keyframe_points", ())]
-        for keyframe in keyframes:
-            keyframe_rows.extend(ANIMATION_KEYFRAME.pack(*keyframe))
-        track_rows.extend(
-            ANIMATION_TRACK.pack(
-                data_path_offset,
-                data_path_size,
-                int(getattr(fcurve, "array_index", 0)),
-                keyframe_offset,
-                len(keyframes),
-            )
-        )
-
-    keyframe_table_offset = ANIMATION_HEADER.size + len(track_rows)
-    string_table_offset = keyframe_table_offset + len(keyframe_rows)
-    header = ANIMATION_HEADER.pack(
-        ANIMATION_MAGIC,
-        ANIMATION_VERSION,
-        ANIMATION_HEADER.size,
-        float(fps),
-        start,
-        end,
-        len(fcurves),
-        ANIMATION_HEADER.size,
-        keyframe_table_offset,
-        string_table_offset,
-        len(strings),
-        source_offset,
-        source_size,
-        name_offset,
-        name_size,
-        armature_offset,
-        armature_size,
-    )
-    return bytes(header + track_rows + keyframe_rows + strings)
+        tracks.append({
+            "path": str(getattr(fcurve, "data_path", "")),
+            "component": int(getattr(fcurve, "array_index", 0)),
+            "keys": [
+                {"frame": frame, "value": value, "interpolation": interpolation}
+                for frame, value, interpolation in keyframes
+            ],
+        })
+    return pack_record(GAME_SCHEMA, "animation", {
+        "name": action.name,
+        "skeleton": {
+            "guid": guid_from_stable_name(skeleton_path),
+            "type": int(AssetType.SKELETON),
+            "path": skeleton_path,
+        },
+        "fps": float(fps),
+        "start": start,
+        "end": end,
+        "tracks": tracks,
+    })
 
 
 def write_animation_asset(
@@ -264,7 +230,10 @@ def write_animation_asset(
     """
     start = time.perf_counter()
     output = animation_output_path(blend_source, output_root, armature.name, action.name)
-    del skeleton_output_path_for_name
+    skeleton_output = skeleton_output_path_for_name(armature.name)
+    if skeleton_output is None:
+        raise RuntimeError(f"animation has no exported skeleton: {armature.name}")
+    skeleton_path = asset_path(skeleton_output)
     if logger is not None:
         logger(
             f"Animation {armature.name}/{action.name}: "
@@ -275,7 +244,7 @@ def write_animation_asset(
         AssetType.ANIMATION,
         asset_path(output),
         source_hash if source_hash is not None else hash_file(blend_source),
-        animation_payload(blend_source, armature, action, fps),
+        animation_payload(blend_source, armature, action, fps, skeleton_path),
     )
     write_binary_asset(output, desc)
     if logger is not None:

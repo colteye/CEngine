@@ -16,7 +16,7 @@
 #ifndef CENGINE_SCENE_SCENE_H
 #define CENGINE_SCENE_SCENE_H
 
-#include "assets/asset_store.h"
+#include "assets/store.h"
 #include "context.h"
 #include "entity/entity.h"
 
@@ -224,14 +224,14 @@ class Scene
      *
      * @param references TODO: Describe this parameter.
      */
-    void SetAssetReferences(std::vector<Assets::AssetReference> references);
+    void SetAssetReferences(std::vector<Assets::Reference> references);
     /**
      * @brief TODO: Describe AssetReference.
      *
      * @param index TODO: Describe this parameter.
      * @return TODO: Describe the return value.
      */
-    [[nodiscard]] const Assets::AssetReference *AssetReference(std::uint32_t index) const;
+    [[nodiscard]] const Assets::Reference *AssetReference(std::uint32_t index) const;
     /**
      * @brief TODO: Describe AssetReferenceCount.
      *
@@ -246,14 +246,14 @@ class Scene
      *
      * @param asset TODO: Describe this parameter.
      */
-    void AppendAuxiliaryAsset(const Assets::AssetReference &asset);
+    void AppendAuxiliaryAsset(const Assets::Reference &asset);
     /**
      * @brief TODO: Describe AuxiliaryAsset.
      *
      * @param index TODO: Describe this parameter.
      * @return TODO: Describe the return value.
      */
-    [[nodiscard]] const Assets::AssetReference *AuxiliaryAsset(std::uint32_t index) const;
+    [[nodiscard]] const Assets::Reference *AuxiliaryAsset(std::uint32_t index) const;
     /**
      * @brief TODO: Describe AuxiliaryAssetCount.
      *
@@ -269,8 +269,8 @@ class Scene
     std::vector<std::unique_ptr<Entity>> entities_;
     std::vector<std::uint32_t> generations_;
     std::vector<std::uint32_t> free_slots_;
-    std::vector<Assets::AssetReference> asset_references_;
-    std::vector<Assets::AssetReference> auxiliary_assets_;
+    std::vector<Assets::Reference> asset_references_;
+    std::vector<Assets::Reference> auxiliary_assets_;
     std::vector<Entity *> started_entities_;
     std::vector<EntityConnection> connections_;
     SceneSettings settings_;

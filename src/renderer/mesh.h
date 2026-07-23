@@ -17,6 +17,7 @@
 #define MESH_H
 
 #include <cstdint>
+#include <array>
 #include <string>
 #include <vector>
 
@@ -45,6 +46,15 @@ struct MeshVertex
     glm::vec2 uv = glm::vec2(0.0f);
     glm::vec2 lightmap_uv = glm::vec2(0.0f);
     glm::vec3 tangent = glm::vec3(1.0f, 0.0f, 0.0f);
+    std::array<std::uint16_t, 4> joints = {};
+    glm::vec4 weights = glm::vec4(0.0f);
+};
+
+struct MeshLod
+{
+    float screen_size = 1.0f;
+    std::vector<MeshVertex> vertices;
+    std::vector<std::uint32_t> indices;
 };
 
 /**
@@ -53,8 +63,7 @@ struct MeshVertex
 struct Mesh
 {
     std::string name;
-    std::vector<MeshVertex> vertices;
-    std::vector<std::uint32_t> indices;
+    std::vector<MeshLod> lods;
     bool has_lightmap_uv = false;
     Bounds local_bounds;
     /**
@@ -64,7 +73,23 @@ struct Mesh
      */
     [[nodiscard]] bool Empty() const
     {
-        return vertices.empty() || indices.empty();
+        return lods.empty() || lods.front().vertices.empty() || lods.front().indices.empty();
+    }
+
+    [[nodiscard]] const MeshLod *Lod(float screen_size) const
+    {
+        if (lods.empty())
+        {
+            return nullptr;
+        }
+        for (const MeshLod &lod : lods)
+        {
+            if (screen_size >= lod.screen_size)
+            {
+                return &lod;
+            }
+        }
+        return &lods.back();
     }
 };
 

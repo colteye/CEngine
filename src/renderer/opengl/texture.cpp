@@ -88,12 +88,11 @@ GLenum CompressedFormat(TextureFormat format)
 /**
  * @brief TODO: Describe UploadRgbe.
  *
- * @param mip TODO: Describe this parameter.
+ * @param source TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-GLuint UploadRgbe(const TextureMip &mip)
+GLuint UploadRgbe(const Texture &source)
 {
-    std::vector<std::uint16_t> pixels(mip.data.size());
     static const std::array<std::uint16_t, static_cast<size_t>(256u * 256u)> LinearHalf = [] {
         constexpr float MaxFiniteHalf = 65504.0f;
         std::array<std::uint16_t, static_cast<size_t>(256u * 256u)> values{};
@@ -110,22 +109,25 @@ GLuint UploadRgbe(const TextureMip &mip)
         return values;
     }();
     const std::uint16_t opaque = glm::packHalf1x16(1.0f);
-    for (std::size_t index = 0; index < mip.data.size(); index += 4u)
-    {
-        const std::size_t row = static_cast<std::size_t>(mip.data[index + 3]) * 256u;
-        pixels[index] = LinearHalf[row + mip.data[index]];
-        pixels[index + 1] = LinearHalf[row + mip.data[index + 1]];
-        pixels[index + 2] = LinearHalf[row + mip.data[index + 2]];
-        pixels[index + 3] = opaque;
-    }
 
     GLuint texture = 0;
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, static_cast<GLsizei>(mip.width), static_cast<GLsizei>(mip.height), 0,
-                 GL_RGBA, GL_HALF_FLOAT, pixels.data());
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, FullMipLevelCount(mip.width, mip.height));
+    for (std::size_t level = 0; level < source.mips.size(); ++level)
+    {
+        const TextureMip &mip = source.mips[level];
+        std::vector<std::uint16_t> pixels(mip.data.size());
+        for (std::size_t index = 0; index < mip.data.size(); index += 4u)
+        {
+            const std::size_t row = static_cast<std::size_t>(mip.data[index + 3]) * 256u;
+            pixels[index] = LinearHalf[row + mip.data[index]];
+            pixels[index + 1] = LinearHalf[row + mip.data[index + 1]];
+            pixels[index + 2] = LinearHalf[row + mip.data[index + 2]];
+            pixels[index + 3] = opaque;
+        }
+        glTexImage2D(GL_TEXTURE_2D, static_cast<GLint>(level), GL_RGBA16F, static_cast<GLsizei>(mip.width),
+                     static_cast<GLsizei>(mip.height), 0, GL_RGBA, GL_HALF_FLOAT, pixels.data());
+    }
     return texture;
 }
 
@@ -151,14 +153,14 @@ GLuint TextureLoader::Load(const Texture &source)
     GLuint texture = 0;
     if (source.format == TextureFormat::Rgbe8)
     {
-        if (source.mips.size() != 1 ||
-            source.mips.front().data.size() !=
-                static_cast<std::size_t>(source.mips.front().width) * source.mips.front().height * 4u)
+        if (std::any_of(source.mips.begin(), source.mips.end(), [](const TextureMip &mip) {
+                return mip.data.size() != static_cast<std::size_t>(mip.width) * mip.height * 4u;
+            }))
         {
             Logging::Logger::Get().Error("renderer", "RGBExp32 texture data is invalid");
             return 0;
         }
-        texture = UploadRgbe(source.mips.front());
+        texture = UploadRgbe(source);
     }
     else
     {
@@ -172,15 +174,15 @@ GLuint TextureLoader::Load(const Texture &source)
                                    static_cast<GLsizei>(mip.height), 0, static_cast<GLsizei>(mip.data.size()),
                                    mip.data.data());
         }
-        if (source.mips.size() == 1)
-        {
-            glGenerateMipmap(GL_TEXTURE_2D);
-        }
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL,
-                        source.mips.size() == 1
-                            ? FullMipLevelCount(source.mips.front().width, source.mips.front().height)
-                            : static_cast<GLint>(source.mips.size() - 1));
     }
+    if (source.mips.size() == 1)
+    {
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL,
+                    source.mips.size() == 1
+                        ? FullMipLevelCount(source.mips.front().width, source.mips.front().height)
+                        : static_cast<GLint>(source.mips.size() - 1));
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);

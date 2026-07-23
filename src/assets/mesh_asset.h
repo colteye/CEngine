@@ -8,32 +8,28 @@
 //                      |___/
 
 /**
- * @file src/assets/asset_error.h
- * @brief TODO: Describe the purpose of this file.
+ * @file src/assets/mesh_asset.h
+ * @brief Loads a cooked mesh asset into its renderer value.
  * @author Erik Coltey
  */
 
-#ifndef CENGINE_ASSETS_ASSET_ERROR_H
-#define CENGINE_ASSETS_ASSET_ERROR_H
+#ifndef CENGINE_MESH_ASSET_H
+#define CENGINE_MESH_ASSET_H
 
-#include "logging/logger.h"
+#include "renderer/mesh.h"
 
-#include <string_view>
-
+#include <filesystem>
 namespace CEngine::Assets
 {
 
 /**
- * @brief TODO: Describe AssetError.
+ * @brief TODO: Describe LoadMeshAsset.
  *
- * @param message TODO: Describe this parameter.
+ * @param path TODO: Describe this parameter.
+ * @param mesh TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-inline bool AssetError(std::string_view message)
-{
-    Logging::Logger::Get().Error("assets", message);
-    return false;
-}
+bool LoadMeshAsset(const std::filesystem::path &path, CEngine::Renderer::Mesh &mesh);
 
 } // namespace CEngine::Assets
 
