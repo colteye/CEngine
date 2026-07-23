@@ -15,24 +15,26 @@
 
 #include "assets/store.h"
 #include "assets/scene_asset.h"
+#ifdef CENGINE_ENABLE_AUDIO
+#include "audio/audio_system.h"
+#endif
 #include "context.h"
 #include "entity/entity_factory.h"
 #include "entity/player_entity.h"
+#include "imgui_platform.h"
 #include "input/actions.h"
-#include "input/glfw/glfw_input_backend.h"
+#include "input/sdl/sdl_input_backend.h"
 #include "input/input_system.h"
 #include "physics/physics_system.h"
 #include "renderer/camera.h"
 #include "renderer/render_system.h"
 #include "scene/scene.h"
+#include "window/window_system.h"
 
 #ifdef CENGINE_ENABLE_OPENGL
-#include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
-#include <glad/glad.h>
 #include <imgui.h>
 #endif
-#include <GLFW/glfw3.h>
 
 #include <algorithm>
 #include <cmath>
@@ -160,53 +162,6 @@ std::filesystem::path ProjectRootForScene(const std::filesystem::path &scene_pat
         }
     }
     return std::filesystem::current_path();
-}
-
-/**
- * @brief TODO: Describe CreateWindow.
- *
- * @return TODO: Describe the return value.
- */
-GLFWwindow *CreateWindow()
-{
-    if (glfwInit() == GLFW_FALSE)
-    {
-        std::cerr << "Failed to initialize GLFW.\n";
-        return nullptr;
-    }
-    glfwWindowHint(GLFW_DECORATED, GLFW_TRUE);
-
-#ifdef CENGINE_ENABLE_VULKAN
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow *window = glfwCreateWindow(1024, 768, "CEngine - Vulkan", nullptr, nullptr);
-#else
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-#ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-#endif
-    GLFWwindow *window = glfwCreateWindow(1024, 768, "CEngine", nullptr, nullptr);
-#endif
-    if (window == nullptr)
-    {
-        std::cerr << "Failed to create the CEngine window.\n";
-        glfwTerminate();
-        return nullptr;
-    }
-
-#ifdef CENGINE_ENABLE_OPENGL
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
-    if (gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)) == 0)
-    {
-        std::cerr << "Failed to initialize OpenGL.\n";
-        glfwDestroyWindow(window);
-        glfwTerminate();
-        return nullptr;
-    }
-#endif
-    return window;
 }
 
 #ifdef CENGINE_ENABLE_OPENGL
@@ -363,7 +318,7 @@ void DrawFpsCounter(float delta_seconds)
 void BeginTuningFrame()
 {
     ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
+    Viewer::ImGuiPlatform::NewFrame();
     ImGui::NewFrame();
 }
 
@@ -375,6 +330,7 @@ void EndTuningFrame()
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
+
 #endif
 
 /**
@@ -386,12 +342,20 @@ void EndTuningFrame()
  * @param renderer TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-int RunScene(GLFWwindow *window, const std::filesystem::path &scene_path, const std::filesystem::path &project_root,
-             Renderer::RenderSystem &renderer)
+int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path &scene_path,
+             const std::filesystem::path &project_root, Renderer::RenderSystem &renderer)
 {
     CEngine::Assets::Store assets(project_root);
-    CEngine::Input::InputSystem input(std::make_unique<CEngine::Input::GlfwInputBackend>(window));
+    CEngine::Input::InputSystem input(std::make_unique<CEngine::Input::SdlInputBackend>(window));
     const Viewer::Actions actions = Viewer::RegisterActions(input);
+#ifdef CENGINE_ENABLE_AUDIO
+    CEngine::Audio::AudioSystem audio;
+    if (!audio.Initialize())
+    {
+        std::cerr << "Failed to initialize required audio.\n";
+        return 1;
+    }
+#endif
     CEngine::Entities::EntityFactory entity_factory;
     entity_factory.Register<Viewer::PlayerEntity, Viewer::Generated::Player>("player", actions);
     std::unique_ptr<CEngine::Scene::Scene> scene = CEngine::Assets::LoadScene(scene_path, assets, entity_factory);
@@ -421,6 +385,9 @@ int RunScene(GLFWwindow *window, const std::filesystem::path &scene_path, const 
     context.assets = &assets;
     context.rendering = &renderer;
     context.input = &input;
+#ifdef CENGINE_ENABLE_AUDIO
+    context.audio = &audio;
+#endif
 #ifdef CENGINE_ENABLE_JOLT_PHYSICS
     context.physics = &physics;
 #endif
@@ -439,9 +406,9 @@ int RunScene(GLFWwindow *window, const std::filesystem::path &scene_path, const 
         return 1;
     }
 
-    int framebuffer_width = 0;
-    int framebuffer_height = 0;
-    glfwGetFramebufferSize(window, &framebuffer_width, &framebuffer_height);
+    const glm::ivec2 initial_size = window.DrawableSize();
+    int framebuffer_width = initial_size.x;
+    int framebuffer_height = initial_size.y;
     if (framebuffer_width <= 0 || framebuffer_height <= 0 || !renderer.Resize(framebuffer_width, framebuffer_height))
     {
         std::cerr << "Failed to size the renderer for the window.\n";
@@ -458,19 +425,28 @@ int RunScene(GLFWwindow *window, const std::filesystem::path &scene_path, const 
 #else
     input.SetPointerCaptured(true);
 #endif
-    double previous_time = glfwGetTime();
+    double previous_time = window.TimeSeconds();
     double simulation_accumulator = 0.0;
     constexpr double FixedDelta = 1.0 / 60.0;
     constexpr int MaxStepsPerFrame = 4;
-    while (glfwWindowShouldClose(window) == GLFW_FALSE)
+    while (!window.ShouldClose())
     {
-        int current_width = 0;
-        int current_height = 0;
-        glfwGetFramebufferSize(window, &current_width, &current_height);
+#ifdef CENGINE_ENABLE_OPENGL
+        window.PollEvents(&Viewer::ImGuiPlatform::ProcessEvent, nullptr);
+#else
+        window.PollEvents();
+#endif
+        const glm::ivec2 current_size = window.DrawableSize();
+        const int current_width = current_size.x;
+        const int current_height = current_size.y;
         if (current_width <= 0 || current_height <= 0)
         {
-            glfwWaitEvents();
-            previous_time = glfwGetTime();
+#ifdef CENGINE_ENABLE_OPENGL
+            window.WaitEvents(100, &Viewer::ImGuiPlatform::ProcessEvent, nullptr);
+#else
+            window.WaitEvents(100);
+#endif
+            previous_time = window.TimeSeconds();
             simulation_accumulator = 0.0;
             continue;
         }
@@ -486,13 +462,14 @@ int RunScene(GLFWwindow *window, const std::filesystem::path &scene_path, const 
             renderer.SetCameraAspectRatio(static_cast<float>(framebuffer_width) /
                                           static_cast<float>(framebuffer_height));
         }
-        const double current_time = glfwGetTime();
+        const double current_time = window.TimeSeconds();
         const float delta_seconds = static_cast<float>(std::min(current_time - previous_time, 0.25));
         previous_time = current_time;
         input.BeginFrame();
         if (input.IsDown(CEngine::Input::Key::Escape))
         {
-            break;
+            window.RequestClose();
+            continue;
         }
 
 #ifdef CENGINE_ENABLE_OPENGL
@@ -534,6 +511,15 @@ int RunScene(GLFWwindow *window, const std::filesystem::path &scene_path, const 
             simulation_accumulator = std::fmod(simulation_accumulator, FixedDelta);
         }
 
+#ifdef CENGINE_ENABLE_AUDIO
+        const Renderer::Camera &active_camera = renderer.ActiveCamera();
+        CEngine::Audio::Listener listener;
+        listener.position = active_camera.position;
+        listener.forward = active_camera.direction;
+        audio.SetListener(listener);
+        audio.Update();
+#endif
+
 #ifdef CENGINE_ENABLE_OPENGL
         BeginTuningFrame();
         if (show_tuning_panel)
@@ -545,9 +531,8 @@ int RunScene(GLFWwindow *window, const std::filesystem::path &scene_path, const 
         renderer.Render();
 #ifdef CENGINE_ENABLE_OPENGL
         EndTuningFrame();
-        glfwSwapBuffers(window);
+        window.SwapBuffers();
 #endif
-        glfwPollEvents();
     }
     return 0;
 }
@@ -580,21 +565,21 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    GLFWwindow *window = CreateWindow();
-    if (window == nullptr)
+    CEngine::Window::WindowSystem window;
+    CEngine::Window::WindowDesc window_desc;
+#ifdef CENGINE_ENABLE_VULKAN
+    window_desc.title = "CEngine - Vulkan";
+    window_desc.graphics_api = CEngine::Window::GraphicsApi::Vulkan;
+#endif
+    if (!window.Initialize(window_desc))
     {
         return 1;
     }
 
-    int width = 0;
-    int height = 0;
-    glfwGetFramebufferSize(window, &width, &height);
     Renderer::RenderSystem renderer;
-    if (!renderer.Initialize(window, width, height))
+    if (!renderer.Initialize(window))
     {
         std::cerr << "Failed to initialize the renderer.\n";
-        glfwDestroyWindow(window);
-        glfwTerminate();
         return 1;
     }
 
@@ -602,38 +587,31 @@ int main(int argc, char **argv)
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
-    if (!ImGui_ImplGlfw_InitForOpenGL(window, true))
+    if (!Viewer::ImGuiPlatform::Initialize(window))
     {
-        std::cerr << "Failed to initialize the ImGui GLFW backend.\n";
+        std::cerr << "Failed to initialize the ImGui SDL3 backend.\n";
         ImGui::DestroyContext();
         renderer.Shutdown();
-        glfwDestroyWindow(window);
-        glfwTerminate();
         return 1;
     }
     if (!ImGui_ImplOpenGL3_Init("#version 330"))
     {
         std::cerr << "Failed to initialize the ImGui OpenGL backend.\n";
-        ImGui_ImplGlfw_Shutdown();
+        Viewer::ImGuiPlatform::Shutdown();
         ImGui::DestroyContext();
         renderer.Shutdown();
-        glfwDestroyWindow(window);
-        glfwTerminate();
         return 1;
     }
 #endif
 
-    glfwShowWindow(window);
-    glfwPollEvents();
     const int result = RunScene(window, scene_path, project_root, renderer);
 
 #ifdef CENGINE_ENABLE_OPENGL
     ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
+    Viewer::ImGuiPlatform::Shutdown();
     ImGui::DestroyContext();
 #endif
     renderer.Shutdown();
-    glfwDestroyWindow(window);
-    glfwTerminate();
+    window.Shutdown();
     return result;
 }

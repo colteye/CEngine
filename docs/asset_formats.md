@@ -11,7 +11,7 @@ content into runtime files:
 ```text
 Blender source -> Blender add-on -> .casset/.cscene and component assets
 images         -> Python tools   -> .dds
-audio          -> Python tools   -> .ogg/.opus
+audio          -> Python tools   -> .wav/.flac/.mp3/.ogg
 ```
 
 Every engine-owned binary payload is declared in
@@ -27,7 +27,7 @@ headers, table records, disk mirrors, compatibility readers, or format-specific
 primitive decoders.
 
 Handwritten `*_asset.cpp` code is limited to semantic validation and conversion
-from generated data into a runtime object. DDS and Ogg/Opus are standard
+from generated data into a runtime object. DDS and standard audio files are
 external formats and keep their own parsers.
 
 ## Common envelope
@@ -76,7 +76,7 @@ Reference {
 | Composition | `.casset` | reusable named object hierarchy and component references |
 | Scene | `.cscene` | whole-map settings, references, entity rows, class records, connections |
 | Particle | `.cparticle` | emission, lifetime, speed/spread, gravity, size/color curves, texture, blend, looping |
-| Audio | `.ogg`/`.opus` | Standard Ogg/Opus stream, loaded directly |
+| Audio | `.wav`/`.flac`/`.mp3`/`.ogg` | Standard PCM or compressed stream, loaded directly |
 
 Deferred navigation, shader-package, and deployment-package formats are not
 implemented.
@@ -156,8 +156,10 @@ particle systems or `ce_particle` objects. Optional `ce_particle_*` properties
 override texture, emission rate, lifetime, speed, spread, gravity, start/end
 size, start/end color, blend mode, loop, and world-space behavior.
 
-Audio stays in Ogg/Opus rather than acquiring an engine wrapper before loop,
-attenuation, subtitle, dialogue, or streaming metadata is actually required.
+Audio stays in WAV, FLAC, MP3, or Ogg/Vorbis rather than acquiring an engine
+container before loop, attenuation, subtitle, dialogue, or streaming metadata
+is actually required. The runtime can either cache decoded PCM for repeated
+effects or stream-decode the retained compressed bytes for music and ambience.
 
 ## Sponza
 
@@ -169,5 +171,4 @@ generated version-one formats. The existing
 
 - [glTF 2.0](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html)
 - [DDS programming guide](https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dx-graphics-dds-pguide)
-- [Opus](https://www.opus-codec.org/)
 - [Ogg](https://www.xiph.org/ogg/)

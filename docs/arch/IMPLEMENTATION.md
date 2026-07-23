@@ -26,9 +26,11 @@ The application owns the concrete long-lived systems:
 
 ```text
 Store
+WindowSystem
 InputSystem
 PhysicsSystem
 RenderSystem
+AudioSystem
 Scene
 ```
 
@@ -59,14 +61,14 @@ The representation follows lifetime:
 
 | Value | Representation | Reason |
 | --- | --- | --- |
-| reusable entity, mesh-instance, light, body, constraint, character slot | tagged 64-bit `Handle<Tag>` packing a 32-bit index and generation | stale references must fail after slot reuse and unrelated handle domains must not mix |
+| reusable entity, mesh-instance, light, body, constraint, character, or audio-voice slot | tagged 64-bit `Handle<Tag>` packing a 32-bit index and generation | stale references must fail after slot reuse and unrelated handle domains must not mix |
 | append-only input action | tagged `ActionHandle` with a fixed generation | actions share the typed handle representation but are never removed or reused |
 | serialized entity or asset table position | `uint32_t` | it is a file-local index, not a live runtime identity |
 | cooked asset identity | validated `Reference{path, guid, type}` | immutable assets do not need mutable runtime handles |
 | immutable decoded asset ownership | `shared_ptr<const T>` | scenes and render records may safely share one decoded value |
 | backend lookup key | raw `const T*` | call-scoped or backend-private observation of an asset retained by a public `shared_ptr` owner |
 | subsystem composition | raw pointer in `Context` | explicitly non-owning and bounded by application lifetime |
-| compile-selected subsystem backend | `unique_ptr<I*Backend>` | keeps graphics, input, and physics implementations replaceable without runtime registries |
+| compile-selected subsystem backend | `unique_ptr<I*Backend>` | keeps window, graphics, input, physics, and audio implementations replaceable without runtime registries |
 
 Do not introduce an asset handle in parallel with `Reference` and
 `shared_ptr`. Do not use a bare integer for a reusable slot. Do not place
@@ -94,7 +96,8 @@ payload from `schemas/engine.game.json`. `Reader` owns bounded little-endian
 primitives; generated `Wire::Read` functions own layout and structural
 validation. Python uses the same flattened schema through one generic
 packer/unpacker. Handwritten `*_asset.cpp` files contain only semantic
-validation and construction. DDS and Ogg/Opus remain standard external files.
+validation and construction. DDS, WAV, FLAC, MP3, and Ogg/Vorbis remain
+standard external files.
 
 `.cscene` contains generated settings, references, entity rows, generated class
 records, auxiliary asset indices, and connections. The same schema generator
@@ -189,8 +192,39 @@ falls back to transform movement in tests or tools without physics.
 ## Input
 
 `InputSystem` owns one platform backend and maps device state to append-only
-actions. `Key` covers every standard GLFW keyboard key. Game code consumes
-`ActionHandle` values; device-specific GLFW values do not cross the backend.
+actions. `Key` covers the standard keyboard set and the SDL3 backend maps it to
+scancodes. Game code consumes `ActionHandle` values; SDL values do not cross the
+backend.
+
+## Window and platform
+
+`WindowSystem` owns one `IWindowBackend`. The SDL3 backend owns video subsystem
+lifetime, event pumping, a high-pixel-density resizable window, OpenGL context
+or Vulkan surface prerequisites, drawable sizing, presentation, and monotonic
+time. Renderer initialization consumes `WindowSystem`, not an SDL window.
+
+Opaque native access exists only for compiled integrations such as Vulkan
+surface creation and ImGui's SDL adapter. Game/entity code and the sample's
+ordinary control flow use CEngine window values.
+
+SDL3 is the sole platform/device dependency. Its fetched static build enables
+video, events, the selected graphics surface, and optional audio while disabling
+unused GPU-renderer, camera, joystick, haptic, HID, power, sensor, dialog, and
+tray subsystems.
+
+## Audio
+
+`AudioSystem` owns one `IAudioBackend` and generation-checked voice slots.
+CEngine owns validation, voice capacity, priority/age stealing, buses, and
+diagnostics. The miniaudio backend decodes and mixes without its device layer;
+an SDL3 playback stream pulls the final stereo floating-point mix.
+
+The current path supports cached effects, streamed music/ambience, 2D and 3D
+voices, listener/source velocity, attenuation models, rolloff, Doppler, cones,
+gain/pitch/fades, looping, pause/resume/seek, music/effects/dialog buses,
+sound-effects environment reverb, and obstruction/occlusion filtering. See
+[`../audio_requirements.md`](../audio_requirements.md) for the exact support
+matrix and exclusions.
 
 ## Extension rules
 
@@ -209,5 +243,7 @@ actions. `Key` covers every standard GLFW keyboard key. Game code consumes
   verified commands.
 - [`../physics_requirements.md`](../physics_requirements.md): physics product
   contract and support matrix.
+- [`../audio_requirements.md`](../audio_requirements.md): audio product contract
+  and support matrix.
 - [`DELIVERY.md`](DELIVERY.md): historical milestone/performance references.
 - `CORE.md`, `SYSTEMS.md`, `NETWORK.md`: complete target design references.

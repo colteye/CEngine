@@ -20,6 +20,10 @@ namespace CEngine::Assets
 {
 class Store;
 }
+namespace CEngine::Audio
+{
+class AudioSystem;
+}
 namespace CEngine::Input
 {
 class InputSystem;
@@ -43,6 +47,7 @@ namespace CEngine
 struct Context
 {
     Assets::Store *assets = nullptr;
+    Audio::AudioSystem *audio = nullptr;
     Scene::Scene *scene = nullptr;
     Renderer::RenderSystem *rendering = nullptr;
     PhysicsSystem *physics = nullptr;

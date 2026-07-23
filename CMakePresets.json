@@ -53,9 +53,7 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CENGINE_ENABLE_OPENGL": "ON",
-        "CENGINE_ENABLE_VULKAN": "OFF",
-        "CENGINE_FETCH_GLFW_X11": "OFF",
-        "CENGINE_FETCH_GLFW_WAYLAND": "OFF"
+        "CENGINE_ENABLE_VULKAN": "OFF"
       }
     },
     {

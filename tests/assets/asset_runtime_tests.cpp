@@ -91,7 +91,7 @@ bool Run(const std::filesystem::path &root)
                   "store should load compositions") &&
            Expect(store.LoadParticle(Ref(root, "python_fixture.cparticle", Type::Particle)) != nullptr,
                   "store should load particles") &&
-           Expect(store.LoadAudio(audio_ref) != nullptr, "store should load standard Ogg/Opus audio");
+           Expect(store.LoadAudio(audio_ref) != nullptr, "store should load standard Ogg/Vorbis audio");
 }
 } // namespace
 

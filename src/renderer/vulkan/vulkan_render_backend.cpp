@@ -14,10 +14,12 @@
  */
 
 #include "vulkan_render_backend.h"
+#include "window/window_system.h"
 
 #ifdef CENGINE_ENABLE_VULKAN
 
-#include <GLFW/glfw3.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
 
 #include <algorithm>
 #include <iostream>
@@ -59,11 +61,12 @@ bool VkSucceeded(VkResult result, const char *message)
  * @param window_height TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-bool VulkanRenderBackend::Initialize(RenderSystem &, GLFWwindow *window, int window_width, int window_height)
+bool VulkanRenderBackend::Initialize(RenderSystem &, Window::WindowSystem &window, int window_width,
+                                     int window_height)
 {
-    if (window == nullptr)
+    if (window.NativeHandle() == nullptr)
     {
-        std::cout << "Vulkan backend requires a GLFW window.\n";
+        std::cout << "Vulkan backend requires an initialized window.\n";
         return false;
     }
 
@@ -291,12 +294,6 @@ void VulkanRenderBackend::UpdateMeshInstance(std::uint32_t /*slot*/, const glm::
  */
 bool VulkanRenderBackend::CreateInstance()
 {
-    if (glfwVulkanSupported() != GLFW_TRUE)
-    {
-        std::cout << "GLFW reports that Vulkan is not supported on this system.\n";
-        return false;
-    }
-
     VkApplicationInfo app_info{};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app_info.pApplicationName = "CEngine";
@@ -305,19 +302,19 @@ bool VulkanRenderBackend::CreateInstance()
     app_info.engineVersion = VK_MAKE_VERSION(0, 1, 0);
     app_info.apiVersion = VK_API_VERSION_1_0;
 
-    uint32_t glfw_extension_count = 0;
-    const char **glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
-    if (glfw_extensions == nullptr || glfw_extension_count == 0)
+    uint32_t extension_count = 0;
+    const char *const *extensions = SDL_Vulkan_GetInstanceExtensions(&extension_count);
+    if (extensions == nullptr || extension_count == 0)
     {
-        std::cout << "GLFW did not provide Vulkan instance extensions.\n";
+        std::cout << "SDL3 did not provide Vulkan instance extensions: " << SDL_GetError() << '\n';
         return false;
     }
 
     VkInstanceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     create_info.pApplicationInfo = &app_info;
-    create_info.enabledExtensionCount = glfw_extension_count;
-    create_info.ppEnabledExtensionNames = glfw_extensions;
+    create_info.enabledExtensionCount = extension_count;
+    create_info.ppEnabledExtensionNames = extensions;
     create_info.enabledLayerCount = 0;
 
     return VkSucceeded(vkCreateInstance(&create_info, nullptr, &instance), "Failed to create Vulkan instance.");
@@ -329,10 +326,14 @@ bool VulkanRenderBackend::CreateInstance()
  * @param window TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-bool VulkanRenderBackend::CreateSurface(GLFWwindow *window)
+bool VulkanRenderBackend::CreateSurface(Window::WindowSystem &window)
 {
-    return VkSucceeded(glfwCreateWindowSurface(instance, window, nullptr, &surface),
-                       "Failed to create Vulkan window surface.");
+    if (!SDL_Vulkan_CreateSurface(static_cast<SDL_Window *>(window.NativeHandle()), instance, nullptr, &surface))
+    {
+        std::cout << "Failed to create Vulkan window surface: " << SDL_GetError() << '\n';
+        return false;
+    }
+    return true;
 }
 
 /**

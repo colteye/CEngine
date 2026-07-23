@@ -15,11 +15,10 @@ include(CTest)
 
 option(CENGINE_BUILD_VIEWER "Build the interactive CEngine viewer executable." ON)
 option(CENGINE_ENABLE_OPENGL "Build the OpenGL 3.3 render backend." ON)
-option(CENGINE_USE_SYSTEM_GLFW "Use an installed system GLFW package instead of fetching GLFW source." OFF)
-option(CENGINE_FETCH_GLFW_X11 "Build the X11 backend when GLFW is fetched on Linux." ON)
-option(CENGINE_FETCH_GLFW_WAYLAND "Build the Wayland backend when GLFW is fetched on Linux." OFF)
 option(CENGINE_ENABLE_VULKAN "Build the Vulkan render backend when the Vulkan SDK is available." OFF)
 option(CENGINE_ENABLE_JOLT_PHYSICS "Build the Jolt Physics backend." ON)
+option(CENGINE_ENABLE_AUDIO "Build the miniaudio mixer/3D backend on SDL3 audio." ON)
+option(CENGINE_USE_SYSTEM_SDL3 "Use an installed SDL3 package instead of fetching pinned source." OFF)
 option(CENGINE_BUILD_TESTS "Build lightweight CEngine test executables." ON)
 
 if(CENGINE_ENABLE_OPENGL AND CENGINE_ENABLE_VULKAN)
@@ -103,56 +102,54 @@ function(ce_setup_opengl out_target)
     set(${out_target} CEngineOpenGL PARENT_SCOPE)
 endfunction()
 
-function(ce_setup_glfw out_target)
-    if(CENGINE_USE_SYSTEM_GLFW)
-        find_package(glfw3 QUIET CONFIG)
-
-        if(TARGET glfw)
-            set(${out_target} glfw PARENT_SCOPE)
-            return()
+function(ce_setup_sdl3 out_target)
+    if(CENGINE_USE_SYSTEM_SDL3)
+        find_package(SDL3 3.4 REQUIRED CONFIG)
+        if(TARGET SDL3::SDL3)
+            set(${out_target} SDL3::SDL3 PARENT_SCOPE)
+        elseif(TARGET SDL3::SDL3-static)
+            set(${out_target} SDL3::SDL3-static PARENT_SCOPE)
+        else()
+            message(FATAL_ERROR "The SDL3 package did not export an SDL3 target.")
         endif()
-
-        if(TARGET glfw3)
-            set(${out_target} glfw3 PARENT_SCOPE)
-            return()
-        endif()
-
-        find_path(GLFW_INCLUDE_DIR GLFW/glfw3.h)
-        find_library(GLFW_LIBRARY NAMES glfw glfw3)
-
-        if(GLFW_INCLUDE_DIR AND GLFW_LIBRARY)
-            add_library(glfw_system UNKNOWN IMPORTED)
-            set_target_properties(glfw_system PROPERTIES
-                IMPORTED_LOCATION "${GLFW_LIBRARY}"
-                INTERFACE_INCLUDE_DIRECTORIES "${GLFW_INCLUDE_DIR}"
-            )
-            set(${out_target} glfw_system PARENT_SCOPE)
-            return()
-        endif()
-
-        message(FATAL_ERROR "System GLFW was requested but was not found.")
+        return()
     endif()
 
     include(FetchContent)
-    set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-    set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
-    if(UNIX AND NOT APPLE)
-        set(GLFW_BUILD_WAYLAND ${CENGINE_FETCH_GLFW_WAYLAND} CACHE BOOL "" FORCE)
-        set(GLFW_BUILD_X11 ${CENGINE_FETCH_GLFW_X11} CACHE BOOL "" FORCE)
-    endif()
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
+    set(SDL_UNINSTALL OFF CACHE BOOL "" FORCE)
+    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+    set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+    set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(SDL_AUDIO ${CENGINE_ENABLE_AUDIO} CACHE BOOL "" FORCE)
+    set(SDL_VIDEO ON CACHE BOOL "" FORCE)
+    set(SDL_GPU OFF CACHE BOOL "" FORCE)
+    set(SDL_RENDER OFF CACHE BOOL "" FORCE)
+    set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
+    set(SDL_JOYSTICK OFF CACHE BOOL "" FORCE)
+    set(SDL_HAPTIC OFF CACHE BOOL "" FORCE)
+    set(SDL_HIDAPI OFF CACHE BOOL "" FORCE)
+    set(SDL_POWER OFF CACHE BOOL "" FORCE)
+    set(SDL_SENSOR OFF CACHE BOOL "" FORCE)
+    set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
+    set(SDL_TRAY OFF CACHE BOOL "" FORCE)
+    set(SDL_DISKAUDIO OFF CACHE BOOL "" FORCE)
+    set(SDL_OPENGL ${CENGINE_ENABLE_OPENGL} CACHE BOOL "" FORCE)
+    set(SDL_OPENGLES OFF CACHE BOOL "" FORCE)
+    set(SDL_VULKAN ${CENGINE_ENABLE_VULKAN} CACHE BOOL "" FORCE)
     FetchContent_Declare(
-        glfw
-        GIT_REPOSITORY https://github.com/glfw/glfw.git
-        # GLFW 3.4, pinned to an immutable revision.
-        GIT_TAG 7b6aead9fb88b3623e3b3725ebb42670cbe4c579
+        SDL3
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        # SDL 3.4.10, pinned to an immutable revision.
+        GIT_TAG 8e37db5e797b6167f3a00d697d816a684bd259c7
     )
-    FetchContent_MakeAvailable(glfw)
-    set(${out_target} glfw PARENT_SCOPE)
+    FetchContent_MakeAvailable(SDL3)
+    set(${out_target} SDL3::SDL3-static PARENT_SCOPE)
 endfunction()
 
-ce_setup_glfw(CEngine_GLFW_TARGET)
+ce_setup_sdl3(CENGINE_SDL3_TARGET)
 
 if(CENGINE_ENABLE_JOLT_PHYSICS)
     include(FetchContent)
@@ -316,6 +313,14 @@ if(CENGINE_BUILD_TESTS)
     add_test(NAME load_python_cscene_fixture
         COMMAND CEngineSceneTests "${CENGINE_PYTHON_CSCENE_FIXTURE}")
     set_tests_properties(load_python_cscene_fixture PROPERTIES FIXTURES_REQUIRED python_assets)
+    add_executable(CEngineWindowSystemTests tests/window/window_system_tests.cpp)
+    target_link_libraries(CEngineWindowSystemTests PRIVATE CEngineCore)
+    if(MSVC)
+        target_compile_options(CEngineWindowSystemTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+    else()
+        target_compile_options(CEngineWindowSystemTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME window_system COMMAND CEngineWindowSystemTests)
     if(CENGINE_ENABLE_OPENGL)
         add_executable(CEngineShadowSystemTests
             tests/renderer/shadow_system_tests.cpp
@@ -334,16 +339,46 @@ if(CENGINE_BUILD_TESTS)
         target_link_libraries(CEngineShadowSystemTests PRIVATE CEngineCore)
         add_test(NAME shadow_system COMMAND CEngineShadowSystemTests)
     endif()
+    if(CENGINE_ENABLE_AUDIO)
+        add_executable(CEngineAudioSystemTests tests/audio/audio_system_tests.cpp)
+        target_link_libraries(CEngineAudioSystemTests PRIVATE CEngineCore)
+        if(MSVC)
+            target_compile_options(CEngineAudioSystemTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+        else()
+            target_compile_options(CEngineAudioSystemTests PRIVATE -Wall -Wextra -Wpedantic)
+        endif()
+        add_test(NAME audio_system COMMAND CEngineAudioSystemTests)
+        add_executable(CEngineAudioBackendTests tests/audio/audio_backend_tests.cpp)
+        target_link_libraries(CEngineAudioBackendTests PRIVATE CEngineCore)
+        if(MSVC)
+            target_compile_options(CEngineAudioBackendTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+        else()
+            target_compile_options(CEngineAudioBackendTests PRIVATE -Wall -Wextra -Wpedantic)
+        endif()
+        add_test(NAME audio_backend COMMAND CEngineAudioBackendTests)
+        set_tests_properties(audio_backend PROPERTIES ENVIRONMENT "SDL_AUDIODRIVER=dummy")
+    endif()
 endif()
 
 set(CENGINE_CORE_SOURCES
     src/physics/physics_system.cpp
     src/renderer/camera.cpp
-    src/input/glfw/glfw_input_backend.cpp
+    src/input/sdl/sdl_input_backend.cpp
     src/input/input_system.cpp
     src/renderer/mesh_instance.cpp
     src/renderer/render_system.cpp
+    src/window/sdl/sdl_window_backend.cpp
+    src/window/window_system.cpp
 )
+
+if(CENGINE_ENABLE_AUDIO)
+    list(APPEND CENGINE_CORE_SOURCES
+        src/audio/audio_system.cpp
+        src/audio/miniaudio/audio_backend.cpp
+        src/audio/miniaudio/miniaudio_impl.cpp
+        third_party/miniaudio/extras/nodes/ma_reverb_node/ma_reverb_node.c
+    )
+endif()
 
 if(CENGINE_ENABLE_JOLT_PHYSICS)
     list(APPEND CENGINE_CORE_SOURCES
@@ -395,10 +430,24 @@ target_include_directories(CEngineCore
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 
-target_link_libraries(CEngineCore PUBLIC ${CEngine_GLFW_TARGET})
+target_link_libraries(CEngineCore PUBLIC ${CENGINE_SDL3_TARGET})
 target_link_libraries(CEngineCore PUBLIC CEngineAssets)
 target_link_libraries(CEngineCore PRIVATE ${CMAKE_DL_LIBS})
 target_link_libraries(CEngineScene PUBLIC CEngineCore)
+
+if(CENGINE_ENABLE_AUDIO)
+    target_include_directories(CEngineCore SYSTEM PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniaudio"
+    )
+    target_compile_definitions(CEngineCore
+        PUBLIC CENGINE_ENABLE_AUDIO
+        PRIVATE
+            MA_NO_DEVICE_IO
+            MA_NO_ENCODING
+            MA_NO_GENERATION
+            MA_NO_RESOURCE_MANAGER
+    )
+endif()
 
 if(CENGINE_ENABLE_JOLT_PHYSICS)
     target_link_libraries(CEngineCore PUBLIC Jolt)
@@ -412,11 +461,6 @@ if(CENGINE_ENABLE_VULKAN)
     target_link_libraries(CEngineCore PUBLIC Vulkan::Vulkan)
     target_compile_definitions(CEngineCore PUBLIC CENGINE_ENABLE_VULKAN)
 endif()
-
-target_compile_definitions(CEngineCore
-    PUBLIC
-        GLFW_INCLUDE_NONE
-)
 
 if(CENGINE_ENABLE_OPENGL)
     target_compile_definitions(CEngineCore PUBLIC CENGINE_ENABLE_OPENGL GL_SILENCE_DEPRECATION)

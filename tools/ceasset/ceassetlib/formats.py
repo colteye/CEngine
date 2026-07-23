@@ -19,7 +19,7 @@ from enum import IntEnum
 
 
 TARGET_TEXTURE_EXTENSIONS = {".dds"}
-TARGET_AUDIO_EXTENSIONS = {".ogg", ".opus"}
+TARGET_AUDIO_EXTENSIONS = {".flac", ".mp3", ".ogg", ".wav"}
 PASSTHROUGH_TARGET_EXTENSIONS = {*TARGET_TEXTURE_EXTENSIONS, *TARGET_AUDIO_EXTENSIONS}
 SOURCE_TEXTURE_EXTENSIONS = {".jpeg", ".jpg", ".png", ".tga"}
 
@@ -66,7 +66,9 @@ ASSET_TYPE_NAMES = {
 RUNTIME_EXTENSIONS = {
     ".dds": AssetType.TEXTURE,
     ".ogg": AssetType.AUDIO,
-    ".opus": AssetType.AUDIO,
+    ".flac": AssetType.AUDIO,
+    ".mp3": AssetType.AUDIO,
+    ".wav": AssetType.AUDIO,
     ".cmat": AssetType.MATERIAL,
     ".cmesh": AssetType.MESH,
     ".cskel": AssetType.SKELETON,

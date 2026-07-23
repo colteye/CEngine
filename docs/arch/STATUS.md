@@ -7,8 +7,21 @@
 ## Current initiative result
 
 Standard 3D physics is implemented across Jolt, cooked assets, scenes, and the
-Blender add-on. Cooked asset payloads have also been reset to one schema-owned
-version-one format.
+Blender add-on. Windowing and input have moved from GLFW to engine-owned SDL3
+backends, and the engine now has a complete SDL3/miniaudio playback path.
+Cooked asset payloads use one schema-owned version-one format.
+
+### Window and platform
+
+- `WindowSystem` owns one replaceable `IWindowBackend`.
+- The SDL3 backend owns window/video lifetime, event pumping, drawable sizing,
+  OpenGL context setup, Vulkan surface prerequisites, presentation, and time.
+- Render backends initialize from `WindowSystem`; no window-library type is in
+  the renderer facade.
+- The viewer's ordinary window/event loop uses the engine facade. Only its
+  explicit ImGui adapter sees opaque SDL event/window values.
+- The pinned SDL3 static build enables video, events, the selected graphics
+  surface, and optional audio; unused subsystems are disabled.
 
 ## Current implementation
 
@@ -40,7 +53,7 @@ version-one format.
   `shared_ptr<const T>` ownership.
 - Typed caches directly hold every decoded runtime asset: materials, meshes,
   texture orientations, collision, skeletons, animations, compositions, and
-  particles. Standard Ogg/Opus audio is loaded directly.
+  particles. Standard WAV, FLAC, MP3, and Ogg/Vorbis audio is loaded directly.
 - `schemas/engine.game.json` owns every cooked payload record. The generator
   emits owned `Wire::*` values and complete C++ readers; Python exports all
   payloads through one generic schema packer.
@@ -108,8 +121,28 @@ version-one format.
 
 ### Input
 
-- `Key` and the GLFW mapping include punctuation, digits, A-Z, navigation,
-  locks, F1-F25, keypad keys, modifiers, super keys, world keys, and menu.
+- `Key` and the SDL3 scancode mapping include punctuation, digits, A-Z,
+  navigation, locks, F1-F24, keypad keys, modifiers, super keys, world keys,
+  and menu. The legacy F25 value safely remains unmapped because SDL3 has no
+  corresponding scancode.
+
+### Audio
+
+- `AudioSystem` owns a replaceable `IAudioBackend` and generation-checked voice
+  slots with deterministic capacity, priority, and age policy.
+- SDL3 owns the platform device and output stream. Miniaudio is compiled without
+  device I/O and owns decoding, mixing, sample-rate conversion, effects, and
+  3D spatialization.
+- Playback supports cached effects and streamed music/ambience, 2D/3D voices,
+  attenuation, rolloff, Doppler, cones, velocity, gain, pitch, loops, fades,
+  pause/resume/seek, and cursor queries.
+- Master/music/effects/dialog buses support gain, mute, and fades.
+- Sound effects have environment reverb and per-voice obstruction/occlusion
+  gain plus low-pass filtering.
+- Optional device failure degrades to a silent facade; required startup fails
+  explicitly. Diagnostics expose device and voice lifecycle outcomes.
+- The vendored audio footprint is limited to miniaudio, stb_vorbis, and the
+  miniaudio reverb node. SDL_mixer is not included.
 
 ## Known limits
 
@@ -123,6 +156,12 @@ version-one format.
   physics-material assets.
 - Character crouch exists in the runtime API; the viewer has no crouch action.
 - There is no debug-draw bridge from Jolt into the renderer.
+- SDL3 gamepad/touch bindings and mobile lifecycle interruption policy are not
+  implemented yet; the input/platform backend seams do not expose desktop
+  types to game code.
+- Mobile and console target packages and graphics backends are not currently
+  built in CI. Console SDL packages remain platform-SDK inputs.
+- Audio has one listener and one global sound-effects environment.
 
 These are explicit limits, not placeholder interfaces.
 
@@ -138,11 +177,16 @@ git diff --check
 ```
 
 - `cmake --build --preset mac-debug -j 6`: passed;
-- `ctest --test-dir build/mac-debug --output-on-failure`: 9/9 passed;
+- `ctest --test-dir build/mac-debug --output-on-failure`: 12/12 passed;
+- an audio-disabled OpenGL viewer build passed with SDL3 audio off and no
+  miniaudio sources;
+- a Vulkan-selected viewer compile/link check passed through SDL3's Vulkan
+  surface path;
 - `python3 -m unittest discover tools/ceasset/tests`: 124 tests passed with one
   intentional skip;
 - `git diff --check`: passed;
 - both game-schema JSON files parse successfully;
-- all 120 concrete `Key` values have a GLFW mapping;
+- all standard concrete `Key` values have an SDL3 scancode mapping; F25 is the
+  sole intentionally unmapped legacy value;
 - source searches contain no live old renderable, asset-database, public
   physics-backend, legacy box-physics, or parallel property APIs.

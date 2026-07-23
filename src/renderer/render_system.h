@@ -27,7 +27,10 @@
 #include <memory>
 #include <vector>
 
-struct GLFWwindow;
+namespace CEngine::Window
+{
+class WindowSystem;
+}
 
 namespace CEngine::Renderer
 {
@@ -153,7 +156,7 @@ class RenderSystem
      * @param window_height TODO: Describe this parameter.
      * @return TODO: Describe the return value.
      */
-    bool Initialize(GLFWwindow *window, int window_width, int window_height);
+    bool Initialize(Window::WindowSystem &window);
     /**
      * @brief TODO: Describe Shutdown.
      */

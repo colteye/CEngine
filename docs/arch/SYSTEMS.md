@@ -433,7 +433,7 @@ It does not own:
 ### 3. Platform boundary
 
 Platform services pump OS/window events. Input adapters convert backend values
-such as GLFW keys or platform gamepad codes into CEngine device controls.
+such as SDL scancodes or platform gamepad codes into CEngine device controls.
 
 Game and entity code never depends on backend key constants.
 

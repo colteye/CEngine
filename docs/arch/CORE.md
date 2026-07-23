@@ -512,7 +512,7 @@ All engine and game-module boundaries follow these rules:
 6. Document calling threads and input lifetimes.
 7. Do not allow one system to modify another system's private state.
 8. Keep serialized records separate from live runtime objects.
-9. Do not expose OpenGL, Vulkan, Jolt, GLFW, socket-library, or audio-library
+9. Do not expose OpenGL, Vulkan, Jolt, SDL, socket-library, or audio-library
    types in engine and game APIs.
 10. Make the common call synchronous and unsurprising when it is simulation-local;
     use staging only across a real thread, I/O, or transaction boundary.
@@ -2063,7 +2063,7 @@ provide:
 - crash-reporting hooks;
 - platform networking and audio-device adapters.
 
-GLFW and OS-specific types remain behind these interfaces. A dedicated server
+SDL and OS-specific types remain behind these interfaces. A dedicated server
 can use a headless platform configuration with no window or graphics surface.
 
 ### 3. Concurrency policy

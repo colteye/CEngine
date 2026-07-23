@@ -9,7 +9,7 @@
 
 /**
  * @file src/assets/audio_asset.h
- * @brief Loads standard Ogg/Opus files without a CEngine envelope.
+ * @brief Loads standard WAV, FLAC, MP3, and Ogg/Vorbis files.
  * @author Erik Coltey
  */
 

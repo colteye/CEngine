@@ -73,14 +73,14 @@ class CeassetTests(unittest.TestCase):
         """TODO: Describe `test_convert_copies_passthrough_target_asset_and_skips_incremental_build`."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source = root / "assets" / "source" / "audio" / "voice.opus"
+            source = root / "assets" / "source" / "audio" / "voice.ogg"
             source.parent.mkdir(parents=True)
-            source.write_bytes(b"opus payload")
+            source.write_bytes(b"OggS payload")
 
             paths = ceasset.make_project_paths(root)
             self.assertEqual(quiet_call(ceasset.convert_source, paths, source), 0)
-            output = root / "assets" / "compiled" / "audio" / "voice.opus"
-            self.assertEqual(output.read_bytes(), b"opus payload")
+            output = root / "assets" / "compiled" / "audio" / "voice.ogg"
+            self.assertEqual(output.read_bytes(), b"OggS payload")
 
             self.assertEqual(quiet_call(ceasset.build, paths, ceasset.BuildOptions(force=False)), 0)
             cache = ceasset.load_cache(paths)

@@ -464,7 +464,7 @@ def _bounds(field: dict[str, Any], expression: str) -> list[str]:
     Returns:
         TODO: Describe the produced value.
     """
-    checks = [f"!CEngine::Assets::IsFinite({expression})"]
+    checks = [f"!std::isfinite({expression})"]
     if "min" in field:
         op = "<=" if field.get("min_exclusive", False) else "<"
         checks.append(f"{expression} {op} {_cpp_float(field['min'])}")
@@ -505,19 +505,19 @@ def _emit_read(lines: list[str], entity: dict[str, Any]) -> None:
                     f"    if (!reader.F32("
                     f"value.transform.position[{index}])) return false;"
                 )
-                final_checks.append(f"!CEngine::Assets::IsFinite(value.transform.position[{index}])")
+                final_checks.append(f"!std::isfinite(value.transform.position[{index}])")
             for index in range(4):
                 lines.append(
                     f"    if (!reader.F32("
                     f"value.transform.rotation[{index}])) return false;"
                 )
-                final_checks.append(f"!CEngine::Assets::IsFinite(value.transform.rotation[{index}])")
+                final_checks.append(f"!std::isfinite(value.transform.rotation[{index}])")
             for index in range(3):
                 lines.append(
                     f"    if (!reader.F32("
                     f"value.transform.scale[{index}])) return false;"
                 )
-                final_checks.append(f"!CEngine::Assets::IsFinite(value.transform.scale[{index}])")
+                final_checks.append(f"!std::isfinite(value.transform.scale[{index}])")
         elif field_type == "f32":
             lines.append(
                 f"    if (!reader.F32({target})) return false;"
@@ -644,7 +644,7 @@ def _emit_wire_checks(
     """Emit schema constraints after one scalar has been decoded."""
     checks: list[str] = []
     if field.get("finite", False) or field["type"] == "f32":
-        checks.append(f"!CEngine::Assets::IsFinite({expression})")
+        checks.append(f"!std::isfinite({expression})")
     if "value" in field:
         checks.append(f"{expression} != {field['value']}")
     if "min" in field:
@@ -810,6 +810,7 @@ def generate_cpp(
         f"#ifndef {guard}",
         f"#define {guard}",
         "",
+        "#include <cmath>",
         "#include <cstddef>",
         "#include <cstdint>",
         "#include <array>",

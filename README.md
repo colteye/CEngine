@@ -30,8 +30,8 @@ cmake --build --preset mac-debug
 ```
 
 Use `mac-release` in place of `mac-debug` for an optimized build. CMake links
-the system OpenGL framework and builds GLFW's Cocoa backend automatically; a
-separate Vulkan SDK is not required.
+the system OpenGL framework and builds SDL3's Cocoa video and CoreAudio
+backends automatically; a separate Vulkan SDK is not required.
 
 From a Windows command prompt:
 
@@ -66,19 +66,28 @@ Build products live under `build/`, which is ignored by git.
 ## Dependencies
 
 - CMake 3.22 or newer
-- A C++17 compiler
+- A C++20 compiler
 - OpenGL
-- GLFW 3
+- SDL 3.4
+- miniaudio 0.11.25 when audio is enabled
 
-By default, CMake downloads and builds an immutable revision of GLFW 3.4 with
-`FetchContent`, so Visual Studio project files or prebuilt GLFW libraries are not
-required. To use an installed GLFW package instead, configure with
-`-DCENGINE_USE_SYSTEM_GLFW=ON`.
+By default, CMake downloads and statically builds an immutable SDL 3.4.10
+revision. To use an installed SDL3 package instead, configure with
+`-DCENGINE_USE_SYSTEM_SDL3=ON`. The fetched build enables only the video,
+event, selected graphics-surface, and optional audio subsystems CEngine uses;
+SDL GPU, renderer, camera, joystick, haptic, HID, sensor, dialog, tray, and
+power support are disabled.
 
-On Linux, fetched GLFW still needs the development packages for the selected
-desktop backend. The default fetched backend is X11; use
-`-DCENGINE_FETCH_GLFW_WAYLAND=ON -DCENGINE_FETCH_GLFW_X11=OFF` for Wayland, or
-use the `debug-headless` preset for a compile/link check on minimal images.
+Audio is enabled by default with `-DCENGINE_ENABLE_AUDIO=ON`. CEngine vendors
+only miniaudio's single-header implementation, the Vorbis decoder, and its
+small reverb node. Miniaudio device I/O, encoding, generation, and resource
+manager are compiled out: SDL3 owns the platform audio device while miniaudio
+owns decoding, mixing, and 3D spatialization. Disable the complete engine audio
+path with `-DCENGINE_ENABLE_AUDIO=OFF`.
+
+On Linux, SDL3 uses the video and audio backends detected by its build. The
+`debug-headless` preset remains available for a compile/link check on minimal
+images.
 
 The viewer opens as a maximized, bordered window and keeps its camera projection
 and render targets matched to the framebuffer at any window resolution. With no arguments, it loads
@@ -116,6 +125,10 @@ pipeline deliberately does not wrap PNG/TGA/DDS bytes in a custom texture file.
 Source inputs such as `.png`, `.tga`, and `.psd` must get explicit Python
 conversion paths with tests before the tool accepts them. PNG/TGA texture
 conversion uses Pillow to write DDS output directly.
+
+Standard WAV, FLAC, MP3, and Ogg/Vorbis audio files are likewise loaded
+directly. See [Audio system](docs/audio_requirements.md) for the runtime feature
+and portability contract.
 
 The converter internals live under `tools/ceasset/ceassetlib/` so each path can
 stay small: binary state, path handling, texture conversion, and command

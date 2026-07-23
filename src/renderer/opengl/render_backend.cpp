@@ -300,7 +300,7 @@ void MeshResources::Destroy()
  * @param in_window_height TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-bool RenderBackend::Initialize(RenderSystem &in_rendering, GLFWwindow * /*window*/, int in_window_width,
+bool RenderBackend::Initialize(RenderSystem &in_rendering, Window::WindowSystem & /*window*/, int in_window_width,
                                int in_window_height)
 {
     rendering_ = &in_rendering;

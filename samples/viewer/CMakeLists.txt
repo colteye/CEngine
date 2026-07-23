@@ -71,7 +71,7 @@ if(CENGINE_BUILD_VIEWER)
             "${PROJECT_SOURCE_DIR}/third_party/imgui/imgui_draw.cpp"
             "${PROJECT_SOURCE_DIR}/third_party/imgui/imgui_tables.cpp"
             "${PROJECT_SOURCE_DIR}/third_party/imgui/imgui_widgets.cpp"
-            "${PROJECT_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_glfw.cpp"
+            "${PROJECT_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_sdl3.cpp"
             "${PROJECT_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_opengl3.cpp"
         )
         target_include_directories(CEngineViewerImGui PUBLIC
@@ -83,10 +83,14 @@ if(CENGINE_BUILD_VIEWER)
         )
         target_compile_definitions(CEngineViewerImGui
             PRIVATE IMGUI_IMPL_OPENGL_LOADER_GLAD)
-        target_link_libraries(CEngineViewerImGui PUBLIC ${CEngine_GLFW_TARGET})
+        target_link_libraries(CEngineViewerImGui PUBLIC ${CENGINE_SDL3_TARGET})
     endif()
 
-    add_executable(CEngine ${VIEWER_GAME_SOURCES} main.cpp)
+    set(VIEWER_EXECUTABLE_SOURCES ${VIEWER_GAME_SOURCES} main.cpp)
+    if(CENGINE_ENABLE_OPENGL)
+        list(APPEND VIEWER_EXECUTABLE_SOURCES imgui_platform.cpp)
+    endif()
+    add_executable(CEngine ${VIEWER_EXECUTABLE_SOURCES})
     add_dependencies(CEngine CEngineViewerSchemas)
     target_include_directories(CEngine PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(CEngine PRIVATE CEngineScene)

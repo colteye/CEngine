@@ -20,7 +20,10 @@
 
 #include <cstdint>
 
-struct GLFWwindow;
+namespace CEngine::Window
+{
+class WindowSystem;
+}
 
 namespace CEngine::Renderer
 {
@@ -71,7 +74,8 @@ class IRenderBackend
      * @param window_height TODO: Describe this parameter.
      * @return TODO: Describe the return value.
      */
-    virtual bool Initialize(RenderSystem &rendering, GLFWwindow *window, int window_width, int window_height) = 0;
+    virtual bool Initialize(RenderSystem &rendering, Window::WindowSystem &window, int window_width,
+                            int window_height) = 0;
     /**
      * @brief TODO: Describe Shutdown.
      */

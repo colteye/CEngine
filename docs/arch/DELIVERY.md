@@ -241,14 +241,14 @@ Dependencies are judged by total owned code and failure risk avoided:
 
 | Dependency | Choice | Tradeoff |
 | --- | --- | --- |
-| GLFW | use | avoids separate desktop window, input, and graphics-surface implementations |
+| SDL3 | use | one portable platform layer supplies window, events, input state, graphics surfaces, clocks, and audio devices |
 | Jolt Physics | use | avoids owning a robust 3D solver, broad phase, contacts, constraints, and character collision |
 | GLM | use internally | compact existing math dependency; its types are not a binary API promise |
 | GLAD | use with OpenGL | generated API loading is mechanical and backend-private |
 | nv_dds | prefer tool/cooker use | runtime consumes validated cooked texture payloads rather than a general image API |
 | Vulkan backend | build only when selected | it does not gate the active milestone backend or create runtime selection machinery |
 | GameNetworkingSockets or ENet | evaluate at M2 | transport supplies tested connection/reliability mechanics while CEngine retains command, snapshot, and replication meaning |
-| miniaudio or equivalent | evaluate at M3 | device, decode, and mixer mechanics stay behind CEngine semantic audio commands |
+| miniaudio | use without device I/O | decoding, mixing, buses, effects, and 3D spatialization stay behind CEngine audio commands while SDL3 owns platform devices |
 
 Dependencies are pinned to immutable revisions or vendored snapshots. Unused
 examples, tests, tools, and backends stay disabled. Third-party types stop at

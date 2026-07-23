@@ -80,8 +80,6 @@ class Reader
     std::size_t offset_ = 0;
 };
 
-[[nodiscard]] bool IsFinite(float value);
-
 /**
  * Reads a complete file and commits the output only after the read succeeds.
  */

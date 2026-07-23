@@ -169,11 +169,6 @@ std::string_view Reader::String(std::size_t offset, std::size_t size) const
     return {reinterpret_cast<const char *>(bytes.data()), bytes.size()};
 }
 
-bool IsFinite(float value)
-{
-    return (std::bit_cast<std::uint32_t>(value) & 0x7f800000u) != 0x7f800000u;
-}
-
 bool ReadFile(const std::filesystem::path &path, std::vector<std::byte> &output)
 {
     std::ifstream file(path, std::ios::binary | std::ios::ate);

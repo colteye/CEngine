@@ -193,7 +193,8 @@ class RenderBackend final : public IRenderBackend
      * @param window_height TODO: Describe this parameter.
      * @return TODO: Describe the return value.
      */
-    bool Initialize(RenderSystem &rendering, GLFWwindow *window, int window_width, int window_height) override;
+    bool Initialize(RenderSystem &rendering, Window::WindowSystem &window, int window_width,
+                    int window_height) override;
     /**
      * @brief TODO: Describe Shutdown.
      */

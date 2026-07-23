@@ -14,6 +14,7 @@
  */
 
 #include "renderer/render_system.h"
+#include "window/window_system.h"
 
 #ifdef CENGINE_ENABLE_OPENGL
 #include "renderer/opengl/render_backend.h"
@@ -67,9 +68,14 @@ RenderSystem::~RenderSystem()
  * @param window_height TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-bool RenderSystem::Initialize(GLFWwindow *window, int window_width, int window_height)
+bool RenderSystem::Initialize(Window::WindowSystem &window)
 {
     Shutdown();
+    const glm::ivec2 drawable_size = window.DrawableSize();
+    if (drawable_size.x <= 0 || drawable_size.y <= 0)
+    {
+        return false;
+    }
 
 #ifdef CENGINE_ENABLE_OPENGL
     backend_ = std::make_unique<OpenGL::RenderBackend>();
@@ -77,7 +83,7 @@ bool RenderSystem::Initialize(GLFWwindow *window, int window_width, int window_h
     backend_ = std::make_unique<VulkanRenderBackend>();
 #endif
 
-    if (backend_ == nullptr || !backend_->Initialize(*this, window, window_width, window_height))
+    if (backend_ == nullptr || !backend_->Initialize(*this, window, drawable_size.x, drawable_size.y))
     {
         backend_.reset();
         return false;
