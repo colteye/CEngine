@@ -311,6 +311,24 @@ if(CENGINE_BUILD_TESTS)
     add_test(NAME load_python_cscene_fixture
         COMMAND CEngineSceneTests "${CENGINE_PYTHON_CSCENE_FIXTURE}")
     set_tests_properties(load_python_cscene_fixture PROPERTIES FIXTURES_REQUIRED python_cscene)
+    if(CENGINE_ENABLE_OPENGL)
+        add_executable(CEngineDirectionalShadowTests
+            src/renderer/opengl/directional_shadow_cascade.cpp
+            tests/renderer/directional_shadow_cascade_tests.cpp
+        )
+        target_include_directories(CEngineDirectionalShadowTests
+            PRIVATE
+                "${CMAKE_CURRENT_SOURCE_DIR}/src"
+            SYSTEM PRIVATE
+                "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glm"
+        )
+        if(MSVC)
+            target_compile_options(CEngineDirectionalShadowTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+        else()
+            target_compile_options(CEngineDirectionalShadowTests PRIVATE -Wall -Wextra -Wpedantic)
+        endif()
+        add_test(NAME directional_shadow_cascades COMMAND CEngineDirectionalShadowTests)
+    endif()
 endif()
 
 set(CENGINE_CORE_SOURCES
@@ -332,6 +350,7 @@ endif()
 if(CENGINE_ENABLE_OPENGL)
     list(APPEND CENGINE_CORE_SOURCES
         third_party/glad/src/glad.c
+        src/renderer/opengl/directional_shadow_cascade.cpp
         src/renderer/opengl/opengl_render_backend.cpp
         src/renderer/opengl/opengl_shadow_system.cpp
         src/renderer/opengl/opengl_texture.cpp

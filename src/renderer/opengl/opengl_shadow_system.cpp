@@ -1,5 +1,6 @@
 #include "opengl_shadow_system.h"
 
+#include "renderer/opengl/directional_shadow_cascade.h"
 #include "renderer/render_system.h"
 
 #include <algorithm>
@@ -428,6 +429,12 @@ void OpenGLShadowSystem::RenderDirectionalShadow(size_t light_index, const Light
 
 	const glm::vec3 light_direction = NormalizeOrDefault(light.direction, glm::vec3(-0.4f, -1.0f, -0.2f));
 	const int resolution = ClampShadowResolution(light.shadow_resolution);
+	std::vector<Bounds> caster_bounds;
+	caster_bounds.reserve(queues.shadow_casters.size());
+	for (uint32_t draw_index : queues.shadow_casters)
+	{
+		caster_bounds.push_back(draw_items[draw_index].world_bounds);
+	}
 
 	for (int cascade = 0; cascade < OpenGLShadows::kCascadeCount; ++cascade)
 	{
@@ -442,57 +449,11 @@ void OpenGLShadowSystem::RenderDirectionalShadow(size_t light_index, const Light
 		const float slice_near = std::max(near_plane, splits[cascade] - overlap);
 		const std::array<glm::vec3, 8> corners = FrustumSliceCorners(inverse_view, constants.proj,
 			slice_near, splits[cascade + 1]);
-		glm::vec3 center(0.0f);
-		for (const glm::vec3& corner : corners)
-		{
-			center += corner;
-		}
-		center /= static_cast<float>(corners.size());
-
-		float radius = 0.0f;
-		for (const glm::vec3& corner : corners)
-		{
-			radius = std::max(radius, glm::length(corner - center));
-		}
-		radius = std::ceil(radius * 16.0f) / 16.0f;
-
-		const glm::vec3 light_right = NormalizeOrDefault(
-			glm::cross(light_direction, StableUpForDirection(light_direction)), glm::vec3(1.0f, 0.0f, 0.0f));
-		const glm::vec3 light_up = glm::cross(light_right, light_direction);
-		const float world_units_per_texel = (radius * 2.0f) / static_cast<float>(resolution);
-		if (world_units_per_texel > 0.0f)
-		{
-			const float right_coordinate = glm::dot(center, light_right);
-			const float up_coordinate = glm::dot(center, light_up);
-			center += light_right * (std::round(right_coordinate / world_units_per_texel) *
-				world_units_per_texel - right_coordinate);
-			center += light_up * (std::round(up_coordinate / world_units_per_texel) *
-				world_units_per_texel - up_coordinate);
-		}
-
-		const float z_padding = std::max(10.0f, radius * 2.0f);
-		glm::mat4 view = glm::lookAt(
-			center - light_direction * (radius + z_padding), center, light_up);
-
-		glm::vec3 min_bounds(std::numeric_limits<float>::max());
-		glm::vec3 max_bounds(std::numeric_limits<float>::lowest());
-		for (const glm::vec3& corner : corners)
-		{
-			const glm::vec3 light_space = glm::vec3(view * glm::vec4(corner, 1.0f));
-			min_bounds = glm::min(min_bounds, light_space);
-			max_bounds = glm::max(max_bounds, light_space);
-		}
-
-		const float xy_padding = world_units_per_texel * 3.0f;
-		min_bounds.x = -radius - xy_padding;
-		max_bounds.x = radius + xy_padding;
-		min_bounds.y = -radius - xy_padding;
-		max_bounds.y = radius + xy_padding;
-
-		const float near_depth = std::max(0.01f, -max_bounds.z - z_padding);
-		const float far_depth = std::max(near_depth + 1.0f, -min_bounds.z + z_padding);
-		const glm::mat4 projection = glm::ortho(min_bounds.x, max_bounds.x, min_bounds.y, max_bounds.y,
-			near_depth, far_depth);
+		const DirectionalShadowCascade cascade_matrices =
+			BuildDirectionalShadowCascade(corners, light_direction, resolution,
+				caster_bounds, kDirectionalShadowDistance);
+		const glm::mat4& view = cascade_matrices.view;
+		const glm::mat4& projection = cascade_matrices.projection;
 		const int cascade_index = cascade_base + cascade;
 
 		gpu_data.cascade_matrices[cascade_index] = projection * view;
