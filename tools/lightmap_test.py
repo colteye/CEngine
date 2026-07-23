@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 import bpy
 import math
 import os
@@ -147,11 +162,26 @@ def mark_visual_seams(mesh):
 
 
 def restore_seams(mesh, original_seams):
+    """TODO: Describe `restore_seams`.
+
+    Args:
+        mesh: TODO: Describe this parameter.
+        original_seams: TODO: Describe this parameter.
+    """
     for edge, use_seam in zip(mesh.edges, original_seams):
         edge.use_seam = use_seam
 
 
 def uv_coordinates_match(first_uv, second_uv):
+    """TODO: Describe `uv_coordinates_match`.
+
+    Args:
+        first_uv: TODO: Describe this parameter.
+        second_uv: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return (
         abs(first_uv.x - second_uv.x) <= UV_EPSILON
         and abs(first_uv.y - second_uv.y) <= UV_EPSILON
@@ -164,12 +194,26 @@ def get_uv_islands(mesh, uv_layer):
     edge_faces = [[] for _ in mesh.edges]
 
     def find(index):
+        """TODO: Describe `find`.
+
+        Args:
+            index: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         while parents[index] != index:
             parents[index] = parents[parents[index]]
             index = parents[index]
         return index
 
     def union(first, second):
+        """TODO: Describe `union`.
+
+        Args:
+            first: TODO: Describe this parameter.
+            second: TODO: Describe this parameter.
+        """
         first_root = find(first)
         second_root = find(second)
 
@@ -219,6 +263,14 @@ def get_uv_islands(mesh, uv_layer):
 
 
 def triangle_aspect_ratio(points):
+    """TODO: Describe `triangle_aspect_ratio`.
+
+    Args:
+        points: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     lengths = [
         (points[1] - points[0]).length,
         (points[2] - points[1]).length,
@@ -309,6 +361,14 @@ def smart_project_bad_islands(mesh):
     # Reacquire this RNA collection after leaving Edit Mode. UV-layer objects
     # captured before an unwrap can become invalid even though their names stay
     # visible in Blender's UI.
+    """TODO: Describe `smart_project_bad_islands`.
+
+    Args:
+        mesh: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     uv_layer = mesh.uv_layers.get(LIGHTMAP_UV_NAME)
 
     if uv_layer is None:
@@ -411,6 +471,11 @@ bpy.ops.object.mode_set(mode='OBJECT')
 # =====================================================
 
 def remove_image(name):
+    """TODO: Describe `remove_image`.
+
+    Args:
+        name: TODO: Describe this parameter.
+    """
     image = bpy.data.images.get(name)
 
     if image:
@@ -418,6 +483,14 @@ def remove_image(name):
 
 
 def make_float_image(name):
+    """TODO: Describe `make_float_image`.
+
+    Args:
+        name: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     remove_image(name)
 
     return bpy.data.images.new(
@@ -437,6 +510,11 @@ raw_img = make_float_image(RAW_NAME)
 # =====================================================
 
 def set_bake_target(image):
+    """TODO: Describe `set_bake_target`.
+
+    Args:
+        image: TODO: Describe this parameter.
+    """
     for slot in obj.material_slots:
         material = slot.material
 

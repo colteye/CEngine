@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import re
@@ -83,23 +98,41 @@ OBJECT_TYPE_IDS = {
 
 
 class BlenderObjectLike(Protocol):
+    """TODO: Describe `BlenderObjectLike`."""
+
     name: str
     type: str
 
     def get(self, key: str, default: object = None) -> object:
+        """TODO: Describe `get`.
+
+        Args:
+            key: TODO: Describe this parameter.
+            default: TODO: Describe this parameter.
+        """
         ...
 
 
 class BlenderCollectionLike(Protocol):
+    """TODO: Describe `BlenderCollectionLike`."""
+
     name: str
     objects: Iterable[BlenderObjectLike]
 
     def get(self, key: str, default: object = None) -> object:
+        """TODO: Describe `get`.
+
+        Args:
+            key: TODO: Describe this parameter.
+            default: TODO: Describe this parameter.
+        """
         ...
 
 
 @dataclass(frozen=True)
 class CollectionExportSpec:
+    """TODO: Describe `CollectionExportSpec`."""
+
     asset_type: AssetType
     asset_name: str
     collection_name: str
@@ -111,10 +144,26 @@ Logger = Callable[[str], None]
 
 
 def elapsed(start: float) -> str:
+    """TODO: Describe `elapsed`.
+
+    Args:
+        start: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return f"{time.perf_counter() - start:.2f}s"
 
 
 def clean_asset_name(name: str) -> str:
+    """TODO: Describe `clean_asset_name`.
+
+    Args:
+        name: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "_", name.strip())
     cleaned = cleaned.strip("._-")
     if not cleaned:
@@ -123,6 +172,14 @@ def clean_asset_name(name: str) -> str:
 
 
 def asset_type_from_text(text: str) -> AssetType:
+    """TODO: Describe `asset_type_from_text`.
+
+    Args:
+        text: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     lowered = text.lower()
     if lowered == "prefab":
         return AssetType.PREFAB
@@ -136,6 +193,16 @@ def collection_export_spec(
     default_asset_type: AssetType = AssetType.UNKNOWN,
     default_asset_name: str | None = None,
 ) -> CollectionExportSpec | None:
+    """TODO: Describe `collection_export_spec`.
+
+    Args:
+        collection: TODO: Describe this parameter.
+        default_asset_type: TODO: Describe this parameter.
+        default_asset_name: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     custom_type = str(collection.get("ce_asset_type", "") or "")
     if custom_type:
         asset_type = asset_type_from_text(custom_type)
@@ -161,6 +228,14 @@ def collection_export_spec(
 
 
 def collection_objects(collection: BlenderCollectionLike) -> list[BlenderObjectLike]:
+    """TODO: Describe `collection_objects`.
+
+    Args:
+        collection: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     objects = getattr(collection, "all_objects", None)
     if objects is None:
         objects = collection.objects
@@ -168,6 +243,14 @@ def collection_objects(collection: BlenderCollectionLike) -> list[BlenderObjectL
 
 
 def object_role(obj: BlenderObjectLike) -> str:
+    """TODO: Describe `object_role`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     custom_role = str(obj.get("ce_role", "") or "")
     if custom_role:
         return clean_asset_name(custom_role).lower()
@@ -179,6 +262,15 @@ def object_role(obj: BlenderObjectLike) -> str:
 
 
 def matrix_multiply(left: list[list[float]], right: list[list[float]]) -> list[list[float]]:
+    """TODO: Describe `matrix_multiply`.
+
+    Args:
+        left: TODO: Describe this parameter.
+        right: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return [
         [sum(left[row][index] * right[index][column] for index in range(4)) for column in range(4)]
         for row in range(4)
@@ -186,6 +278,14 @@ def matrix_multiply(left: list[list[float]], right: list[list[float]]) -> list[l
 
 
 def blender_to_engine_matrix_rows(matrix: object | None) -> list[float]:
+    """TODO: Describe `blender_to_engine_matrix_rows`.
+
+    Args:
+        matrix: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if matrix is None:
         matrix_rows = [
             [1.0, 0.0, 0.0, 0.0],
@@ -213,11 +313,28 @@ def blender_to_engine_matrix_rows(matrix: object | None) -> list[float]:
 
 
 def matrix_rows(obj: BlenderObjectLike) -> list[float]:
+    """TODO: Describe `matrix_rows`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     matrix = getattr(obj, "matrix_world", None)
     return blender_to_engine_matrix_rows(matrix)
 
 
 def parent_name(obj: BlenderObjectLike, object_names: set[str]) -> str:
+    """TODO: Describe `parent_name`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+        object_names: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     parent = getattr(obj, "parent", None)
     if parent is None or parent.name not in object_names:
         return ""
@@ -225,6 +342,14 @@ def parent_name(obj: BlenderObjectLike, object_names: set[str]) -> str:
 
 
 def material_names(obj: BlenderObjectLike) -> list[str]:
+    """TODO: Describe `material_names`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     names: list[str] = []
     for slot in getattr(obj, "material_slots", ()):
         material = getattr(slot, "material", None)
@@ -234,10 +359,26 @@ def material_names(obj: BlenderObjectLike) -> list[str]:
 
 
 def empty_object_assets(_obj: BlenderObjectLike) -> dict[str, object]:
+    """TODO: Describe `empty_object_assets`.
+
+    Args:
+        _obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return {}
 
 
 def path_parts(path: str | Path) -> list[str]:
+    """TODO: Describe `path_parts`.
+
+    Args:
+        path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return [
         part
         for part in generic_path(Path(path)).replace("\\", "/").split("/")
@@ -246,6 +387,15 @@ def path_parts(path: str | Path) -> list[str]:
 
 
 def suffix_relative_path(base: Path, path: str) -> str | None:
+    """TODO: Describe `suffix_relative_path`.
+
+    Args:
+        base: TODO: Describe this parameter.
+        path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     base_parts = path_parts(base)
     value_parts = path_parts(path)
     if not base_parts or len(value_parts) <= len(base_parts):
@@ -259,6 +409,15 @@ def suffix_relative_path(base: Path, path: str) -> str | None:
 
 
 def bundle_relative_path(path: str, bundle_dir: Path | None) -> str:
+    """TODO: Describe `bundle_relative_path`.
+
+    Args:
+        path: TODO: Describe this parameter.
+        bundle_dir: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if bundle_dir is None:
         return path
 
@@ -275,6 +434,16 @@ def object_record(
     object_names: set[str],
     object_assets: ObjectAssets = empty_object_assets,
 ) -> dict[str, object]:
+    """TODO: Describe `object_record`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+        object_names: TODO: Describe this parameter.
+        object_assets: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return {
         "name": obj.name,
         "role": object_role(obj),
@@ -293,11 +462,31 @@ def collection_payload(
     object_assets: ObjectAssets = empty_object_assets,
     bundle_dir: Path | None = None,
 ) -> bytes:
+    """TODO: Describe `collection_payload`.
+
+    Args:
+        source: TODO: Describe this parameter.
+        spec: TODO: Describe this parameter.
+        objects: TODO: Describe this parameter.
+        object_assets: TODO: Describe this parameter.
+        bundle_dir: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     object_list = sorted(list(objects), key=lambda obj: obj.name)
     object_names = {obj.name for obj in object_list}
     strings = bytearray()
 
     def append_string(text: str) -> tuple[int, int]:
+        """TODO: Describe `append_string`.
+
+        Args:
+            text: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         encoded = text.encode("utf-8")
         offset = len(strings)
         strings.extend(encoded)
@@ -373,6 +562,24 @@ def write_collection_asset(
     export_objects: Iterable[BlenderObjectLike] | None = None,
     source_hash: int | None = None,
 ) -> Path | None:
+    """TODO: Describe `write_collection_asset`.
+
+    Args:
+        source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        collection: TODO: Describe this parameter.
+        object_assets: TODO: Describe this parameter.
+        asset_path: TODO: Describe this parameter.
+        default_asset_type: TODO: Describe this parameter.
+        default_asset_name: TODO: Describe this parameter.
+        payload_source: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+        export_objects: TODO: Describe this parameter.
+        source_hash: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     start = time.perf_counter()
     spec = collection_export_spec(collection, default_asset_type, default_asset_name)
     if spec is None:
@@ -413,6 +620,24 @@ def write_collection_assets(
     export_objects: Iterable[BlenderObjectLike] | None = None,
     source_hash: int | None = None,
 ) -> list[Path]:
+    """TODO: Describe `write_collection_assets`.
+
+    Args:
+        source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        collections: TODO: Describe this parameter.
+        object_assets: TODO: Describe this parameter.
+        asset_path: TODO: Describe this parameter.
+        default_asset_type: TODO: Describe this parameter.
+        default_asset_name: TODO: Describe this parameter.
+        payload_source: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+        export_objects: TODO: Describe this parameter.
+        source_hash: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     outputs: list[Path] = []
     for collection in collections:
         output = write_collection_asset(

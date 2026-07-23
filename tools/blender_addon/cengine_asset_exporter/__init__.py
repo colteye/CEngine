@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import sys
@@ -21,6 +36,11 @@ for _dependency_dir in (_PACKAGE_DIR, _PACKAGE_DIR / "vendor"):
 
 
 def _forget_bundled_modules(package_names: set[str]) -> None:
+    """TODO: Describe `_forget_bundled_modules`.
+
+    Args:
+        package_names: TODO: Describe this parameter.
+    """
     package_path = str(_PACKAGE_DIR).lower()
     for name, module in tuple(sys.modules.items()):
         if name.split(".", 1)[0] not in package_names:

@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/entity/fog_entity.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "entity/fog_entity.h"
 
 #include "context.h"
@@ -5,11 +20,21 @@
 
 namespace CEngine::Entities
 {
+/**
+ * @brief TODO: Describe FogEntity::Classname.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::string_view FogEntity::Classname() const
 {
     return "exponential_height_fog";
 }
 
+/**
+ * @brief TODO: Describe FogEntity::Update.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void FogEntity::Update(Context &context, float /*unused*/)
 {
     if (context.rendering == nullptr)
@@ -28,6 +53,11 @@ void FogEntity::Update(Context &context, float /*unused*/)
     context.rendering->SetExponentialHeightFog(fog);
 }
 
+/**
+ * @brief TODO: Describe FogEntity::Shutdown.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void FogEntity::Shutdown(Context &context)
 {
     if (context.rendering != nullptr)

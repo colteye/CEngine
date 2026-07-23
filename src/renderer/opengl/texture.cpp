@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/opengl/texture.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "renderer/opengl/texture.h"
 
 #include "logging/logger.h"
@@ -16,6 +31,9 @@ namespace CEngine::Renderer::OpenGL
 namespace
 {
 
+/**
+ * @brief TODO: Describe ConfigureAnisotropicFiltering.
+ */
 void ConfigureAnisotropicFiltering()
 {
     if (GLAD_GL_ARB_texture_filter_anisotropic == 0 && GLAD_GL_EXT_texture_filter_anisotropic == 0)
@@ -28,6 +46,13 @@ void ConfigureAnisotropicFiltering()
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, std::min(maximum, 8.0f));
 }
 
+/**
+ * @brief TODO: Describe FullMipLevelCount.
+ *
+ * @param width TODO: Describe this parameter.
+ * @param height TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 GLint FullMipLevelCount(std::uint32_t width, std::uint32_t height)
 {
     GLint levels = 0;
@@ -38,6 +63,12 @@ GLint FullMipLevelCount(std::uint32_t width, std::uint32_t height)
     return levels;
 }
 
+/**
+ * @brief TODO: Describe CompressedFormat.
+ *
+ * @param format TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 GLenum CompressedFormat(TextureFormat format)
 {
     switch (format)
@@ -54,6 +85,12 @@ GLenum CompressedFormat(TextureFormat format)
     return 0;
 }
 
+/**
+ * @brief TODO: Describe UploadRgbe.
+ *
+ * @param mip TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 GLuint UploadRgbe(const TextureMip &mip)
 {
     std::vector<std::uint16_t> pixels(mip.data.size());
@@ -94,6 +131,12 @@ GLuint UploadRgbe(const TextureMip &mip)
 
 } // namespace
 
+/**
+ * @brief TODO: Describe TextureLoader::Load.
+ *
+ * @param source TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 GLuint TextureLoader::Load(const Texture &source)
 {
     if (source.Empty())
@@ -154,6 +197,15 @@ GLuint TextureLoader::Load(const Texture &source)
     return texture;
 }
 
+/**
+ * @brief TODO: Describe TextureLoader::CreateSolid.
+ *
+ * @param red TODO: Describe this parameter.
+ * @param green TODO: Describe this parameter.
+ * @param blue TODO: Describe this parameter.
+ * @param alpha TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 GLuint TextureLoader::CreateSolid(GLubyte red, GLubyte green, GLubyte blue, GLubyte alpha)
 {
     const GLubyte pixel[4] = {red, green, blue, alpha};

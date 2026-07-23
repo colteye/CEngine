@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import posixpath
@@ -20,6 +35,14 @@ TABLE_ALIGNMENT = 16
 
 
 def normalize_asset_path(path: str) -> str:
+    """TODO: Describe `normalize_asset_path`.
+
+    Args:
+        path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     normalized = posixpath.normpath(path.replace("\\", "/"))
     if normalized in ("", ".") or normalized.startswith("/") or normalized == ".." or normalized.startswith("../"):
         raise ValueError(f"asset path must be project-relative: {path}")
@@ -28,11 +51,18 @@ def normalize_asset_path(path: str) -> str:
 
 @dataclass(frozen=True)
 class AssetReference:
+    """TODO: Describe `AssetReference`."""
+
     asset_type: AssetType
     path: str
     guid: bytes
 
     def normalized(self) -> "AssetReference":
+        """TODO: Describe `normalized`.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         if len(self.guid) != 16:
             raise ValueError("asset GUID must contain 16 bytes")
         if self.asset_type in (AssetType.UNKNOWN, AssetType.SCENE):
@@ -42,6 +72,8 @@ class AssetReference:
 
 @dataclass(frozen=True)
 class Transform:
+    """TODO: Describe `Transform`."""
+
     position: tuple[float, float, float] = (0.0, 0.0, 0.0)
     rotation: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)
     scale: tuple[float, float, float] = (1.0, 1.0, 1.0)
@@ -49,6 +81,8 @@ class Transform:
 
 @dataclass(frozen=True)
 class EntityDescription:
+    """TODO: Describe `EntityDescription`."""
+
     data: SchemaEntity
     name: str = ""
     flags: int = 1
@@ -56,6 +90,8 @@ class EntityDescription:
 
 @dataclass(frozen=True)
 class SceneSettings:
+    """TODO: Describe `SceneSettings`."""
+
     ambient_color: tuple[float, float, float] = (0.0, 0.0, 0.0)
     exposure: float = 1.0
     gravity: tuple[float, float, float] = (0.0, 0.0, -9.81)
@@ -64,6 +100,8 @@ class SceneSettings:
 
 @dataclass(frozen=True)
 class EntityConnection:
+    """TODO: Describe `EntityConnection`."""
+
     source_entity: int
     event: str
     target_entity: int
@@ -73,23 +111,44 @@ class EntityConnection:
 
 @dataclass(frozen=True)
 class SceneDescription:
+    """TODO: Describe `SceneDescription`."""
+
     entities: tuple[EntityDescription, ...]
     settings: SceneSettings = field(default_factory=SceneSettings)
     connections: tuple[EntityConnection, ...] = ()
 
 
 def _class_info(value: SchemaEntity) -> tuple[str, struct.Struct]:
+    """TODO: Describe `_class_info`.
+
+    Args:
+        value: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if not isinstance(value, SchemaEntity):
         raise TypeError(f"unsupported entity class: {type(value).__name__}")
     return value.classname, entity_struct(value.schema)
 
 
 class StringTable:
+    """TODO: Describe `StringTable`."""
+
     def __init__(self) -> None:
+        """TODO: Describe `__init__`."""
         self.data = bytearray()
         self.ranges: dict[str, tuple[int, int]] = {}
 
     def add(self, value: str) -> tuple[int, int]:
+        """TODO: Describe `add`.
+
+        Args:
+            value: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         if value in self.ranges:
             return self.ranges[value]
         encoded = value.encode("utf-8")
@@ -100,10 +159,27 @@ class StringTable:
 
 
 def _transform_values(value: Transform) -> tuple[float, ...]:
+    """TODO: Describe `_transform_values`.
+
+    Args:
+        value: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return (*value.position, *value.rotation, *value.scale)
 
 
 def _append_aligned(output: bytearray, data: bytes) -> int:
+    """TODO: Describe `_append_aligned`.
+
+    Args:
+        output: TODO: Describe this parameter.
+        data: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     offset = align_up(len(output), TABLE_ALIGNMENT)
     output.extend(bytes(offset - len(output)))
     output.extend(data)
@@ -111,6 +187,14 @@ def _append_aligned(output: bytearray, data: bytes) -> int:
 
 
 def _references(value: SchemaEntity) -> tuple[AssetReference, ...]:
+    """TODO: Describe `_references`.
+
+    Args:
+        value: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     result: list[AssetReference] = []
     for field in value.schema["fields"]:
         field_type = field["type"]
@@ -124,6 +208,14 @@ def _references(value: SchemaEntity) -> tuple[AssetReference, ...]:
 
 
 def _collect_assets(entities: list[EntityDescription]) -> tuple[list[AssetReference], dict[AssetReference, int]]:
+    """TODO: Describe `_collect_assets`.
+
+    Args:
+        entities: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     by_path: dict[str, AssetReference] = {}
     for entity in entities:
         for reference in _references(entity.data):
@@ -137,11 +229,30 @@ def _collect_assets(entities: list[EntityDescription]) -> tuple[list[AssetRefere
 
 
 def _asset_index(reference: AssetReference, indices: dict[AssetReference, int]) -> int:
+    """TODO: Describe `_asset_index`.
+
+    Args:
+        reference: TODO: Describe this parameter.
+        indices: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return indices[reference.normalized()]
 
 
 def _valid_lightmap_binding(scale: tuple[float, float], offset: tuple[float, float],
                             rgbm_range: float) -> bool:
+    """TODO: Describe `_valid_lightmap_binding`.
+
+    Args:
+        scale: TODO: Describe this parameter.
+        offset: TODO: Describe this parameter.
+        rgbm_range: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return (scale[0] > 0.0 and scale[1] > 0.0 and
             offset[0] >= 0.0 and offset[1] >= 0.0 and
             offset[0] + scale[0] <= 1.0 and
@@ -151,6 +262,13 @@ def _valid_lightmap_binding(scale: tuple[float, float], offset: tuple[float, flo
 def _validate_schema_scalar(
     field: dict[str, object], value: float, values: dict[str, object]
 ) -> None:
+    """TODO: Describe `_validate_schema_scalar`.
+
+    Args:
+        field: TODO: Describe this parameter.
+        value: TODO: Describe this parameter.
+        values: TODO: Describe this parameter.
+    """
     if not math.isfinite(value):
         raise ValueError(f"{field['name']} must be finite")
     if "min" in field:
@@ -174,6 +292,17 @@ def _pack_schema_entity(
     auxiliary_assets: list[int],
     entity_count: int,
 ) -> bytes:
+    """TODO: Describe `_pack_schema_entity`.
+
+    Args:
+        value: TODO: Describe this parameter.
+        assets: TODO: Describe this parameter.
+        auxiliary_assets: TODO: Describe this parameter.
+        entity_count: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     _validate_entity_semantics(value)
     packed: list[object] = []
     values = value.values
@@ -239,6 +368,11 @@ def _pack_schema_entity(
     return entity_struct(value.schema).pack(*packed)
 
 def _validate_entity_semantics(value: SchemaEntity) -> None:
+    """TODO: Describe `_validate_entity_semantics`.
+
+    Args:
+        value: TODO: Describe this parameter.
+    """
     if value.classname == "physics_constraint":
         fields = value.values
         constraint_type = int(fields["type"])
@@ -281,6 +415,14 @@ def _validate_entity_semantics(value: SchemaEntity) -> None:
 
 
 def build_scene_payload(scene: SceneDescription) -> bytes:
+    """TODO: Describe `build_scene_payload`.
+
+    Args:
+        scene: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     entities = list(scene.entities)
     if not entities:
         raise ValueError("scene must contain at least one entity")
@@ -386,5 +528,13 @@ def build_scene_payload(scene: SceneDescription) -> bytes:
 
 
 def write_scene(path: Path, scene: SceneDescription, stable_name: str, source_hash: int = 0) -> None:
+    """TODO: Describe `write_scene`.
+
+    Args:
+        path: TODO: Describe this parameter.
+        scene: TODO: Describe this parameter.
+        stable_name: TODO: Describe this parameter.
+        source_hash: TODO: Describe this parameter.
+    """
     write_binary_asset(path, make_asset_desc(
         AssetType.SCENE, stable_name, source_hash, build_scene_payload(scene)))

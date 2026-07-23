@@ -1,4 +1,19 @@
 #!/usr/bin/env python3
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -18,6 +33,14 @@ MANIFEST = ADDON_DIR / "blender_manifest.toml"
 
 
 def iter_package_files(root: Path):
+    """TODO: Describe `iter_package_files`.
+
+    Args:
+        root: TODO: Describe this parameter.
+
+    Yields:
+        TODO: Describe the produced value.
+    """
     for path in sorted(root.rglob("*")):
         if not path.is_file():
             continue
@@ -27,6 +50,13 @@ def iter_package_files(root: Path):
 
 
 def write_wheel_contents(archive: zipfile.ZipFile, wheel: Path, vendor_root: Path) -> None:
+    """TODO: Describe `write_wheel_contents`.
+
+    Args:
+        archive: TODO: Describe this parameter.
+        wheel: TODO: Describe this parameter.
+        vendor_root: TODO: Describe this parameter.
+    """
     with zipfile.ZipFile(wheel) as wheel_archive:
         for member in wheel_archive.infolist():
             if member.is_dir():
@@ -35,6 +65,14 @@ def write_wheel_contents(archive: zipfile.ZipFile, wheel: Path, vendor_root: Pat
 
 
 def platform_manifest(platform: str) -> str:
+    """TODO: Describe `platform_manifest`.
+
+    Args:
+        platform: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     lines = MANIFEST.read_text(encoding="utf-8").splitlines()
     return "\n".join(
         f'platforms = ["{platform}"]' if line.startswith("platforms = ") else line
@@ -47,6 +85,17 @@ def write_addon_zip(
     platform: str = "windows-x64",
     game_file: Path | None = None,
 ) -> Path:
+    """TODO: Describe `write_addon_zip`.
+
+    Args:
+        output: TODO: Describe this parameter.
+        pillow_wheel: TODO: Describe this parameter.
+        platform: TODO: Describe this parameter.
+        game_file: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if pillow_wheel is None:
         pillow_wheel = PILLOW_WHEELS.get(platform)
         if pillow_wheel is None:
@@ -74,6 +123,14 @@ def write_addon_zip(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """TODO: Describe `main`.
+
+    Args:
+        argv: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     parser = argparse.ArgumentParser(description="Package the CEngine Blender add-on.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--pillow-wheel", type=Path)

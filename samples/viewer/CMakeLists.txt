@@ -1,3 +1,12 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
 set(VIEWER_GENERATED_DIR "${CENGINE_GENERATED_ROOT}/viewer")
 set(VIEWER_GENERATED_HEADER
     "${VIEWER_GENERATED_DIR}/viewer_entities.generated.h")

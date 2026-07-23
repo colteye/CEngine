@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/assets/skeleton_loader.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #ifndef CENGINE_SKELETON_LOADER_H
 #define CENGINE_SKELETON_LOADER_H
 
@@ -15,6 +30,9 @@ constexpr std::array<char, 4> SkeletonPayloadMagic = {'C', 'E', 'S', 'K'};
 constexpr std::uint16_t SkeletonPayloadVersion = 1;
 
 #pragma pack(push, 1)
+/**
+ * @brief TODO: Describe DiskSkeletonHeader.
+ */
 struct DiskSkeletonHeader
 {
     std::array<char, 4> magic = SkeletonPayloadMagic;
@@ -28,6 +46,9 @@ struct DiskSkeletonHeader
     std::uint32_t armature_name_size = 0;
 };
 
+/**
+ * @brief TODO: Describe DiskSkeletonBone.
+ */
 struct DiskSkeletonBone
 {
     std::int32_t parent_index = -1;
@@ -40,21 +61,66 @@ struct DiskSkeletonBone
 static_assert(sizeof(DiskSkeletonHeader) == 32, "DiskSkeletonHeader must stay packed and stable.");
 static_assert(sizeof(DiskSkeletonBone) == 76, "DiskSkeletonBone must stay packed and stable.");
 
+/**
+ * @brief TODO: Describe SkeletonAsset.
+ */
 class SkeletonAsset
 {
   public:
+    /**
+     * @brief TODO: Describe Load.
+     *
+     * @param path TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     bool Load(const std::filesystem::path &path);
 
+    /**
+     * @brief TODO: Describe BoneCount.
+     *
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] std::uint32_t BoneCount() const
     {
         return header_.bone_count;
     }
+    /**
+     * @brief TODO: Describe ArmatureName.
+     *
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] std::string_view ArmatureName() const;
+    /**
+     * @brief TODO: Describe Bone.
+     *
+     * @param index TODO: Describe this parameter.
+     * @param bone TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     bool Bone(std::uint32_t index, DiskSkeletonBone &bone) const;
+    /**
+     * @brief TODO: Describe BoneName.
+     *
+     * @param index TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] std::string_view BoneName(std::uint32_t index) const;
 
   private:
+    /**
+     * @brief TODO: Describe Parse.
+     *
+     * @return TODO: Describe the return value.
+     */
     bool Parse();
+    /**
+     * @brief TODO: Describe StringViewAt.
+     *
+     * @param offset TODO: Describe this parameter.
+     * @param size TODO: Describe this parameter.
+     * @param view TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     bool StringViewAt(std::uint32_t offset, std::uint32_t size, std::string_view &view) const;
 
     AssetFile file_;

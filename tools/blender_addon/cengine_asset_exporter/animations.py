@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import struct
@@ -27,21 +42,50 @@ INTERPOLATION_IDS = {
 
 @dataclass(frozen=True)
 class AnimationExport:
+    """TODO: Describe `AnimationExport`."""
+
     source: object
     armature: object
     output: Path
 
 
 def elapsed(start: float) -> str:
+    """TODO: Describe `elapsed`.
+
+    Args:
+        start: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return f"{time.perf_counter() - start:.2f}s"
 
 
 def animation_output_path(blend_source: Path, output_root: Path, armature_name: str, action_name: str) -> Path:
+    """TODO: Describe `animation_output_path`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        armature_name: TODO: Describe this parameter.
+        action_name: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     name = f"{clean_asset_name(armature_name)}_{clean_asset_name(action_name)}"
     return output_dir_for_source(blend_source, output_root) / "animations" / f"{name}.canim"
 
 
 def armature_actions(armature: object) -> list[object]:
+    """TODO: Describe `armature_actions`.
+
+    Args:
+        armature: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     actions: list[object] = []
     seen: set[int] = set()
 
@@ -67,6 +111,14 @@ def armature_actions(armature: object) -> list[object]:
 
 
 def action_targets(objects: Iterable[object]) -> list[tuple[object, object]]:
+    """TODO: Describe `action_targets`.
+
+    Args:
+        objects: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     targets: list[tuple[object, object]] = []
     for obj in sorted(objects, key=lambda item: item.name):
         if getattr(obj, "type", "") != "ARMATURE":
@@ -77,17 +129,42 @@ def action_targets(objects: Iterable[object]) -> list[tuple[object, object]]:
 
 
 def frame_range(action: object) -> tuple[float, float]:
+    """TODO: Describe `frame_range`.
+
+    Args:
+        action: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     value = getattr(action, "frame_range", (0.0, 0.0))
     return (float(value[0]), float(value[1]))
 
 
 def keyframe_record(keyframe: object) -> tuple[float, float, int]:
+    """TODO: Describe `keyframe_record`.
+
+    Args:
+        keyframe: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     co = getattr(keyframe, "co", (0.0, 0.0))
     interpolation = str(getattr(keyframe, "interpolation", "")).upper()
     return (float(co[0]), float(co[1]), INTERPOLATION_IDS.get(interpolation, 0))
 
 
 def append_string(strings: bytearray, text: str) -> tuple[int, int]:
+    """TODO: Describe `append_string`.
+
+    Args:
+        strings: TODO: Describe this parameter.
+        text: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     encoded = text.encode("utf-8")
     offset = len(strings)
     strings.extend(encoded)
@@ -95,6 +172,17 @@ def append_string(strings: bytearray, text: str) -> tuple[int, int]:
 
 
 def animation_payload(source: Path, armature: object, action: object, fps: float) -> bytes:
+    """TODO: Describe `animation_payload`.
+
+    Args:
+        source: TODO: Describe this parameter.
+        armature: TODO: Describe this parameter.
+        action: TODO: Describe this parameter.
+        fps: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     start, end = frame_range(action)
     strings = bytearray()
     source_offset, source_size = append_string(strings, generic_path(source))
@@ -158,6 +246,22 @@ def write_animation_asset(
     logger: Callable[[str], None] | None = None,
     source_hash: int | None = None,
 ) -> AnimationExport:
+    """TODO: Describe `write_animation_asset`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        armature: TODO: Describe this parameter.
+        action: TODO: Describe this parameter.
+        fps: TODO: Describe this parameter.
+        skeleton_output_path_for_name: TODO: Describe this parameter.
+        asset_path: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+        source_hash: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     start = time.perf_counter()
     output = animation_output_path(blend_source, output_root, armature.name, action.name)
     del skeleton_output_path_for_name
@@ -189,6 +293,21 @@ def write_animation_assets(
     logger: Callable[[str], None] | None = None,
     source_hash: int | None = None,
 ) -> list[AnimationExport]:
+    """TODO: Describe `write_animation_assets`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        objects: TODO: Describe this parameter.
+        fps: TODO: Describe this parameter.
+        skeleton_output_path_for_name: TODO: Describe this parameter.
+        asset_path: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+        source_hash: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     targets = action_targets(objects)
     if logger is not None:
         logger(f"Animation export queue: {len(targets)} armature/action target(s)")

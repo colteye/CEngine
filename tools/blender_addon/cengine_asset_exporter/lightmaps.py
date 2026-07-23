@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import math
@@ -40,12 +55,16 @@ INDIRECT_BAKE_LIGHT_MODES = frozenset({"baked", "mixed"})
 
 @dataclass(frozen=True)
 class AtlasTile:
+    """TODO: Describe `AtlasTile`."""
+
     scale: tuple[float, float]
     offset: tuple[float, float]
 
 
 @dataclass(frozen=True)
 class BakeTarget:
+    """TODO: Describe `BakeTarget`."""
+
     key: str
     source: object
     world_matrix: object
@@ -56,6 +75,8 @@ class BakeTarget:
 
 @dataclass(frozen=True)
 class LightmapSettings:
+    """TODO: Describe `LightmapSettings`."""
+
     resolution: int = DEFAULT_RESOLUTION
     padding: int = DEFAULT_PADDING
     samples: int = DEFAULT_SAMPLES
@@ -64,6 +85,14 @@ class LightmapSettings:
 
     @classmethod
     def from_scene(cls, scene: object) -> "LightmapSettings":
+        """TODO: Describe `from_scene`.
+
+        Args:
+            scene: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         getter = getattr(scene, "get", lambda _key, default: default)
         return cls(
             resolution=int(getter(
@@ -78,6 +107,16 @@ class LightmapSettings:
 
 
 def plan_atlas(names: Iterable[str], resolution: int, padding: int) -> dict[str, AtlasTile]:
+    """TODO: Describe `plan_atlas`.
+
+    Args:
+        names: TODO: Describe this parameter.
+        resolution: TODO: Describe this parameter.
+        padding: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     ordered = sorted(set(names))
     if not ordered:
         return {}
@@ -108,6 +147,15 @@ def plan_atlas(names: Iterable[str], resolution: int, padding: int) -> dict[str,
 
 
 def encode_rgbm(pixels: Iterable[float], rgbm_range: float) -> bytes:
+    """TODO: Describe `encode_rgbm`.
+
+    Args:
+        pixels: TODO: Describe this parameter.
+        rgbm_range: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     values = pixels if hasattr(pixels, "__len__") and hasattr(pixels, "__getitem__") else list(pixels)
     if len(values) % 4 != 0:
         raise ValueError("Blender lightmap pixels must be RGBA")
@@ -134,6 +182,14 @@ def encode_rgbm(pixels: Iterable[float], rgbm_range: float) -> bytes:
 
 
 def encode_rgbexp32(pixels: Iterable[float]) -> bytes:
+    """TODO: Describe `encode_rgbexp32`.
+
+    Args:
+        pixels: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     values = pixels if hasattr(pixels, "__len__") and hasattr(pixels, "__getitem__") else list(pixels)
     if len(values) % 4 != 0:
         raise ValueError("Blender lightmap pixels must be RGBA")
@@ -158,6 +214,14 @@ def encode_rgbexp32(pixels: Iterable[float]) -> bytes:
 
 
 def _static_meshes(objects: Iterable[object]) -> list[object]:
+    """TODO: Describe `_static_meshes`.
+
+    Args:
+        objects: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return sorted((obj for obj in objects
                    if getattr(obj, "type", "") == "MESH"
                    and object_role(obj) != "occluder"
@@ -168,6 +232,12 @@ def _static_meshes(objects: Iterable[object]) -> list[object]:
 
 
 def _select_only(blender: object, obj: object) -> None:
+    """TODO: Describe `_select_only`.
+
+    Args:
+        blender: TODO: Describe this parameter.
+        obj: TODO: Describe this parameter.
+    """
     for selected in tuple(getattr(blender.context, "selected_objects", ())):
         selected.select_set(False)
     obj.select_set(True)
@@ -176,6 +246,16 @@ def _select_only(blender: object, obj: object) -> None:
 
 def _edge_has_visual_seam(mesh: object, edge_index: int,
                           edge_face_loops: list[list[tuple[int, tuple[int, int]]]]) -> bool:
+    """TODO: Describe `_edge_has_visual_seam`.
+
+    Args:
+        mesh: TODO: Describe this parameter.
+        edge_index: TODO: Describe this parameter.
+        edge_face_loops: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     face_loops = edge_face_loops[edge_index]
     if len(face_loops) != 2:
         return True
@@ -202,6 +282,14 @@ def _edge_has_visual_seam(mesh: object, edge_index: int,
 
 
 def _mark_visual_seams(mesh: object) -> list[bool]:
+    """TODO: Describe `_mark_visual_seams`.
+
+    Args:
+        mesh: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     original_seams = [bool(edge.use_seam) for edge in mesh.edges]
     sharp_edges = mesh.attributes.get("sharp_edge")
     edge_face_loops: list[list[tuple[int, tuple[int, int]]]] = [
@@ -230,26 +318,64 @@ def _mark_visual_seams(mesh: object) -> list[bool]:
 
 
 def _restore_seams(mesh: object, original_seams: Iterable[bool]) -> None:
+    """TODO: Describe `_restore_seams`.
+
+    Args:
+        mesh: TODO: Describe this parameter.
+        original_seams: TODO: Describe this parameter.
+    """
     for edge, use_seam in zip(mesh.edges, original_seams):
         edge.use_seam = use_seam
 
 
 def _uv_coordinates_match(first_uv: object, second_uv: object) -> bool:
+    """TODO: Describe `_uv_coordinates_match`.
+
+    Args:
+        first_uv: TODO: Describe this parameter.
+        second_uv: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return (abs(first_uv.x - second_uv.x) <= UV_EPSILON
             and abs(first_uv.y - second_uv.y) <= UV_EPSILON)
 
 
 def _uv_islands(mesh: object, uv_layer: object) -> list[list[int]]:
+    """TODO: Describe `_uv_islands`.
+
+    Args:
+        mesh: TODO: Describe this parameter.
+        uv_layer: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     parents = list(range(len(mesh.polygons)))
     edge_faces: list[list[tuple[int, tuple[int, int]]]] = [[] for _ in mesh.edges]
 
     def find(index: int) -> int:
+        """TODO: Describe `find`.
+
+        Args:
+            index: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         while parents[index] != index:
             parents[index] = parents[parents[index]]
             index = parents[index]
         return index
 
     def union(first: int, second: int) -> None:
+        """TODO: Describe `union`.
+
+        Args:
+            first: TODO: Describe this parameter.
+            second: TODO: Describe this parameter.
+        """
         first_root = find(first)
         second_root = find(second)
         if first_root != second_root:
@@ -285,6 +411,14 @@ def _uv_islands(mesh: object, uv_layer: object) -> list[list[int]]:
 
 
 def _triangle_aspect_ratio(points: list[object]) -> float:
+    """TODO: Describe `_triangle_aspect_ratio`.
+
+    Args:
+        points: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     lengths = ((points[1] - points[0]).length,
                (points[2] - points[1]).length,
                (points[0] - points[2]).length)
@@ -293,6 +427,14 @@ def _triangle_aspect_ratio(points: list[object]) -> float:
 
 
 def _trimmed_density_ratio(densities: Iterable[float]) -> float | None:
+    """TODO: Describe `_trimmed_density_ratio`.
+
+    Args:
+        densities: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     values = sorted(float(value) for value in densities)
     if len(values) < MIN_TEXEL_DENSITY_SAMPLES:
         return None
@@ -305,6 +447,16 @@ def _trimmed_density_ratio(densities: Iterable[float]) -> float | None:
 
 def _island_needs_fallback(mesh: object, uv_layer: object,
                            polygon_indices: Iterable[int]) -> bool:
+    """TODO: Describe `_island_needs_fallback`.
+
+    Args:
+        mesh: TODO: Describe this parameter.
+        uv_layer: TODO: Describe this parameter.
+        polygon_indices: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     texel_densities: list[float] = []
     for polygon_index in polygon_indices:
         loop_indices = list(mesh.polygons[polygon_index].loop_indices)
@@ -334,6 +486,15 @@ def _island_needs_fallback(mesh: object, uv_layer: object,
 
 
 def _smart_project_bad_islands(blender: object, obj: object) -> int:
+    """TODO: Describe `_smart_project_bad_islands`.
+
+    Args:
+        blender: TODO: Describe this parameter.
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     mesh = obj.data
     uv_layer = mesh.uv_layers.get(LIGHTMAP_UV)
     if uv_layer is None:
@@ -365,6 +526,14 @@ def ensure_lightmap_uvs(
     resolution: int = DEFAULT_RESOLUTION,
     padding: int = DEFAULT_PADDING,
 ) -> None:
+    """TODO: Describe `ensure_lightmap_uvs`.
+
+    Args:
+        blender: TODO: Describe this parameter.
+        objects: TODO: Describe this parameter.
+        resolution: TODO: Describe this parameter.
+        padding: TODO: Describe this parameter.
+    """
     previous_active = getattr(blender.context.view_layer.objects, "active", None)
     previous_selected = tuple(getattr(blender.context, "selected_objects", ()))
     previous_mode = str(getattr(blender.context, "mode", "OBJECT"))
@@ -433,6 +602,12 @@ def ensure_lightmap_uvs(
 
 
 def _copy_bake_uv(mesh: object, tile: AtlasTile) -> None:
+    """TODO: Describe `_copy_bake_uv`.
+
+    Args:
+        mesh: TODO: Describe this parameter.
+        tile: TODO: Describe this parameter.
+    """
     source = mesh.uv_layers.get(LIGHTMAP_UV)
     if source is None:
         raise RuntimeError(f"mesh has no {LIGHTMAP_UV} UV layer")
@@ -450,11 +625,27 @@ def _copy_bake_uv(mesh: object, tile: AtlasTile) -> None:
 
 
 def _save_hdr(pixels: Iterable[float], resolution: int, dds_path: Path) -> None:
+    """TODO: Describe `_save_hdr`.
+
+    Args:
+        pixels: TODO: Describe this parameter.
+        resolution: TODO: Describe this parameter.
+        dds_path: TODO: Describe this parameter.
+    """
     write_rgbexp32_dds(dds_path, resolution, resolution, encode_rgbexp32(pixels))
 
 
 def _bake_targets(objects: Iterable[object],
                   prefab_objects: dict[str, list[object]]) -> list[BakeTarget]:
+    """TODO: Describe `_bake_targets`.
+
+    Args:
+        objects: TODO: Describe this parameter.
+        prefab_objects: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     targets: list[BakeTarget] = []
     for obj in sorted(objects, key=lambda value: str(getattr(value, "name", ""))):
         if (getattr(obj, "type", "") == "MESH" and
@@ -482,6 +673,14 @@ def _bake_targets(objects: Iterable[object],
 
 
 def _maximum_rgb(pixels: Iterable[float]) -> float:
+    """TODO: Describe `_maximum_rgb`.
+
+    Args:
+        pixels: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     values = pixels if hasattr(pixels, "__len__") and hasattr(pixels, "__getitem__") else list(pixels)
     if len(values) % 4 != 0:
         raise RuntimeError("Blender lightmap pixels must be RGBA")
@@ -490,6 +689,14 @@ def _maximum_rgb(pixels: Iterable[float]) -> float:
 
 
 def _active_material_output(node_tree: object) -> object | None:
+    """TODO: Describe `_active_material_output`.
+
+    Args:
+        node_tree: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     for node in node_tree.nodes:
         if getattr(node, "type", "") == "OUTPUT_MATERIAL" and bool(
                 getattr(node, "is_active_output", False)):
@@ -576,6 +783,11 @@ def _prepare_material_alpha_for_bake(material: object) -> dict[str, object] | No
 
 
 def _restore_material_alpha_after_bake(change: dict[str, object]) -> None:
+    """TODO: Describe `_restore_material_alpha_after_bake`.
+
+    Args:
+        change: TODO: Describe this parameter.
+    """
     node_tree = change["node_tree"]
     output_node = change["output_node"]
     surface_input = output_node.inputs.get("Surface")
@@ -600,6 +812,17 @@ def _denoise_lightmap(
     resolution: int,
     logger: Callable[[str], None] | None = None,
 ) -> array:
+    """TODO: Describe `_denoise_lightmap`.
+
+    Args:
+        blender: TODO: Describe this parameter.
+        source_image: TODO: Describe this parameter.
+        resolution: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     scene = blender.context.scene
     previous_group = scene.compositing_node_group
     previous_filepath = scene.render.filepath
@@ -673,6 +896,21 @@ def bake_scene_lightmaps(
     settings: LightmapSettings | None = None,
 ) -> tuple[dict[str, LightmapPlacement],
            dict[str, tuple[tuple[int, LightmapPlacement], ...]], list[Path]]:
+    """TODO: Describe `bake_scene_lightmaps`.
+
+    Args:
+        blender: TODO: Describe this parameter.
+        source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        objects: TODO: Describe this parameter.
+        scene_name: TODO: Describe this parameter.
+        prefab_objects: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+        settings: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     object_list = list(objects)
     has_baked_lights = any(
         getattr(obj, "type", "") == "LIGHT" and
@@ -730,10 +968,20 @@ def bake_scene_lightmaps(
     bake_materials: dict[int, object] = {}
     hidden_objects: list[tuple[object, bool]] = []
     def hide_object(obj: object) -> None:
+        """TODO: Describe `hide_object`.
+
+        Args:
+            obj: TODO: Describe this parameter.
+        """
         hidden_objects.append((obj, bool(obj.hide_render)))
         obj.hide_render = True
 
     def target_image(image: object) -> None:
+        """TODO: Describe `target_image`.
+
+        Args:
+            image: TODO: Describe this parameter.
+        """
         for material, node in temporary_nodes:
             node.image = image
             for existing in material.node_tree.nodes:
@@ -742,6 +990,7 @@ def bake_scene_lightmaps(
             node.select = True
 
     def bake_pass() -> None:
+        """TODO: Describe `bake_pass`."""
         target_image(raw_image)
         scene.cycles.bake_type = "DIFFUSE"
         scene.render.bake.use_selected_to_active = False

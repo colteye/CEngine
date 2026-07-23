@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/assets/casset_loader.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/casset_loader.h"
 
 #include "assets/asset_error.h"
@@ -10,6 +25,13 @@ namespace CEngine::Assets
 namespace
 {
 
+/**
+ * @brief TODO: Describe ReadHeader.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadHeader(ByteView bytes, DiskCAssetHeader &value)
 {
     if (bytes.size < sizeof(value))
@@ -29,6 +51,14 @@ bool ReadHeader(ByteView bytes, DiskCAssetHeader &value)
            ReadU32LE(bytes, offset, value.collection_name_size);
 }
 
+/**
+ * @brief TODO: Describe ReadObjectRow.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadObjectRow(ByteView bytes, std::size_t offset, DiskCAssetObject &value)
 {
     if (!ReadU32LE(bytes, offset, value.name_offset) || !ReadU32LE(bytes, offset, value.name_size) ||
@@ -48,6 +78,14 @@ bool ReadObjectRow(ByteView bytes, std::size_t offset, DiskCAssetObject &value)
     return true;
 }
 
+/**
+ * @brief TODO: Describe ReadComponentRow.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadComponentRow(ByteView bytes, std::size_t offset, DiskCAssetComponent &value)
 {
     return ReadU32LE(bytes, offset, value.kind) && ReadU32LE(bytes, offset, value.path_offset) &&
@@ -56,6 +94,12 @@ bool ReadComponentRow(ByteView bytes, std::size_t offset, DiskCAssetComponent &v
 
 } // namespace
 
+/**
+ * @brief TODO: Describe CAsset::Load.
+ *
+ * @param path TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool CAsset::Load(const std::filesystem::path &path)
 {
     file_ = {};
@@ -71,6 +115,11 @@ bool CAsset::Load(const std::filesystem::path &path)
     return Parse();
 }
 
+/**
+ * @brief TODO: Describe CAsset::Parse.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool CAsset::Parse()
 {
     if (file_.Type() != AssetType::Asset)
@@ -143,6 +192,11 @@ bool CAsset::Parse()
     return true;
 }
 
+/**
+ * @brief TODO: Describe CAsset::SourcePath.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::string_view CAsset::SourcePath() const
 {
     std::string_view view;
@@ -150,6 +204,11 @@ std::string_view CAsset::SourcePath() const
     return view;
 }
 
+/**
+ * @brief TODO: Describe CAsset::CollectionName.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::string_view CAsset::CollectionName() const
 {
     std::string_view view;
@@ -157,6 +216,13 @@ std::string_view CAsset::CollectionName() const
     return view;
 }
 
+/**
+ * @brief TODO: Describe CAsset::Object.
+ *
+ * @param index TODO: Describe this parameter.
+ * @param object TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool CAsset::Object(std::uint32_t index, CAssetObject &object) const
 {
     if (index >= header_.object_count)
@@ -191,6 +257,13 @@ bool CAsset::Object(std::uint32_t index, CAssetObject &object) const
     return true;
 }
 
+/**
+ * @brief TODO: Describe CAsset::Component.
+ *
+ * @param index TODO: Describe this parameter.
+ * @param component TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool CAsset::Component(std::uint32_t index, CAssetComponent &component) const
 {
     if (index >= header_.component_count)
@@ -216,6 +289,14 @@ bool CAsset::Component(std::uint32_t index, CAssetComponent &component) const
     return true;
 }
 
+/**
+ * @brief TODO: Describe CAsset::Component.
+ *
+ * @param object TODO: Describe this parameter.
+ * @param local_index TODO: Describe this parameter.
+ * @param component TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool CAsset::Component(const CAssetObject &object, std::uint32_t local_index, CAssetComponent &component) const
 {
     if (local_index >= object.component_count)
@@ -225,6 +306,14 @@ bool CAsset::Component(const CAssetObject &object, std::uint32_t local_index, CA
     return Component(object.first_component + local_index, component);
 }
 
+/**
+ * @brief TODO: Describe CAsset::StringViewAt.
+ *
+ * @param offset TODO: Describe this parameter.
+ * @param size TODO: Describe this parameter.
+ * @param view TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool CAsset::StringViewAt(std::uint32_t offset, std::uint32_t size, std::string_view &view) const
 {
     if (offset > string_table_.size || size > string_table_.size - offset)

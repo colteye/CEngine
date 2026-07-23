@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import math
@@ -19,6 +34,8 @@ from .scene_export import (
 
 @dataclass(frozen=True)
 class LightmapPlacement:
+    """TODO: Describe `LightmapPlacement`."""
+
     texture: Path
     scale: tuple[float, float]
     offset: tuple[float, float]
@@ -26,6 +43,14 @@ class LightmapPlacement:
 
 
 def blender_scene_settings(blender: object) -> SceneSettings:
+    """TODO: Describe `blender_scene_settings`.
+
+    Args:
+        blender: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     scene = getattr(getattr(blender, "context", None), "scene", None)
     world = getattr(scene, "world", None)
     color = tuple(float(value) for value in getattr(world, "color", (0.05, 0.05, 0.05)))[:3]
@@ -51,11 +76,29 @@ def blender_scene_settings(blender: object) -> SceneSettings:
 
 
 def _property(obj: object, name: str, default: object = None) -> object:
+    """TODO: Describe `_property`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+        name: TODO: Describe this parameter.
+        default: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     getter = getattr(obj, "get", None)
     return getter(name, default) if callable(getter) else default
 
 
 def _property_name(field: dict[str, object]) -> str:
+    """TODO: Describe `_property_name`.
+
+    Args:
+        field: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return str(field.get("blender_property", f"ce_{field['name']}"))
 
 
@@ -65,6 +108,17 @@ def _native_schema_value(
     field: dict[str, object],
     default: object,
 ) -> object:
+    """TODO: Describe `_native_schema_value`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+        classname: TODO: Describe this parameter.
+        field: TODO: Describe this parameter.
+        default: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     name = str(field["name"])
     data = getattr(obj, "data", None)
     if classname == "player" and getattr(obj, "type", "") == "CAMERA":
@@ -78,6 +132,15 @@ def _native_schema_value(
 
 
 def _enum_value(field: dict[str, object], value: object) -> int:
+    """TODO: Describe `_enum_value`.
+
+    Args:
+        field: TODO: Describe this parameter.
+        value: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     values = field.get("values", {})
     if isinstance(value, str):
         normalized = value.replace("_", "").lower()
@@ -99,6 +162,19 @@ def schema_entity(
     resolve_asset_path: Callable[[str], Path] | None = None,
     entity_indices: dict[str, int] | None = None,
 ) -> SchemaEntity:
+    """TODO: Describe `schema_entity`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+        schema: TODO: Describe this parameter.
+        transform: TODO: Describe this parameter.
+        asset_path: TODO: Describe this parameter.
+        resolve_asset_path: TODO: Describe this parameter.
+        entity_indices: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     values: dict[str, object] = {}
     for field in schema["fields"]:
         field_type = field["type"]
@@ -169,6 +245,14 @@ def schema_entity(
 
 
 def _quaternion(matrix: list[list[float]]) -> tuple[float, float, float, float]:
+    """TODO: Describe `_quaternion`.
+
+    Args:
+        matrix: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     trace = matrix[0][0] + matrix[1][1] + matrix[2][2]
     if trace > 0.0:
         scale = math.sqrt(trace + 1.0) * 2.0
@@ -192,6 +276,14 @@ def _quaternion(matrix: list[list[float]]) -> tuple[float, float, float, float]:
 
 
 def object_transform(obj: object) -> Transform:
+    """TODO: Describe `object_transform`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     flat = blender_to_engine_matrix_rows(getattr(obj, "matrix_world", None))
     matrix = [flat[index:index + 4] for index in range(0, 16, 4)]
     scale = [math.sqrt(sum(matrix[row][column] ** 2 for row in range(3))) for column in range(3)]
@@ -215,6 +307,16 @@ def object_transform(obj: object) -> Transform:
 
 
 def _reference(asset_type: AssetType, path: Path, asset_path: Callable[[Path], str]) -> AssetReference:
+    """TODO: Describe `_reference`.
+
+    Args:
+        asset_type: TODO: Describe this parameter.
+        path: TODO: Describe this parameter.
+        asset_path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     relative = asset_path(path)
     return AssetReference(asset_type, relative, guid_from_stable_name(relative))
 
@@ -230,6 +332,22 @@ def scene_description(
     game_schema: GameSchema | None = None,
     resolve_asset_path: Callable[[str], Path] | None = None,
 ) -> SceneDescription:
+    """TODO: Describe `scene_description`.
+
+    Args:
+        objects: TODO: Describe this parameter.
+        mesh_outputs: TODO: Describe this parameter.
+        material_outputs: TODO: Describe this parameter.
+        asset_path: TODO: Describe this parameter.
+        lightmaps: TODO: Describe this parameter.
+        skybox_outputs: TODO: Describe this parameter.
+        physics_outputs: TODO: Describe this parameter.
+        game_schema: TODO: Describe this parameter.
+        resolve_asset_path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     objects = tuple(objects)
     entities: list[EntityDescription] = []
     schemas = game_schema or load_bundled_game()

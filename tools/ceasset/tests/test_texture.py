@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import sys
@@ -15,7 +30,10 @@ from ceassetlib.texture import (
 
 
 class TextureTests(unittest.TestCase):
+    """TODO: Describe `TextureTests`."""
+
     def test_pillow_dds_format_normalization_is_small_and_explicit(self) -> None:
+        """TODO: Describe `test_pillow_dds_format_normalization_is_small_and_explicit`."""
         self.assertEqual(normalize_pillow_dds_format("BC1"), "DXT1")
         self.assertEqual(normalize_pillow_dds_format("bc3"), "DXT5")
         self.assertEqual(normalize_pillow_dds_format("BC5"), "BC5")
@@ -23,6 +41,7 @@ class TextureTests(unittest.TestCase):
             normalize_pillow_dds_format("BC7")
 
     def test_builtin_dxt5_writer_emits_one_block_for_four_by_four_rgba(self) -> None:
+        """TODO: Describe `test_builtin_dxt5_writer_emits_one_block_for_four_by_four_rgba`."""
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "lightmap.dds"
             write_rgba_dxt5(output, 4, 4, bytes((255, 128, 0, 255)) * 16)
@@ -33,6 +52,7 @@ class TextureTests(unittest.TestCase):
             self.assertEqual(len(data), 128 + 16)
 
     def test_pillow_conversion_accepts_one_bit_source_images(self) -> None:
+        """TODO: Describe `test_pillow_conversion_accepts_one_bit_source_images`."""
         try:
             from PIL import Image
         except ImportError as error:
@@ -48,6 +68,7 @@ class TextureTests(unittest.TestCase):
             self.assertEqual(output.read_bytes()[:4], b"DDS ")
 
     def test_builtin_rgbexp32_writer_emits_tagged_uncompressed_texture(self) -> None:
+        """TODO: Describe `test_builtin_rgbexp32_writer_emits_tagged_uncompressed_texture`."""
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "lightmap.dds"
             pixels = bytes((255, 128, 64, 129, 0, 64, 32, 127))

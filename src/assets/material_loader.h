@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/assets/material_loader.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #ifndef CENGINE_MATERIAL_LOADER_H
 #define CENGINE_MATERIAL_LOADER_H
 
@@ -8,6 +23,13 @@
 namespace CEngine::Assets
 {
 
+/**
+ * @brief TODO: Describe LoadMaterialAsset.
+ *
+ * @param path TODO: Describe this parameter.
+ * @param material TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool LoadMaterialAsset(const std::filesystem::path &path, CEngine::Renderer::Material &material);
 
 } // namespace CEngine::Assets

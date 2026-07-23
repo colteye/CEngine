@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file samples/viewer/entity/player_entity.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "entity/player_entity.h"
 
 #include "context.h"
@@ -13,11 +28,21 @@
 
 namespace Viewer
 {
+/**
+ * @brief TODO: Describe PlayerEntity::Classname.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::string_view PlayerEntity::Classname() const
 {
     return "player";
 }
 
+/**
+ * @brief TODO: Describe PlayerEntity::Initialize.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void PlayerEntity::Initialize(CEngine::Context &context)
 {
     const glm::vec3 direction =
@@ -38,6 +63,12 @@ void PlayerEntity::Initialize(CEngine::Context &context)
     }
 }
 
+/**
+ * @brief TODO: Describe PlayerEntity::Update.
+ *
+ * @param context TODO: Describe this parameter.
+ * @param delta_seconds TODO: Describe this parameter.
+ */
 void PlayerEntity::Update(CEngine::Context &context, float delta_seconds)
 {
     if (!enabled)
@@ -105,6 +136,11 @@ void PlayerEntity::Update(CEngine::Context &context, float delta_seconds)
     }
 }
 
+/**
+ * @brief TODO: Describe PlayerEntity::Shutdown.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void PlayerEntity::Shutdown(CEngine::Context &context)
 {
     if (context.physics != nullptr && character_)

@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/physics/physics_types.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #ifndef PHYSICS_TYPES_H
 #define PHYSICS_TYPES_H
 
@@ -15,6 +30,9 @@ using PhysicsConstraintHandle = CEngine::Handle<PhysicsConstraintSlotTag>;
 struct PhysicsCharacterSlotTag;
 using PhysicsCharacterHandle = CEngine::Handle<PhysicsCharacterSlotTag>;
 
+/**
+ * @brief TODO: Describe PhysicsMotionType.
+ */
 enum class PhysicsMotionType
 {
     Static,
@@ -22,6 +40,9 @@ enum class PhysicsMotionType
     Kinematic
 };
 
+/**
+ * @brief TODO: Describe PhysicsShapeType.
+ */
 enum class PhysicsShapeType
 {
     Box,
@@ -37,6 +58,9 @@ enum class PhysicsShapeType
 
 // Engine-neutral collision geometry. The same value is produced by the asset
 // loader and consumed by PhysicsSystem; no Jolt object crosses this boundary.
+/**
+ * @brief TODO: Describe PhysicsShape.
+ */
 struct PhysicsShape
 {
     PhysicsShapeType type = PhysicsShapeType::Box;
@@ -61,6 +85,9 @@ inline constexpr std::uint8_t PhysicsLockRotationX = 1u << 3u;
 inline constexpr std::uint8_t PhysicsLockRotationY = 1u << 4u;
 inline constexpr std::uint8_t PhysicsLockRotationZ = 1u << 5u;
 
+/**
+ * @brief TODO: Describe PhysicsSystemDesc.
+ */
 struct PhysicsSystemDesc
 {
     glm::vec3 gravity = glm::vec3(0.0f, 0.0f, -9.81f);
@@ -70,6 +97,9 @@ struct PhysicsSystemDesc
     uint32_t max_contact_events = 4096;
 };
 
+/**
+ * @brief TODO: Describe PhysicsBodyDesc.
+ */
 struct PhysicsBodyDesc
 {
     PhysicsMotionType motion_type = PhysicsMotionType::Static;
@@ -90,6 +120,9 @@ struct PhysicsBodyDesc
     bool allow_sleeping = true;
 };
 
+/**
+ * @brief TODO: Describe PhysicsBodyState.
+ */
 struct PhysicsBodyState
 {
     glm::vec3 position = glm::vec3(0.0f);
@@ -99,6 +132,9 @@ struct PhysicsBodyState
     bool active = false;
 };
 
+/**
+ * @brief TODO: Describe PhysicsQueryHit.
+ */
 struct PhysicsQueryHit
 {
     PhysicsBodyHandle body;
@@ -108,6 +144,9 @@ struct PhysicsQueryHit
     std::uint32_t sub_shape = 0;
 };
 
+/**
+ * @brief TODO: Describe PhysicsContactType.
+ */
 enum class PhysicsContactType : std::uint8_t
 {
     Begin,
@@ -115,6 +154,9 @@ enum class PhysicsContactType : std::uint8_t
     End
 };
 
+/**
+ * @brief TODO: Describe PhysicsContactEvent.
+ */
 struct PhysicsContactEvent
 {
     PhysicsContactType type = PhysicsContactType::Begin;
@@ -125,6 +167,9 @@ struct PhysicsContactEvent
     bool sensor = false;
 };
 
+/**
+ * @brief TODO: Describe PhysicsConstraintType.
+ */
 enum class PhysicsConstraintType : std::uint8_t
 {
     Fixed,
@@ -135,6 +180,9 @@ enum class PhysicsConstraintType : std::uint8_t
     Cone
 };
 
+/**
+ * @brief TODO: Describe PhysicsMotorMode.
+ */
 enum class PhysicsMotorMode : std::uint8_t
 {
     Off,
@@ -142,6 +190,9 @@ enum class PhysicsMotorMode : std::uint8_t
     Position
 };
 
+/**
+ * @brief TODO: Describe PhysicsConstraintDesc.
+ */
 struct PhysicsConstraintDesc
 {
     PhysicsConstraintType type = PhysicsConstraintType::Fixed;
@@ -163,6 +214,9 @@ struct PhysicsConstraintDesc
     bool enabled = true;
 };
 
+/**
+ * @brief TODO: Describe PhysicsCharacterDesc.
+ */
 struct PhysicsCharacterDesc
 {
     glm::vec3 position = glm::vec3(0.0f);
@@ -178,6 +232,9 @@ struct PhysicsCharacterDesc
     std::uint8_t collision_layer = 0;
 };
 
+/**
+ * @brief TODO: Describe PhysicsCharacterState.
+ */
 struct PhysicsCharacterState
 {
     glm::vec3 position = glm::vec3(0.0f);

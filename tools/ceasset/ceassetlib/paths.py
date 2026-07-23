@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import shutil
@@ -7,6 +22,8 @@ from pathlib import Path
 
 @dataclass
 class ProjectPaths:
+    """TODO: Describe `ProjectPaths`."""
+
     root: Path
     assets_dir: Path
     state_dir: Path
@@ -16,6 +33,14 @@ class ProjectPaths:
 
 
 def make_project_paths(root: Path) -> ProjectPaths:
+    """TODO: Describe `make_project_paths`.
+
+    Args:
+        root: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     project_root = root.resolve()
     assets_dir = project_root / "assets"
     state_dir = assets_dir / ".ceasset"
@@ -30,10 +55,27 @@ def make_project_paths(root: Path) -> ProjectPaths:
 
 
 def generic_path(path: Path) -> str:
+    """TODO: Describe `generic_path`.
+
+    Args:
+        path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return path.as_posix()
 
 
 def stored_path(root: Path, path: Path) -> Path:
+    """TODO: Describe `stored_path`.
+
+    Args:
+        root: TODO: Describe this parameter.
+        path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     absolute = path.resolve()
     try:
         return absolute.relative_to(root.resolve())
@@ -42,12 +84,31 @@ def stored_path(root: Path, path: Path) -> Path:
 
 
 def project_path(paths: ProjectPaths, path: Path) -> Path:
+    """TODO: Describe `project_path`.
+
+    Args:
+        paths: TODO: Describe this parameter.
+        path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if path.is_absolute():
         return path
     return paths.root / path
 
 
 def output_for_source(paths: ProjectPaths, source: Path, target_extension: str | None = None) -> Path:
+    """TODO: Describe `output_for_source`.
+
+    Args:
+        paths: TODO: Describe this parameter.
+        source: TODO: Describe this parameter.
+        target_extension: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     try:
         relative = source.resolve().relative_to((paths.assets_dir / "source").resolve())
     except ValueError:
@@ -57,6 +118,15 @@ def output_for_source(paths: ProjectPaths, source: Path, target_extension: str |
 
 
 def output_dir_for_source(source: Path, output_root: Path) -> Path:
+    """TODO: Describe `output_dir_for_source`.
+
+    Args:
+        source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     try:
         relative = source.resolve().relative_to((output_root.parent / "source").resolve())
     except ValueError:
@@ -69,6 +139,12 @@ def output_dir_for_source(source: Path, output_root: Path) -> Path:
 
 
 def atomic_write_bytes(path: Path, data: bytes | bytearray) -> None:
+    """TODO: Describe `atomic_write_bytes`.
+
+    Args:
+        path: TODO: Describe this parameter.
+        data: TODO: Describe this parameter.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")
     temporary.write_bytes(data)
@@ -76,6 +152,12 @@ def atomic_write_bytes(path: Path, data: bytes | bytearray) -> None:
 
 
 def atomic_copyfile(source: Path, output: Path) -> None:
+    """TODO: Describe `atomic_copyfile`.
+
+    Args:
+        source: TODO: Describe this parameter.
+        output: TODO: Describe this parameter.
+    """
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(output.name + ".tmp")
     shutil.copyfile(source, temporary)

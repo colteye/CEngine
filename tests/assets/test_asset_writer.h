@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file tests/assets/test_asset_writer.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #ifndef CENGINE_TESTS_ASSETS_TEST_ASSET_WRITER_H
 #define CENGINE_TESTS_ASSETS_TEST_ASSET_WRITER_H
 
@@ -12,6 +27,12 @@
 namespace CEngine::Tests
 {
 
+/**
+ * @brief TODO: Describe TestGuid.
+ *
+ * @param name TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 inline Assets::Guid TestGuid(std::string_view name)
 {
     constexpr std::uint64_t Offset = 14695981039346656037ull;
@@ -35,6 +56,17 @@ inline Assets::Guid TestGuid(std::string_view name)
     return guid;
 }
 
+/**
+ * @brief TODO: Describe WriteTestAsset.
+ *
+ * @param path TODO: Describe this parameter.
+ * @param type TODO: Describe this parameter.
+ * @param payload TODO: Describe this parameter.
+ * @param guid TODO: Describe this parameter.
+ * @param source_hash TODO: Describe this parameter.
+ * @param platform TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 inline bool WriteTestAsset(const std::filesystem::path &path, Assets::AssetType type,
                            const std::vector<std::uint8_t> &payload, const Assets::Guid &guid = {},
                            std::uint64_t source_hash = 0, std::string_view platform = "generic")

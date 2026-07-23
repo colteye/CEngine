@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/opengl/shaders/shader.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "shader.h"
 
 #include <filesystem>
@@ -11,6 +26,14 @@ namespace CEngine::Renderer::OpenGL
 namespace
 {
 
+/**
+ * @brief TODO: Describe ReadShaderSource.
+ *
+ * @param path TODO: Describe this parameter.
+ * @param includes TODO: Describe this parameter.
+ * @param output TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadShaderSource(const std::filesystem::path &path, std::unordered_set<std::string> &includes, std::string &output)
 {
     const std::filesystem::path normalized = path.lexically_normal();
@@ -53,12 +76,27 @@ bool ReadShaderSource(const std::filesystem::path &path, std::unordered_set<std:
     return true;
 }
 
+/**
+ * @brief TODO: Describe LoadShaderSource.
+ *
+ * @param path TODO: Describe this parameter.
+ * @param output TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool LoadShaderSource(const std::filesystem::path &path, std::string &output)
 {
     std::unordered_set<std::string> includes;
     return ReadShaderSource(path, includes, output);
 }
 
+/**
+ * @brief TODO: Describe CompileShader.
+ *
+ * @param shader TODO: Describe this parameter.
+ * @param source TODO: Describe this parameter.
+ * @param path TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool CompileShader(GLuint shader, const std::string &source, const std::string &path)
 {
     std::cout << "Compiling shader: " << path << '\n';
@@ -81,6 +119,9 @@ bool CompileShader(GLuint shader, const std::string &source, const std::string &
 
 } // namespace
 
+/**
+ * @brief TODO: Describe ShaderProgram::~ShaderProgram.
+ */
 ShaderProgram::~ShaderProgram()
 {
     if (program_id_ != 0)
@@ -90,6 +131,13 @@ ShaderProgram::~ShaderProgram()
     }
 }
 
+/**
+ * @brief TODO: Describe ShaderProgram::Load.
+ *
+ * @param vertex_file_path TODO: Describe this parameter.
+ * @param fragment_file_path TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ShaderProgram::Load(const std::string &vertex_file_path, const std::string &fragment_file_path)
 {
     GLuint vertex_id = glCreateShader(GL_VERTEX_SHADER);

@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import json
@@ -19,7 +34,10 @@ from ceassetlib.game_schema import load_game_schema, make_schema_entity
 
 
 class SchemaGeneratorTests(unittest.TestCase):
+    """TODO: Describe `SchemaGeneratorTests`."""
+
     def test_generated_cpp_is_standalone_standard_library_code(self) -> None:
+        """TODO: Describe `test_generated_cpp_is_standalone_standard_library_code`."""
         with tempfile.TemporaryDirectory() as temporary:
             header = Path(temporary) / "entities.h"
             subprocess.run(
@@ -57,6 +75,7 @@ class SchemaGeneratorTests(unittest.TestCase):
         self.assertIn("bytes[offset + 3u]) << 24u", source)
 
     def test_game_file_contains_data_not_cpp_bindings(self) -> None:
+        """TODO: Describe `test_game_file_contains_data_not_cpp_bindings`."""
         game = json.loads(ENGINE_GAME.read_text(encoding="utf-8"))
         encoded = json.dumps(game)
         self.assertNotIn('"cpp"', encoded)
@@ -64,6 +83,7 @@ class SchemaGeneratorTests(unittest.TestCase):
         self.assertNotIn("header", encoded)
 
     def test_new_game_entity_generates_for_cpp_and_python(self) -> None:
+        """TODO: Describe `test_new_game_entity_generates_for_cpp_and_python`."""
         compiler = shutil.which(os.environ.get("CXX", "c++"))
         self.assertIsNotNone(compiler, "a C++ compiler is required")
         with tempfile.TemporaryDirectory() as temporary:

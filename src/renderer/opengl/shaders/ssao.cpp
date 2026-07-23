@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/opengl/shaders/ssao.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "ssao.h"
 
 #include "renderer/render_system.h"
@@ -8,6 +23,9 @@
 namespace CEngine::Renderer::OpenGL
 {
 
+/**
+ * @brief TODO: Describe SSAO::SSAO.
+ */
 SSAO::SSAO()
 {
     compute_program_.Load("shaders/opengl/ssao.vert", "shaders/opengl/ssao.frag");
@@ -15,11 +33,19 @@ SSAO::SSAO()
     InitializeParameters();
 }
 
+/**
+ * @brief TODO: Describe SSAO::UseCompute.
+ */
 void SSAO::UseCompute() const
 {
     compute_program_.Use();
 }
 
+/**
+ * @brief TODO: Describe SSAO::UpdateCompute.
+ *
+ * @param rendering TODO: Describe this parameter.
+ */
 void SSAO::UpdateCompute(const RenderSystem &rendering) const
 {
     glActiveTexture(GL_TEXTURE0);
@@ -41,11 +67,19 @@ void SSAO::UpdateCompute(const RenderSystem &rendering) const
     glUniform1f(contrast_id_, settings.contrast);
 }
 
+/**
+ * @brief TODO: Describe SSAO::UseComposite.
+ */
 void SSAO::UseComposite() const
 {
     composite_program_.Use();
 }
 
+/**
+ * @brief TODO: Describe SSAO::UpdateComposite.
+ *
+ * @param rendering TODO: Describe this parameter.
+ */
 void SSAO::UpdateComposite(const RenderSystem &rendering) const
 {
     glActiveTexture(GL_TEXTURE0);
@@ -67,6 +101,9 @@ void SSAO::UpdateComposite(const RenderSystem &rendering) const
     glUniform1f(fog_start_distance_id_, fog.start_distance);
 }
 
+/**
+ * @brief TODO: Describe SSAO::InitializeParameters.
+ */
 void SSAO::InitializeParameters()
 {
     const GLuint compute_id = compute_program_.GetId();
@@ -91,6 +128,16 @@ void SSAO::InitializeParameters()
     fog_start_distance_id_ = glGetUniformLocation(composite_id, "fog_start_distance");
 }
 
+/**
+ * @brief TODO: Describe SSAO::SetTextures.
+ *
+ * @param render TODO: Describe this parameter.
+ * @param depth TODO: Describe this parameter.
+ * @param normal_roughness TODO: Describe this parameter.
+ * @param ao TODO: Describe this parameter.
+ * @param width TODO: Describe this parameter.
+ * @param height TODO: Describe this parameter.
+ */
 void SSAO::SetTextures(GLuint render, GLuint depth, GLuint normal_roughness, GLuint ao, int width, int height)
 {
     render_tex_ = render;

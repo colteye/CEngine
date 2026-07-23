@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/input/input_system.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #ifndef CENGINE_INPUT_INPUT_SYSTEM_H
 #define CENGINE_INPUT_INPUT_SYSTEM_H
 
@@ -17,6 +32,9 @@ namespace CEngine::Input
 struct ActionTag;
 using ActionHandle = Handle<ActionTag>;
 
+/**
+ * @brief TODO: Describe Key.
+ */
 enum class Key
 {
     Space,
@@ -142,19 +160,33 @@ enum class Key
     Count,
 };
 
+/**
+ * @brief TODO: Describe PointerAxis.
+ */
 enum class PointerAxis
 {
     X,
     Y,
 };
 
+/**
+ * @brief TODO: Describe InputSystem.
+ */
 class InputSystem
 {
   public:
+    /**
+     * @brief TODO: Describe InputSystem.
+     *
+     * @param backend TODO: Describe this parameter.
+     */
     explicit InputSystem(std::unique_ptr<IInputBackend> backend = {}) : backend_(std::move(backend))
     {
     }
 
+    /**
+     * @brief TODO: Describe BeginFrame.
+     */
     void BeginFrame()
     {
         if (backend_ != nullptr)
@@ -180,14 +212,30 @@ class InputSystem
                 (binding.axis == PointerAxis::X ? pointer_delta.x : pointer_delta.y) * binding.scale;
         }
     }
+    /**
+     * @brief TODO: Describe IsDown.
+     *
+     * @param key TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] bool IsDown(Key key) const
     {
         return backend_ != nullptr && backend_->IsDown(key);
     }
+    /**
+     * @brief TODO: Describe PointerDelta.
+     *
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] glm::vec2 PointerDelta() const
     {
         return backend_ != nullptr ? backend_->PointerDelta() : glm::vec2(0.0f);
     }
+    /**
+     * @brief TODO: Describe SetPointerCaptured.
+     *
+     * @param captured TODO: Describe this parameter.
+     */
     void SetPointerCaptured(bool captured)
     {
         if (backend_ != nullptr)
@@ -195,19 +243,59 @@ class InputSystem
             backend_->SetPointerCaptured(captured);
         }
     }
+    /**
+     * @brief TODO: Describe RegisterAction.
+     *
+     * @param name TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     ActionHandle RegisterAction(std::string name);
+    /**
+     * @brief TODO: Describe BindKey.
+     *
+     * @param action TODO: Describe this parameter.
+     * @param key TODO: Describe this parameter.
+     * @param scale TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     bool BindKey(ActionHandle action, Key key, float scale = 1.0f);
+    /**
+     * @brief TODO: Describe BindPointerAxis.
+     *
+     * @param action TODO: Describe this parameter.
+     * @param axis TODO: Describe this parameter.
+     * @param scale TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     bool BindPointerAxis(ActionHandle action, PointerAxis axis, float scale = 1.0f);
+    /**
+     * @brief TODO: Describe Set.
+     *
+     * @param action TODO: Describe this parameter.
+     * @param value TODO: Describe this parameter.
+     */
     void Set(ActionHandle action, float value);
+    /**
+     * @brief TODO: Describe Value.
+     *
+     * @param action TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] float Value(ActionHandle action) const;
 
   private:
+    /**
+     * @brief TODO: Describe KeyBinding.
+     */
     struct KeyBinding
     {
         ActionHandle action;
         Key key{};
         float scale{};
     };
+    /**
+     * @brief TODO: Describe PointerBinding.
+     */
     struct PointerBinding
     {
         ActionHandle action;

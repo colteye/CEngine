@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/assets/scene_loader.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/scene_loader.h"
 
 #include "assets/asset_store.h"
@@ -24,12 +39,24 @@ namespace
 {
 using namespace CSceneFormat;
 
+/**
+ * @brief TODO: Describe Fail.
+ *
+ * @param message TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Fail(std::string_view message)
 {
     Logging::Logger::Get().Error("scene", message);
     return false;
 }
 
+/**
+ * @brief TODO: Describe AssetTypeFor.
+ *
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 AssetType AssetTypeFor(std::uint32_t value)
 {
     const auto type = static_cast<AssetType>(value);
@@ -54,6 +81,9 @@ AssetType AssetTypeFor(std::uint32_t value)
     }
 }
 
+/**
+ * @brief TODO: Describe SerializedEntity.
+ */
 struct SerializedEntity
 {
     std::string_view classname;
@@ -63,6 +93,14 @@ struct SerializedEntity
     std::uint32_t auxiliary_base = 0;
 };
 
+/**
+ * @brief TODO: Describe LoadSceneInternal.
+ *
+ * @param path TODO: Describe this parameter.
+ * @param store TODO: Describe this parameter.
+ * @param factory TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::unique_ptr<Scene::Scene> LoadSceneInternal(const std::filesystem::path &path, AssetStore &store,
                                                 Entities::EntityFactory &factory)
 {
@@ -244,12 +282,27 @@ std::unique_ptr<Scene::Scene> LoadSceneInternal(const std::filesystem::path &pat
 
 } // namespace
 
+/**
+ * @brief TODO: Describe LoadScene.
+ *
+ * @param path TODO: Describe this parameter.
+ * @param store TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::unique_ptr<Scene::Scene> LoadScene(const std::filesystem::path &path, AssetStore &store)
 {
     Entities::EntityFactory factory;
     return LoadSceneInternal(path, store, factory);
 }
 
+/**
+ * @brief TODO: Describe LoadScene.
+ *
+ * @param path TODO: Describe this parameter.
+ * @param store TODO: Describe this parameter.
+ * @param entity_factory TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::unique_ptr<Scene::Scene> LoadScene(const std::filesystem::path &path, AssetStore &store,
                                         Entities::EntityFactory &entity_factory)
 {

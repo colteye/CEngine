@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import sys
@@ -20,7 +35,10 @@ from ceassetlib.scene_format import (
 
 
 class SceneFormatTests(unittest.TestCase):
+    """TODO: Describe `SceneFormatTests`."""
+
     def test_cpp_and_python_fixed_layout_sizes_match(self) -> None:
+        """TODO: Describe `test_cpp_and_python_fixed_layout_sizes_match`."""
         self.assertEqual(
             (
                 SCENE_HEADER.size,
@@ -35,6 +53,7 @@ class SceneFormatTests(unittest.TestCase):
         )
 
     def test_scene_extension_has_a_distinct_asset_type(self) -> None:
+        """TODO: Describe `test_scene_extension_has_a_distinct_asset_type`."""
         self.assertEqual(asset_type_for_extension(".cscene"), AssetType.SCENE)
         self.assertEqual(asset_type_for_extension(".casset"), AssetType.ASSET)
 

@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 import math
 from pathlib import Path
 
@@ -40,10 +55,26 @@ _ENUM_ITEM_CACHE: dict[tuple[str, str], tuple[tuple[str, str, str], ...]] = {}
 
 
 def _settings(context):
+    """TODO: Describe `_settings`.
+
+    Args:
+        context: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return context.scene.cengine_settings
 
 
 def _output_root(context) -> Path | None:
+    """TODO: Describe `_output_root`.
+
+    Args:
+        context: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     value = str(_settings(context).output_root or "")
     if value:
         return Path(bpy.path.abspath(value)).absolute()
@@ -52,6 +83,14 @@ def _output_root(context) -> Path | None:
 
 
 def _active_collection(context):
+    """TODO: Describe `_active_collection`.
+
+    Args:
+        context: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     collection = getattr(context, "collection", None)
     if collection is None:
         raise RuntimeError("make an asset collection active first")
@@ -59,6 +98,14 @@ def _active_collection(context):
 
 
 def _scene_collection(context):
+    """TODO: Describe `_scene_collection`.
+
+    Args:
+        context: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     collection = _active_collection(context)
     spec = collection_export_spec(collection, AssetType.PREFAB)
     if spec is None or spec.asset_type != AssetType.SCENE:
@@ -68,6 +115,14 @@ def _scene_collection(context):
 
 
 def _lightmap_settings(context) -> LightmapSettings:
+    """TODO: Describe `_lightmap_settings`.
+
+    Args:
+        context: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     settings = _settings(context)
     return LightmapSettings(
         resolution=settings.lightmap_resolution,
@@ -79,6 +134,12 @@ def _lightmap_settings(context) -> LightmapSettings:
 
 
 def _select_only(context, obj) -> None:
+    """TODO: Describe `_select_only`.
+
+    Args:
+        context: TODO: Describe this parameter.
+        obj: TODO: Describe this parameter.
+    """
     for selected in tuple(getattr(context, "selected_objects", ())):
         selected.select_set(False)
     obj.select_set(True)
@@ -86,6 +147,15 @@ def _select_only(context, obj) -> None:
 
 
 def _new_entity_object(context, classname: str):
+    """TODO: Describe `_new_entity_object`.
+
+    Args:
+        context: TODO: Describe this parameter.
+        classname: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     object_type = native_object_type(classname)
     name = display_name(classname)
     if object_type == "MESH":
@@ -121,6 +191,12 @@ def _new_entity_object(context, classname: str):
 
 
 def _apply_native_defaults(obj, schema: dict[str, object]) -> None:
+    """TODO: Describe `_apply_native_defaults`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+        schema: TODO: Describe this parameter.
+    """
     classname = str(schema["classname"])
     fields = {str(field["name"]): field for field in schema["fields"]}
     if classname == "light" and obj.type == "LIGHT":
@@ -137,6 +213,14 @@ def _apply_native_defaults(obj, schema: dict[str, object]) -> None:
 
 
 def _draw_id_property(layout, obj, key: str, label: str) -> None:
+    """TODO: Describe `_draw_id_property`.
+
+    Args:
+        layout: TODO: Describe this parameter.
+        obj: TODO: Describe this parameter.
+        key: TODO: Describe this parameter.
+        label: TODO: Describe this parameter.
+    """
     if key not in obj:
         row = layout.row()
         row.alert = True
@@ -146,6 +230,13 @@ def _draw_id_property(layout, obj, key: str, label: str) -> None:
 
 
 def _draw_enum(layout, obj, field: dict[str, object]) -> None:
+    """TODO: Describe `_draw_enum`.
+
+    Args:
+        layout: TODO: Describe this parameter.
+        obj: TODO: Describe this parameter.
+        field: TODO: Describe this parameter.
+    """
     key = property_name(field)
     current = str(obj.get(key, ""))
     row = layout.row(align=True)
@@ -157,6 +248,13 @@ def _draw_enum(layout, obj, field: dict[str, object]) -> None:
 
 
 def _draw_asset(layout, obj, field: dict[str, object]) -> None:
+    """TODO: Describe `_draw_asset`.
+
+    Args:
+        layout: TODO: Describe this parameter.
+        obj: TODO: Describe this parameter.
+        field: TODO: Describe this parameter.
+    """
     key = property_name(field)
     row = layout.row(align=True)
     if key in obj:
@@ -172,6 +270,14 @@ def _draw_asset(layout, obj, field: dict[str, object]) -> None:
 def _draw_object_reference(
     layout, obj, key: str, label: str
 ) -> None:
+    """TODO: Describe `_draw_object_reference`.
+
+    Args:
+        layout: TODO: Describe this parameter.
+        obj: TODO: Describe this parameter.
+        key: TODO: Describe this parameter.
+        label: TODO: Describe this parameter.
+    """
     if key not in obj:
         row = layout.row()
         row.alert = True
@@ -183,6 +289,13 @@ def _draw_object_reference(
 
 
 def _draw_entity_fields(layout, obj, schema: dict[str, object]) -> None:
+    """TODO: Describe `_draw_entity_fields`.
+
+    Args:
+        layout: TODO: Describe this parameter.
+        obj: TODO: Describe this parameter.
+        schema: TODO: Describe this parameter.
+    """
     classname = str(schema["classname"])
     if classname == "prop":
         layout.prop(obj, "hide_render", text="Hidden in Engine")
@@ -264,6 +377,15 @@ def _draw_entity_fields(layout, obj, schema: dict[str, object]) -> None:
 
 
 def _enum_value_items(operator, context):
+    """TODO: Describe `_enum_value_items`.
+
+    Args:
+        operator: TODO: Describe this parameter.
+        context: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if operator.property_key == "ce_collider":
         return tuple(
             (value, display_name(value), f"Cook a {display_name(value)} collider")
@@ -289,6 +411,8 @@ def _enum_value_items(operator, context):
 if bpy is not None:
 
     class CENGINE_PG_scene_settings(bpy.types.PropertyGroup):
+        """TODO: Describe `CENGINE_PG_scene_settings`."""
+
         output_root: bpy.props.StringProperty(  # type: ignore[valid-type]
             name="Output Root",
             description=(
@@ -320,6 +444,8 @@ if bpy is not None:
 
 
     class CENGINE_OT_export_assets(bpy.types.Operator):
+        """TODO: Describe `CENGINE_OT_export_assets`."""
+
         bl_idname = "cengine.export_assets"
         bl_label = "Export CEngine Asset"
         bl_description = "Cook the active asset collection without baking lightmaps"
@@ -329,6 +455,15 @@ if bpy is not None:
             name="Collection Only", default=False)
 
         def invoke(self, context, event):
+            """TODO: Describe `invoke`.
+
+            Args:
+                context: TODO: Describe this parameter.
+                event: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             del event
             settings = _settings(context)
             if not settings.output_root:
@@ -338,6 +473,14 @@ if bpy is not None:
             return self.execute(context)
 
         def execute(self, context):
+            """TODO: Describe `execute`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             root = _output_root(context)
             try:
                 result = exporter.run_export(
@@ -350,6 +493,8 @@ if bpy is not None:
 
 
     class CENGINE_OT_set_collection_type(bpy.types.Operator):
+        """TODO: Describe `CENGINE_OT_set_collection_type`."""
+
         bl_idname = "cengine.set_collection_type"
         bl_label = "Set CEngine Asset Type"
         bl_options = {"REGISTER", "UNDO"}
@@ -364,6 +509,14 @@ if bpy is not None:
         )
 
         def execute(self, context):
+            """TODO: Describe `execute`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             collection = _active_collection(context)
             collection["ce_asset_type"] = self.asset_type
             if "ce_asset_name" not in collection:
@@ -372,6 +525,8 @@ if bpy is not None:
 
 
     class CENGINE_OT_add_entity(bpy.types.Operator):
+        """TODO: Describe `CENGINE_OT_add_entity`."""
+
         bl_idname = "cengine.add_entity"
         bl_label = "Add CEngine Entity"
         bl_options = {"REGISTER", "UNDO"}
@@ -389,6 +544,14 @@ if bpy is not None:
         )
 
         def execute(self, context):
+            """TODO: Describe `execute`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             schema = exporter.GAME_SCHEMA.entity(self.entity_type)
             if schema is None:
                 self.report({"ERROR"}, f"Unknown entity type: {self.entity_type}")
@@ -401,10 +564,17 @@ if bpy is not None:
 
 
     class CENGINE_MT_add_entity(bpy.types.Menu):
+        """TODO: Describe `CENGINE_MT_add_entity`."""
+
         bl_idname = "CENGINE_MT_add_entity"
         bl_label = "CEngine Entity"
 
         def draw(self, _context):
+            """TODO: Describe `draw`.
+
+            Args:
+                _context: TODO: Describe this parameter.
+            """
             layout = self.layout
             for schema in exporter.GAME_SCHEMA.entities:
                 classname = str(schema["classname"])
@@ -421,11 +591,21 @@ if bpy is not None:
 
 
     class CENGINE_OT_initialize_entity(bpy.types.Operator):
+        """TODO: Describe `CENGINE_OT_initialize_entity`."""
+
         bl_idname = "cengine.initialize_entity"
         bl_label = "Initialize Entity Settings"
         bl_options = {"REGISTER", "UNDO"}
 
         def execute(self, context):
+            """TODO: Describe `execute`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             obj = context.active_object
             if obj is None:
                 return {"CANCELLED"}
@@ -438,11 +618,21 @@ if bpy is not None:
 
 
     class CENGINE_OT_initialize_material(bpy.types.Operator):
+        """TODO: Describe `CENGINE_OT_initialize_material`."""
+
         bl_idname = "cengine.initialize_material"
         bl_label = "Initialize CEngine Material"
         bl_options = {"REGISTER", "UNDO"}
 
         def execute(self, context):
+            """TODO: Describe `execute`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             material = getattr(context, "material", None)
             if material is None:
                 return {"CANCELLED"}
@@ -463,6 +653,8 @@ if bpy is not None:
 
 
     class CENGINE_OT_set_enum_value(bpy.types.Operator):
+        """TODO: Describe `CENGINE_OT_set_enum_value`."""
+
         bl_idname = "cengine.set_enum_value"
         bl_label = "Choose Value"
         bl_options = {"REGISTER", "UNDO"}
@@ -474,6 +666,15 @@ if bpy is not None:
         )
 
         def invoke(self, context, event):
+            """TODO: Describe `invoke`.
+
+            Args:
+                context: TODO: Describe this parameter.
+                event: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             del event
             current = str(context.active_object.get(self.property_key, ""))
             if current:
@@ -484,11 +685,21 @@ if bpy is not None:
             return context.window_manager.invoke_props_dialog(self)
 
         def execute(self, context):
+            """TODO: Describe `execute`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             context.active_object[self.property_key] = self.value
             return {"FINISHED"}
 
 
     class CENGINE_OT_choose_asset(bpy.types.Operator):
+        """TODO: Describe `CENGINE_OT_choose_asset`."""
+
         bl_idname = "cengine.choose_asset"
         bl_label = "Choose Asset"
         bl_options = {"REGISTER", "UNDO"}
@@ -502,11 +713,28 @@ if bpy is not None:
         )
 
         def invoke(self, context, event):
+            """TODO: Describe `invoke`.
+
+            Args:
+                context: TODO: Describe this parameter.
+                event: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             del event
             context.window_manager.fileselect_add(self)
             return {"RUNNING_MODAL"}
 
         def execute(self, context):
+            """TODO: Describe `execute`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             obj = context.active_object
             if obj is None:
                 return {"CANCELLED"}
@@ -515,12 +743,22 @@ if bpy is not None:
 
 
     class CENGINE_OT_prepare_lightmaps(bpy.types.Operator):
+        """TODO: Describe `CENGINE_OT_prepare_lightmaps`."""
+
         bl_idname = "cengine.prepare_lightmaps"
         bl_label = "Prepare Lightmap UVs"
         bl_description = "Create or rebuild the Lightmap UV layer without rendering"
         bl_options = {"REGISTER", "UNDO"}
 
         def execute(self, context):
+            """TODO: Describe `execute`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             try:
                 collection, _spec = _scene_collection(context)
                 objects = exporter.exported_collection_objects([collection])
@@ -539,12 +777,22 @@ if bpy is not None:
 
 
     class CENGINE_OT_bake_lightmaps(bpy.types.Operator):
+        """TODO: Describe `CENGINE_OT_bake_lightmaps`."""
+
         bl_idname = "cengine.bake_lightmaps"
         bl_label = "Bake Lightmaps"
         bl_description = "Render and save lightmaps now; later exports reuse them"
         bl_options = {"REGISTER"}
 
         def execute(self, context):
+            """TODO: Describe `execute`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             source = exporter.maybe_blend_source_path()
             root = _output_root(context)
             if source is None or root is None:
@@ -585,12 +833,22 @@ if bpy is not None:
 
 
     class CENGINE_OT_clear_lightmaps(bpy.types.Operator):
+        """TODO: Describe `CENGINE_OT_clear_lightmaps`."""
+
         bl_idname = "cengine.clear_lightmaps"
         bl_label = "Clear Lightmap Bindings"
         bl_description = "Detach baked lightmaps without deleting files or UV layers"
         bl_options = {"REGISTER", "UNDO"}
 
         def execute(self, context):
+            """TODO: Describe `execute`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             try:
                 collection, _spec = _scene_collection(context)
                 objects = exporter.exported_collection_objects([collection])
@@ -603,11 +861,21 @@ if bpy is not None:
 
 
     class CENGINE_OT_validate_asset(bpy.types.Operator):
+        """TODO: Describe `CENGINE_OT_validate_asset`."""
+
         bl_idname = "cengine.validate_asset"
         bl_label = "Validate Asset"
         bl_options = {"REGISTER"}
 
         def execute(self, context):
+            """TODO: Describe `execute`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             try:
                 collection = _active_collection(context)
                 objects = exporter.exported_collection_objects([collection])
@@ -625,11 +893,21 @@ if bpy is not None:
 
 
     class CENGINE_OT_preview_collider(bpy.types.Operator):
+        """TODO: Describe `CENGINE_OT_preview_collider`."""
+
         bl_idname = "cengine.preview_collider"
         bl_label = "Toggle Collider Preview"
         bl_options = {"REGISTER", "UNDO"}
 
         def execute(self, context):
+            """TODO: Describe `execute`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             obj = context.active_object
             if obj is None or entity_classname(obj) != "prop":
                 return {"CANCELLED"}
@@ -660,11 +938,21 @@ if bpy is not None:
 
 
     class CENGINE_OT_preview_entity(bpy.types.Operator):
+        """TODO: Describe `CENGINE_OT_preview_entity`."""
+
         bl_idname = "cengine.preview_entity"
         bl_label = "Preview in Blender"
         bl_options = {"REGISTER", "UNDO"}
 
         def execute(self, context):
+            """TODO: Describe `execute`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             obj = context.active_object
             classname = entity_classname(obj) if obj is not None else ""
             if classname == "player" and obj.type == "CAMERA":
@@ -715,6 +1003,8 @@ if bpy is not None:
 
 
     class CENGINE_PT_asset_workspace(bpy.types.Panel):
+        """TODO: Describe `CENGINE_PT_asset_workspace`."""
+
         bl_label = "CEngine Asset"
         bl_idname = "CENGINE_PT_asset_workspace"
         bl_space_type = "VIEW_3D"
@@ -722,6 +1012,11 @@ if bpy is not None:
         bl_category = "CEngine"
 
         def draw(self, context):
+            """TODO: Describe `draw`.
+
+            Args:
+                context: TODO: Describe this parameter.
+            """
             layout = self.layout
             collection = getattr(context, "collection", None)
             if collection is None:
@@ -753,6 +1048,8 @@ if bpy is not None:
 
 
     class CENGINE_PT_lightmaps(bpy.types.Panel):
+        """TODO: Describe `CENGINE_PT_lightmaps`."""
+
         bl_label = "Lightmaps"
         bl_idname = "CENGINE_PT_lightmaps"
         bl_space_type = "VIEW_3D"
@@ -762,6 +1059,14 @@ if bpy is not None:
 
         @classmethod
         def poll(cls, context):
+            """TODO: Describe `poll`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             collection = getattr(context, "collection", None)
             if collection is None:
                 return False
@@ -772,6 +1077,11 @@ if bpy is not None:
             return spec is not None and spec.asset_type == AssetType.SCENE
 
         def draw(self, context):
+            """TODO: Describe `draw`.
+
+            Args:
+                context: TODO: Describe this parameter.
+            """
             layout = self.layout
             settings = _settings(context)
             layout.label(text="Bake once, export many times.")
@@ -789,6 +1099,8 @@ if bpy is not None:
 
 
     class CENGINE_PT_entity(bpy.types.Panel):
+        """TODO: Describe `CENGINE_PT_entity`."""
+
         bl_label = "CEngine Entity"
         bl_idname = "CENGINE_PT_entity"
         bl_space_type = "PROPERTIES"
@@ -797,9 +1109,22 @@ if bpy is not None:
 
         @classmethod
         def poll(cls, context):
+            """TODO: Describe `poll`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             return context.active_object is not None
 
         def draw(self, context):
+            """TODO: Describe `draw`.
+
+            Args:
+                context: TODO: Describe this parameter.
+            """
             layout = self.layout
             obj = context.active_object
             schema = entity_schema(exporter.GAME_SCHEMA, obj)
@@ -834,6 +1159,8 @@ if bpy is not None:
 
 
     class CENGINE_PT_material(bpy.types.Panel):
+        """TODO: Describe `CENGINE_PT_material`."""
+
         bl_label = "CEngine Material"
         bl_idname = "CENGINE_PT_material"
         bl_space_type = "PROPERTIES"
@@ -842,9 +1169,22 @@ if bpy is not None:
 
         @classmethod
         def poll(cls, context):
+            """TODO: Describe `poll`.
+
+            Args:
+                context: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             return getattr(context, "material", None) is not None
 
         def draw(self, context):
+            """TODO: Describe `draw`.
+
+            Args:
+                context: TODO: Describe this parameter.
+            """
             layout = self.layout
             material = context.material
             layout.label(
@@ -863,6 +1203,11 @@ if bpy is not None:
 
 
     def draw_add_menu(self, _context):
+        """TODO: Describe `draw_add_menu`.
+
+        Args:
+            _context: TODO: Describe this parameter.
+        """
         self.layout.menu(
             CENGINE_MT_add_entity.bl_idname,
             text="CEngine Entity",
@@ -871,6 +1216,11 @@ if bpy is not None:
 
 
     def draw_export_menu(self, _context):
+        """TODO: Describe `draw_export_menu`.
+
+        Args:
+            _context: TODO: Describe this parameter.
+        """
         self.layout.operator(
             CENGINE_OT_export_assets.bl_idname,
             text="CEngine Asset",
@@ -903,6 +1253,7 @@ else:
 
 
 def register() -> None:
+    """TODO: Describe `register`."""
     if bpy is None:
         raise RuntimeError("CEngine Asset Exporter must run inside Blender")
     for cls in CLASSES:
@@ -914,6 +1265,7 @@ def register() -> None:
 
 
 def unregister() -> None:
+    """TODO: Describe `unregister`."""
     if bpy is None:
         raise RuntimeError("CEngine Asset Exporter must run inside Blender")
     bpy.types.TOPBAR_MT_file_export.remove(draw_export_menu)

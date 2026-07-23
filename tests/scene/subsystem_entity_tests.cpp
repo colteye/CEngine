@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file tests/scene/subsystem_entity_tests.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/asset_store.h"
 #include "assets/scene_loader.h"
 #include "context.h"
@@ -25,6 +40,13 @@
 
 namespace
 {
+/**
+ * @brief TODO: Describe Expect.
+ *
+ * @param value TODO: Describe this parameter.
+ * @param message TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Expect(bool value, const char *message)
 {
     if (!value)
@@ -35,6 +57,11 @@ bool Expect(bool value, const char *message)
 }
 
 #ifdef CENGINE_ENABLE_JOLT_PHYSICS
+/**
+ * @brief TODO: Describe JoltRejectsStaleBodyHandles.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool JoltRejectsStaleBodyHandles()
 {
     PhysicsSystem physics;
@@ -65,6 +92,11 @@ bool JoltRejectsStaleBodyHandles()
            }();
 }
 
+/**
+ * @brief TODO: Describe JoltQueriesAndContactsWork.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool JoltQueriesAndContactsWork()
 {
     PhysicsSystem physics;
@@ -198,6 +230,13 @@ bool JoltQueriesAndContactsWork()
 }
 #endif
 
+/**
+ * @brief TODO: Describe ValidateCookedScene.
+ *
+ * @param scene_path TODO: Describe this parameter.
+ * @param project_root TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::filesystem::path &project_root)
 {
     CEngine::Assets::AssetStore assets(project_root);
@@ -360,6 +399,13 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
 }
 } // namespace
 
+/**
+ * @brief TODO: Describe main.
+ *
+ * @param argc TODO: Describe this parameter.
+ * @param argv TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 int main(int argc, char **argv)
 {
     if (argc == 4 && std::string_view(argv[1]) == "--validate-scene")

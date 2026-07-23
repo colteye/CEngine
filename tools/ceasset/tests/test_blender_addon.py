@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import importlib.util
@@ -36,7 +51,16 @@ PACKAGE_SPEC.loader.exec_module(package_addon)
 
 
 class FakeImage:
+    """TODO: Describe `FakeImage`."""
+
     def __init__(self, filepath: Path | str, packed_data: bytes | None = None, name: str = "image.png") -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            filepath: TODO: Describe this parameter.
+            packed_data: TODO: Describe this parameter.
+            name: TODO: Describe this parameter.
+        """
         self.filepath = str(filepath)
         self.name = name
         self.file_format = "PNG"
@@ -44,43 +68,99 @@ class FakeImage:
 
 
 class FakeNode:
+    """TODO: Describe `FakeNode`."""
+
     def __init__(self, node_type: str, image: FakeImage | None = None) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            node_type: TODO: Describe this parameter.
+            image: TODO: Describe this parameter.
+        """
         self.type = node_type
         self.image = image
 
 
 class FakeSocket:
+    """TODO: Describe `FakeSocket`."""
+
     def __init__(self, name: str) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            name: TODO: Describe this parameter.
+        """
         self.name = name
 
 
 class FakeLink:
+    """TODO: Describe `FakeLink`."""
+
     def __init__(self, image: FakeImage, socket: str = "Base Color") -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            image: TODO: Describe this parameter.
+            socket: TODO: Describe this parameter.
+        """
         self.from_node = FakeNode("TEX_IMAGE", image)
         self.to_node = FakeNode("BSDF_PRINCIPLED")
         self.to_socket = FakeSocket(socket)
 
 
 class FakeNodeTree:
+    """TODO: Describe `FakeNodeTree`."""
+
     def __init__(self, links: list[FakeLink]) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            links: TODO: Describe this parameter.
+        """
         self.links = links
 
 
 class FakeMaterial:
+    """TODO: Describe `FakeMaterial`."""
+
     def __init__(self, name: str, images: list[FakeImage] | None = None) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            name: TODO: Describe this parameter.
+            images: TODO: Describe this parameter.
+        """
         self.name = name
         self.node_tree = FakeNodeTree([FakeLink(image) for image in images or []])
 
     def get(self, _key: str, default: object = None) -> object:
+        """TODO: Describe `get`.
+
+        Args:
+            _key: TODO: Describe this parameter.
+            default: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         return default
 
 
 class FakeMaterialSlot:
+    """TODO: Describe `FakeMaterialSlot`."""
+
     def __init__(self, material: FakeMaterial | None) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            material: TODO: Describe this parameter.
+        """
         self.material = material
 
 
 class FakeObject:
+    """TODO: Describe `FakeObject`."""
+
     def __init__(
         self,
         name: str,
@@ -93,6 +173,19 @@ class FakeObject:
         children: list["FakeObject"] | None = None,
         instance_collection: "FakeCollection | None" = None,
     ) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            name: TODO: Describe this parameter.
+            material_names: TODO: Describe this parameter.
+            materials: TODO: Describe this parameter.
+            obj_type: TODO: Describe this parameter.
+            hide_render: TODO: Describe this parameter.
+            hide_viewport: TODO: Describe this parameter.
+            visible: TODO: Describe this parameter.
+            children: TODO: Describe this parameter.
+            instance_collection: TODO: Describe this parameter.
+        """
         self.name = name
         self.type = obj_type
         if materials is None:
@@ -107,13 +200,29 @@ class FakeObject:
         self.instance_type = "COLLECTION" if instance_collection is not None else "NONE"
 
     def get(self, _key: str, default: object = None) -> object:
+        """TODO: Describe `get`.
+
+        Args:
+            _key: TODO: Describe this parameter.
+            default: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         return default
 
     def visible_get(self) -> bool:
+        """TODO: Describe `visible_get`.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         return self.visible
 
 
 class FakeCollection:
+    """TODO: Describe `FakeCollection`."""
+
     def __init__(
         self,
         name: str,
@@ -122,6 +231,15 @@ class FakeCollection:
         hide_render: bool = False,
         hide_viewport: bool = False,
     ) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            name: TODO: Describe this parameter.
+            objects: TODO: Describe this parameter.
+            children: TODO: Describe this parameter.
+            hide_render: TODO: Describe this parameter.
+            hide_viewport: TODO: Describe this parameter.
+        """
         self.name = name
         self.objects = objects or []
         self.children = children or []
@@ -132,27 +250,43 @@ class FakeCollection:
             obj.users_collection.append(self)
 
     def get(self, _key: str, default: object = None) -> object:
+        """TODO: Describe `get`.
+
+        Args:
+            _key: TODO: Describe this parameter.
+            default: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         return default
 
 
 class BlenderAddonTests(unittest.TestCase):
+    """TODO: Describe `BlenderAddonTests`."""
+
     def tearDown(self) -> None:
+        """TODO: Describe `tearDown`."""
         addon.bpy = None
 
     def test_addon_requires_blender_for_bpy_operations(self) -> None:
+        """TODO: Describe `test_addon_requires_blender_for_bpy_operations`."""
         with self.assertRaises(RuntimeError):
             addon.require_bpy()
 
     def test_project_root_is_found_from_assets_source_tree(self) -> None:
+        """TODO: Describe `test_project_root_is_found_from_assets_source_tree`."""
         source = Path("/repo/assets/source/characters/hero.blend")
         self.assertEqual(addon.project_root_for(source), Path("/repo"))
 
     def test_default_output_root_uses_compiled_asset_tree(self) -> None:
+        """TODO: Describe `test_default_output_root_uses_compiled_asset_tree`."""
         source = Path("/repo/assets/source/characters/hero.blend")
         self.assertEqual(addon.default_output_root_for_source(source), Path("/repo/assets/compiled"))
         self.assertIsNone(addon.default_output_root_for_source(None))
 
     def test_operator_invoke_accepts_blender_event_argument(self) -> None:
+        """TODO: Describe `test_operator_invoke_accepts_blender_event_argument`."""
         tree = ast.parse(ADDON_UI.read_text())
         invoke = next(
             node
@@ -163,6 +297,7 @@ class BlenderAddonTests(unittest.TestCase):
         self.assertEqual([arg.arg for arg in invoke.args.args], ["self", "context", "event"])
 
     def test_blender_property_annotations_are_evaluated(self) -> None:
+        """TODO: Describe `test_blender_property_annotations_are_evaluated`."""
         tree = ast.parse(ADDON_UI.read_text())
 
         postponed = any(
@@ -175,12 +310,14 @@ class BlenderAddonTests(unittest.TestCase):
         self.assertFalse(postponed)
 
     def test_blend_source_path_rejects_unsaved_file(self) -> None:
+        """TODO: Describe `test_blend_source_path_rejects_unsaved_file`."""
         addon.bpy = types.SimpleNamespace(data=types.SimpleNamespace(filepath=""))
 
         with self.assertRaisesRegex(RuntimeError, "save the Blender file"):
             addon.blend_source_path()
 
     def test_unsaved_file_can_export_selected_collection_casset(self) -> None:
+        """TODO: Describe `test_unsaved_file_can_export_selected_collection_casset`."""
         with tempfile.TemporaryDirectory() as tmp:
             body = FakeObject("SM_Body")
             collection = FakeCollection("PREFAB_Statue", [body])
@@ -195,6 +332,7 @@ class BlenderAddonTests(unittest.TestCase):
             self.assertTrue((Path(tmp) / "Statue.casset").exists())
 
     def test_collection_only_export_does_not_require_saved_file(self) -> None:
+        """TODO: Describe `test_collection_only_export_does_not_require_saved_file`."""
         with tempfile.TemporaryDirectory() as tmp:
             body = FakeObject("SM_Body")
             collection = FakeCollection("PREFAB_Statue", [body])
@@ -209,6 +347,7 @@ class BlenderAddonTests(unittest.TestCase):
             self.assertTrue((Path(tmp) / "Statue.casset").exists())
 
     def test_collection_only_export_uses_default_compiled_root_for_saved_files(self) -> None:
+        """TODO: Describe `test_collection_only_export_uses_default_compiled_root_for_saved_files`."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "assets" / "source" / "statue" / "Statue.blend"
@@ -227,6 +366,7 @@ class BlenderAddonTests(unittest.TestCase):
             self.assertTrue((root / "assets" / "compiled" / "statue" / "Statue.casset").exists())
 
     def test_selected_plain_collection_exports_as_prefab_asset(self) -> None:
+        """TODO: Describe `test_selected_plain_collection_exports_as_prefab_asset`."""
         with tempfile.TemporaryDirectory() as tmp:
             body = FakeObject("SM_Body")
             collection = FakeCollection("Collection", [body])
@@ -241,6 +381,7 @@ class BlenderAddonTests(unittest.TestCase):
             self.assertTrue((Path(tmp) / "Collection.casset").exists())
 
     def test_exported_collection_objects_skips_hidden_and_unrendered_data(self) -> None:
+        """TODO: Describe `test_exported_collection_objects_skips_hidden_and_unrendered_data`."""
         visible = FakeObject("SM_Visible")
         hidden_render = FakeObject("SM_HiddenRender", hide_render=True)
         hidden_viewport = FakeObject("SM_HiddenViewport", hide_viewport=True)
@@ -257,6 +398,7 @@ class BlenderAddonTests(unittest.TestCase):
         self.assertEqual([obj.name for obj in objects], ["SM_Visible", "SM_VisibleChild"])
 
     def test_exported_collection_objects_walks_nested_child_collections(self) -> None:
+        """TODO: Describe `test_exported_collection_objects_walks_nested_child_collections`."""
         deep_mesh = FakeObject("SM_Deep")
         mid = FakeCollection("Mid", children=[FakeCollection("Deep", [deep_mesh])])
         root = FakeCollection("PREFAB_Root", children=[mid])
@@ -266,6 +408,7 @@ class BlenderAddonTests(unittest.TestCase):
         self.assertEqual([obj.name for obj in objects], ["SM_Deep"])
 
     def test_exported_collection_objects_expands_collection_instance_containers(self) -> None:
+        """TODO: Describe `test_exported_collection_objects_expands_collection_instance_containers`."""
         instanced_mesh = FakeObject("SM_Instanced")
         instanced_collection = FakeCollection("ContainerContents", [instanced_mesh])
         container = FakeObject("EMPTY_Container", obj_type="EMPTY", instance_collection=instanced_collection)
@@ -276,6 +419,7 @@ class BlenderAddonTests(unittest.TestCase):
         self.assertEqual([obj.name for obj in objects], ["EMPTY_Container", "SM_Instanced"])
 
     def test_collection_only_export_needs_output_root_for_unsaved_files(self) -> None:
+        """TODO: Describe `test_collection_only_export_needs_output_root_for_unsaved_files`."""
         collection = FakeCollection("PREFAB_Statue", [FakeObject("SM_Body")])
         addon.bpy = types.SimpleNamespace(
             data=types.SimpleNamespace(filepath="", collections=[collection]),
@@ -286,6 +430,7 @@ class BlenderAddonTests(unittest.TestCase):
             addon.run_export(None, collection_only=True)
 
     def test_unsaved_file_needs_output_root_for_collection_export(self) -> None:
+        """TODO: Describe `test_unsaved_file_needs_output_root_for_collection_export`."""
         addon.bpy = types.SimpleNamespace(
             data=types.SimpleNamespace(filepath="", collections=[]),
             context=types.SimpleNamespace(collection=None, selected_objects=[]),
@@ -295,6 +440,7 @@ class BlenderAddonTests(unittest.TestCase):
             addon.export_current_file(None)
 
     def test_texture_output_path_stays_under_blend_folder(self) -> None:
+        """TODO: Describe `test_texture_output_path_stays_under_blend_folder`."""
         output = addon.texture_output_path(
             Path("/repo/assets/source/characters/hero.blend"),
             Path("/repo/assets/compiled"),
@@ -304,6 +450,7 @@ class BlenderAddonTests(unittest.TestCase):
         self.assertEqual(output, Path("/repo/assets/compiled/characters/hero/textures/albedo.dds"))
 
     def test_asset_path_for_project_is_project_relative(self) -> None:
+        """TODO: Describe `test_asset_path_for_project_is_project_relative`."""
         path = addon.asset_path_for_project(
             Path("/repo"),
             Path("/repo/assets/compiled/hero/meshes/SM_Body.cmesh"),
@@ -312,6 +459,7 @@ class BlenderAddonTests(unittest.TestCase):
         self.assertEqual(path, "assets/compiled/hero/meshes/SM_Body.cmesh")
 
     def test_export_summary_includes_counts_and_destination(self) -> None:
+        """TODO: Describe `test_export_summary_includes_counts_and_destination`."""
         summary = addon.export_summary(
             addon.ExportResult(collections=1, textures=2, materials=3, skeletons=4, meshes=5, animations=6),
             Path("/repo/assets/compiled"),
@@ -323,6 +471,7 @@ class BlenderAddonTests(unittest.TestCase):
         self.assertIn("/repo/assets/compiled", summary)
 
     def test_export_textures_uses_blender_image_datablocks(self) -> None:
+        """TODO: Describe `test_export_textures_uses_blender_image_datablocks`."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "assets" / "source" / "characters" / "hero.blend"
@@ -352,6 +501,7 @@ class BlenderAddonTests(unittest.TestCase):
             convert.assert_called_once_with(image, outputs[0].output, "DXT5")
 
     def test_packed_blender_image_is_written_as_texture_source(self) -> None:
+        """TODO: Describe `test_packed_blender_image_is_written_as_texture_source`."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "assets" / "source" / "hero" / "Hero.blend"
@@ -372,6 +522,7 @@ class BlenderAddonTests(unittest.TestCase):
             self.assertEqual(packed_source.suffix, ".png")
 
     def test_material_images_only_uses_selected_collection_material_graphs(self) -> None:
+        """TODO: Describe `test_material_images_only_uses_selected_collection_material_graphs`."""
         used_image = FakeImage("used.png")
         orphan_image = FakeImage("orphan.png")
         body = FakeObject("SM_Body", materials=[FakeMaterial("Body", [used_image])])
@@ -381,6 +532,7 @@ class BlenderAddonTests(unittest.TestCase):
         self.assertEqual(addon.material_images([orphan]), [orphan_image])
 
     def test_saved_export_scopes_to_selected_collection_tree_and_skips_orphans(self) -> None:
+        """TODO: Describe `test_saved_export_scopes_to_selected_collection_tree_and_skips_orphans`."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "assets" / "source" / "hero" / "Hero.blend"
@@ -442,6 +594,7 @@ class BlenderAddonTests(unittest.TestCase):
             self.assertNotIn(b"SM_Orphan", casset.read_bytes())
 
     def test_scene_collection_flattens_collection_instance_into_cscene(self) -> None:
+        """TODO: Describe `test_scene_collection_flattens_collection_instance_into_cscene`."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "assets" / "source" / "maps" / "Test.blend"
@@ -500,6 +653,7 @@ class BlenderAddonTests(unittest.TestCase):
             self.assertIn(b"assets/compiled/maps/meshes/SM_Door.cmesh", scene_bytes)
 
     def test_object_component_assets_reference_generated_targets(self) -> None:
+        """TODO: Describe `test_object_component_assets_reference_generated_targets`."""
         obj = FakeObject("SM_Body", ["HeroSkin"])
         mesh = Path("assets/compiled/hero/meshes/SM_Body.cmesh")
         material = Path("assets/compiled/hero/materials/HeroSkin.cmat")
@@ -522,6 +676,7 @@ class BlenderAddonTests(unittest.TestCase):
         )
 
     def test_packaged_addon_contains_exporter_and_converter_library(self) -> None:
+        """TODO: Describe `test_packaged_addon_contains_exporter_and_converter_library`."""
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "cengine_asset_exporter.zip"
             game_file = CEASSET_ROOT.parents[1] / "schemas" / "engine.game.json"

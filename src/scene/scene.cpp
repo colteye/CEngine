@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/scene/scene.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "scene/scene.h"
 
 #include "context.h"
@@ -10,11 +25,19 @@
 namespace CEngine::Scene
 {
 
+/**
+ * @brief TODO: Describe Scene::~Scene.
+ */
 Scene::~Scene()
 {
     Stop();
 }
 
+/**
+ * @brief TODO: Describe Scene::Activate.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void Scene::Activate(Context &context)
 {
     if (active_)
@@ -60,6 +83,12 @@ void Scene::Activate(Context &context)
     }
 }
 
+/**
+ * @brief TODO: Describe Scene::Update.
+ *
+ * @param context TODO: Describe this parameter.
+ * @param delta_seconds TODO: Describe this parameter.
+ */
 void Scene::Update(Context &context, float delta_seconds)
 {
     if (!active_)
@@ -86,6 +115,9 @@ void Scene::Update(Context &context, float delta_seconds)
     }
 }
 
+/**
+ * @brief TODO: Describe Scene::Stop.
+ */
 void Scene::Stop() noexcept
 {
     if (!active_)
@@ -108,12 +140,22 @@ void Scene::Stop() noexcept
     active_context_ = {};
 }
 
+/**
+ * @brief TODO: Describe Scene::Reserve.
+ *
+ * @param entity_count TODO: Describe this parameter.
+ */
 void Scene::Reserve(std::size_t entity_count)
 {
     entities_.reserve(entity_count);
     generations_.reserve(entity_count);
 }
 
+/**
+ * @brief TODO: Describe Scene::AddConnection.
+ *
+ * @param connection TODO: Describe this parameter.
+ */
 void Scene::AddConnection(EntityConnection connection)
 {
     if (!IsAlive(connection.source) || !IsAlive(connection.target))
@@ -127,6 +169,13 @@ void Scene::AddConnection(EntityConnection connection)
     connections_.push_back(std::move(connection));
 }
 
+/**
+ * @brief TODO: Describe Scene::AddEntity.
+ *
+ * @param entity TODO: Describe this parameter.
+ * @param name TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 Entity &Scene::AddEntity(std::unique_ptr<Entity> entity, std::string_view name)
 {
     if (entity == nullptr)
@@ -153,6 +202,12 @@ Entity &Scene::AddEntity(std::unique_ptr<Entity> entity, std::string_view name)
     return result;
 }
 
+/**
+ * @brief TODO: Describe Scene::DestroyEntity.
+ *
+ * @param entity TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Scene::DestroyEntity(EntityHandle entity)
 {
     if (!IsAlive(entity))
@@ -185,6 +240,12 @@ bool Scene::DestroyEntity(EntityHandle entity)
     return true;
 }
 
+/**
+ * @brief TODO: Describe Scene::IsAlive.
+ *
+ * @param entity TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Scene::IsAlive(EntityHandle entity) const
 {
     const std::uint32_t index = entity.Index();
@@ -192,30 +253,64 @@ bool Scene::IsAlive(EntityHandle entity) const
            generations_[index] == entity.Generation();
 }
 
+/**
+ * @brief TODO: Describe Scene::GetEntity.
+ *
+ * @param entity TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 Entity *Scene::GetEntity(EntityHandle entity)
 {
     return IsAlive(entity) ? entities_[entity.Index()].get() : nullptr;
 }
+/**
+ * @brief TODO: Describe Scene::GetEntity.
+ *
+ * @param entity TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 const Entity *Scene::GetEntity(EntityHandle entity) const
 {
     return IsAlive(entity) ? entities_[entity.Index()].get() : nullptr;
 }
 
+/**
+ * @brief TODO: Describe Scene::SetAssetReferences.
+ *
+ * @param references TODO: Describe this parameter.
+ */
 void Scene::SetAssetReferences(std::vector<Assets::AssetReference> references)
 {
     asset_references_ = std::move(references);
 }
 
+/**
+ * @brief TODO: Describe Scene::AssetReference.
+ *
+ * @param index TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 const Assets::AssetReference *Scene::AssetReference(std::uint32_t index) const
 {
     return index < asset_references_.size() ? &asset_references_[index] : nullptr;
 }
 
+/**
+ * @brief TODO: Describe Scene::AppendAuxiliaryAsset.
+ *
+ * @param asset TODO: Describe this parameter.
+ */
 void Scene::AppendAuxiliaryAsset(const Assets::AssetReference &asset)
 {
     auxiliary_assets_.push_back(asset);
 }
 
+/**
+ * @brief TODO: Describe Scene::AuxiliaryAsset.
+ *
+ * @param index TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 const Assets::AssetReference *Scene::AuxiliaryAsset(std::uint32_t index) const
 {
     return index < auxiliary_assets_.size() ? &auxiliary_assets_[index] : nullptr;

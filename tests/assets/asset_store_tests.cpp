@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file tests/assets/asset_store_tests.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/asset_io.h"
 #include "assets/asset_store.h"
 #include "test_asset_writer.h"
@@ -11,6 +26,13 @@ namespace
 {
 using namespace CEngine::Assets;
 
+/**
+ * @brief TODO: Describe Expect.
+ *
+ * @param value TODO: Describe this parameter.
+ * @param message TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Expect(bool value, const char *message)
 {
     if (!value)
@@ -20,12 +42,22 @@ bool Expect(bool value, const char *message)
     return value;
 }
 
+/**
+ * @brief TODO: Describe TestRoot.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::filesystem::path TestRoot()
 {
     return std::filesystem::current_path() / "build" / "asset-store-tests" /
            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
 }
 
+/**
+ * @brief TODO: Describe ReferencesAreValidatedAndNormalized.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool ReferencesAreValidatedAndNormalized()
 {
     const auto root = TestRoot();
@@ -53,6 +85,11 @@ bool ReferencesAreValidatedAndNormalized()
     return result;
 }
 
+/**
+ * @brief TODO: Describe ExternalReferencesDoNotInventRuntimeHandles.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool ExternalReferencesDoNotInventRuntimeHandles()
 {
     const auto root = TestRoot();
@@ -75,6 +112,11 @@ bool ExternalReferencesDoNotInventRuntimeHandles()
 
 } // namespace
 
+/**
+ * @brief TODO: Describe main.
+ *
+ * @return TODO: Describe the return value.
+ */
 int main()
 {
     return ReferencesAreValidatedAndNormalized() && ExternalReferencesDoNotInventRuntimeHandles() ? 0 : 1;

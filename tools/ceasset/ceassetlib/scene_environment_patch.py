@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -17,6 +32,8 @@ from .scene_format import (
 
 @dataclass(frozen=True)
 class SkyboxPatch:
+    """TODO: Describe `SkyboxPatch`."""
+
     panorama_path: str
     intensity: float = 1.0
     rotation_radians: float = 0.0
@@ -24,6 +41,8 @@ class SkyboxPatch:
 
 @dataclass(frozen=True)
 class FogPatch:
+    """TODO: Describe `FogPatch`."""
+
     base_height: float = 0.0
     inscattering_color: tuple[float, float, float] = (0.55, 0.65, 0.78)
     density: float = 0.015
@@ -34,6 +53,15 @@ class FogPatch:
 
 
 def _append_aligned(output: bytearray, data: bytes) -> int:
+    """TODO: Describe `_append_aligned`.
+
+    Args:
+        output: TODO: Describe this parameter.
+        data: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     offset = align_up(len(output), 16)
     output.extend(bytes(offset - len(output)))
     output.extend(data)
@@ -41,6 +69,13 @@ def _append_aligned(output: bytearray, data: bytes) -> int:
 
 
 def patch_environment_entities(path: Path, skybox: SkyboxPatch, fog: FogPatch) -> None:
+    """TODO: Describe `patch_environment_entities`.
+
+    Args:
+        path: TODO: Describe this parameter.
+        skybox: TODO: Describe this parameter.
+        fog: TODO: Describe this parameter.
+    """
     file_data = path.read_bytes()
     outer = ASSET_HEADER.unpack_from(file_data)
     if outer[3] != int(AssetType.SCENE):
@@ -58,9 +93,26 @@ def patch_environment_entities(path: Path, skybox: SkyboxPatch, fog: FogPatch) -
     strings = bytearray(payload[string_offset:string_offset + string_size])
 
     def text(offset: int, size: int) -> str:
+        """TODO: Describe `text`.
+
+        Args:
+            offset: TODO: Describe this parameter.
+            size: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         return bytes(strings[offset:offset + size]).decode("utf-8")
 
     def add_text(value: str) -> tuple[int, int]:
+        """TODO: Describe `add_text`.
+
+        Args:
+            value: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         encoded = value.encode("utf-8")
         offset = len(strings)
         strings.extend(encoded)
@@ -180,6 +232,7 @@ def update_fog_entity(path: Path, fog: FogPatch) -> None:
 
 
 def main() -> None:
+    """TODO: Describe `main`."""
     parser = argparse.ArgumentParser(description="Add skybox and height-fog entities without recooking a scene")
     parser.add_argument("scene", type=Path)
     parser.add_argument("panorama")

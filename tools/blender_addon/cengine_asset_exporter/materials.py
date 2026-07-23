@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import struct
@@ -54,6 +69,8 @@ MATERIAL_RENDER_MODE_IDS = {
 
 @dataclass(frozen=True)
 class TextureBinding:
+    """TODO: Describe `TextureBinding`."""
+
     slot: str
     source: Path
     output: Path
@@ -64,6 +81,8 @@ class TextureBinding:
 
 @dataclass(frozen=True)
 class MaterialExport:
+    """TODO: Describe `MaterialExport`."""
+
     source: object
     output: Path
     generated_textures: tuple[Path, ...] = ()
@@ -71,6 +90,8 @@ class MaterialExport:
 
 @dataclass(frozen=True)
 class MaterialFactors:
+    """TODO: Describe `MaterialFactors`."""
+
     base_color: tuple[float, float, float, float]
     metallic: float
     roughness: float
@@ -79,19 +100,45 @@ class MaterialFactors:
 
 @dataclass(frozen=True)
 class MaterialSurface:
+    """TODO: Describe `MaterialSurface`."""
+
     render_mode: int
     alpha_cutoff: float
 
 
 def elapsed(start: float) -> str:
+    """TODO: Describe `elapsed`.
+
+    Args:
+        start: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return f"{time.perf_counter() - start:.2f}s"
 
 
 def default_material_name_for_object(obj: object) -> str:
+    """TODO: Describe `default_material_name_for_object`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return f"{clean_asset_name(str(getattr(obj, 'name', 'Mesh') or 'Mesh'))}_DefaultMaterial"
 
 
 def object_slot_materials(obj: object) -> list[object]:
+    """TODO: Describe `object_slot_materials`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     materials: list[object] = []
     for slot in getattr(obj, "material_slots", ()):
         material = getattr(slot, "material", None)
@@ -101,6 +148,14 @@ def object_slot_materials(obj: object) -> list[object]:
 
 
 def effective_material_names(obj: object) -> list[str]:
+    """TODO: Describe `effective_material_names`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     materials = object_slot_materials(obj)
     if materials:
         return [material.name for material in materials]
@@ -110,24 +165,74 @@ def effective_material_names(obj: object) -> list[str]:
 
 
 def material_output_path(blend_source: Path, output_root: Path, material_name: str) -> Path:
+    """TODO: Describe `material_output_path`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        material_name: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return output_dir_for_source(blend_source, output_root) / "materials" / f"{clean_asset_name(material_name)}.cmat"
 
 
 def material_mra_output_path(blend_source: Path, output_root: Path, material_name: str) -> Path:
+    """TODO: Describe `material_mra_output_path`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        material_name: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return output_dir_for_source(blend_source, output_root) / "textures" / f"{clean_asset_name(material_name)}_mra.dds"
 
 
 def material_bump_normal_output_path(blend_source: Path, output_root: Path, material_name: str) -> Path:
+    """TODO: Describe `material_bump_normal_output_path`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        material_name: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return output_dir_for_source(blend_source, output_root) / "textures" / \
         f"{clean_asset_name(material_name)}_bump_normal.dds"
 
 
 def material_base_alpha_output_path(blend_source: Path, output_root: Path, material_name: str) -> Path:
+    """TODO: Describe `material_base_alpha_output_path`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        material_name: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return output_dir_for_source(blend_source, output_root) / "textures" / \
         f"{clean_asset_name(material_name)}_base_alpha.dds"
 
 
 def principled_value(material: object, socket_name: str, fallback: float) -> float:
+    """TODO: Describe `principled_value`.
+
+    Args:
+        material: TODO: Describe this parameter.
+        socket_name: TODO: Describe this parameter.
+        fallback: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     nodes = getattr(getattr(material, "node_tree", None), "nodes", ())
     for node in nodes:
         if getattr(node, "type", "") != "BSDF_PRINCIPLED":
@@ -142,6 +247,16 @@ def principled_value(material: object, socket_name: str, fallback: float) -> flo
 
 def principled_color(material: object, socket_name: str,
                      fallback: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+    """TODO: Describe `principled_color`.
+
+    Args:
+        material: TODO: Describe this parameter.
+        socket_name: TODO: Describe this parameter.
+        fallback: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     nodes = getattr(getattr(material, "node_tree", None), "nodes", ())
     for node in nodes:
         if getattr(node, "type", "") != "BSDF_PRINCIPLED":
@@ -156,6 +271,15 @@ def principled_color(material: object, socket_name: str,
 
 
 def material_factors(material: object, bindings: list[TextureBinding]) -> MaterialFactors:
+    """TODO: Describe `material_factors`.
+
+    Args:
+        material: TODO: Describe this parameter.
+        bindings: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     slots = {binding.slot for binding in bindings}
     packed_mra = bool(slots & {"metallic_roughness_ao", "orm"})
     authored_base_color = principled_color(material, "Base Color", (1.0, 1.0, 1.0, 1.0))
@@ -171,6 +295,14 @@ def material_factors(material: object, bindings: list[TextureBinding]) -> Materi
 
 
 def material_has_authored_alpha(material: object) -> bool:
+    """TODO: Describe `material_has_authored_alpha`.
+
+    Args:
+        material: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     nodes = getattr(getattr(material, "node_tree", None), "nodes", ())
     principled_nodes = [node for node in nodes if getattr(node, "type", "") == "BSDF_PRINCIPLED"]
     links = getattr(getattr(material, "node_tree", None), "links", ())
@@ -185,6 +317,15 @@ def material_has_authored_alpha(material: object) -> bool:
 
 
 def material_surface(material: object, shader_id: int) -> MaterialSurface:
+    """TODO: Describe `material_surface`.
+
+    Args:
+        material: TODO: Describe this parameter.
+        shader_id: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if shader_id == MATERIAL_SHADER_IDS["unlit"]:
         return MaterialSurface(MATERIAL_RENDER_MODE_IDS["unlit"], 0.5)
     if not material_has_authored_alpha(material):
@@ -205,6 +346,12 @@ def material_surface(material: object, shader_id: int) -> MaterialSurface:
 
 
 def write_mra_texture(bindings: list[TextureBinding], output: Path) -> None:
+    """TODO: Describe `write_mra_texture`.
+
+    Args:
+        bindings: TODO: Describe this parameter.
+        output: TODO: Describe this parameter.
+    """
     by_slot = {binding.slot: binding for binding in bindings}
     metallic = by_slot.get("metallic")
     roughness = by_slot.get("roughness")
@@ -227,6 +374,15 @@ def write_mra_texture(bindings: list[TextureBinding], output: Path) -> None:
         size = max((image.size for image in opened), key=lambda value: value[0] * value[1])
 
         def channel(binding: TextureBinding | None, value: int):
+            """TODO: Describe `channel`.
+
+            Args:
+                binding: TODO: Describe this parameter.
+                value: TODO: Describe this parameter.
+
+            Returns:
+                TODO: Describe the produced value.
+            """
             if binding is None:
                 result = Image.new("L", size, value)
                 channels.append(result)
@@ -265,6 +421,13 @@ def write_mra_texture(bindings: list[TextureBinding], output: Path) -> None:
 
 
 def write_bump_normal_texture(binding: TextureBinding, output: Path, dds_format: str) -> None:
+    """TODO: Describe `write_bump_normal_texture`.
+
+    Args:
+        binding: TODO: Describe this parameter.
+        output: TODO: Describe this parameter.
+        dds_format: TODO: Describe this parameter.
+    """
     try:
         from PIL import Image, ImageFilter
     except ImportError as error:
@@ -316,6 +479,14 @@ def write_base_alpha_texture(
     output: Path,
     dds_format: str,
 ) -> None:
+    """TODO: Describe `write_base_alpha_texture`.
+
+    Args:
+        base_color: TODO: Describe this parameter.
+        opacity: TODO: Describe this parameter.
+        output: TODO: Describe this parameter.
+        dds_format: TODO: Describe this parameter.
+    """
     try:
         from PIL import Image
     except ImportError as error:
@@ -356,6 +527,14 @@ def write_base_alpha_texture(
 
 
 def object_materials(objects: Iterable[object]) -> list[object]:
+    """TODO: Describe `object_materials`.
+
+    Args:
+        objects: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     materials: list[object] = []
     seen: set[int] = set()
     seen_default_names: set[str] = set()
@@ -378,6 +557,15 @@ def object_materials(objects: Iterable[object]) -> list[object]:
 
 
 def texture_slot_name(socket_name: str, node_type: str = "") -> str:
+    """TODO: Describe `texture_slot_name`.
+
+    Args:
+        socket_name: TODO: Describe this parameter.
+        node_type: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if node_type == "NORMAL_MAP" and socket_name.strip().lower() == "color":
         return "normal"
     if node_type != "BSDF_PRINCIPLED":
@@ -386,10 +574,27 @@ def texture_slot_name(socket_name: str, node_type: str = "") -> str:
 
 
 def same_node(left: object, right: object) -> bool:
+    """TODO: Describe `same_node`.
+
+    Args:
+        left: TODO: Describe this parameter.
+        right: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return left is right or (left is not None and right is not None and left == right)
 
 
 def image_pixels_are_grayscale(image: object) -> bool | None:
+    """TODO: Describe `image_pixels_are_grayscale`.
+
+    Args:
+        image: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     pixels = getattr(image, "pixels", None)
     if pixels is None:
         return None
@@ -409,6 +614,14 @@ def image_pixels_are_grayscale(image: object) -> bool | None:
 
 
 def source_is_grayscale(source: Path) -> bool:
+    """TODO: Describe `source_is_grayscale`.
+
+    Args:
+        source: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     try:
         from PIL import Image, ImageChops
     except ImportError:
@@ -432,6 +645,15 @@ def source_is_grayscale(source: Path) -> bool:
 
 
 def image_is_bump_source(image: object, source: Path | None = None) -> bool:
+    """TODO: Describe `image_is_bump_source`.
+
+    Args:
+        image: TODO: Describe this parameter.
+        source: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     names = [
         str(getattr(image, "name", "") or ""),
         str(getattr(image, "filepath", "") or ""),
@@ -448,6 +670,15 @@ def image_is_bump_source(image: object, source: Path | None = None) -> bool:
 
 
 def material_link_slot(link: object, links: list[object]) -> str:
+    """TODO: Describe `material_link_slot`.
+
+    Args:
+        link: TODO: Describe this parameter.
+        links: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     from_node = getattr(link, "from_node", None)
     if getattr(from_node, "type", "") != "TEX_IMAGE":
         return ""
@@ -477,6 +708,16 @@ def material_texture_bindings(
     image_source_path: Callable[[object], Path | None],
     texture_output_path_for_source: Callable[[Path], Path | None],
 ) -> list[TextureBinding]:
+    """TODO: Describe `material_texture_bindings`.
+
+    Args:
+        material: TODO: Describe this parameter.
+        image_source_path: TODO: Describe this parameter.
+        texture_output_path_for_source: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     node_tree = getattr(material, "node_tree", None)
     links = list(getattr(node_tree, "links", ())) if node_tree is not None else []
     bindings: list[TextureBinding] = []
@@ -536,6 +777,14 @@ def material_texture_bindings(
 
 
 def supported_material_images(material: object) -> list[object]:
+    """TODO: Describe `supported_material_images`.
+
+    Args:
+        material: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     node_tree = getattr(material, "node_tree", None)
     links = list(getattr(node_tree, "links", ())) if node_tree is not None else []
     images: list[object] = []
@@ -565,6 +814,18 @@ def material_payload(
     asset_path: Callable[[Path], str] = generic_path,
     factors: MaterialFactors | None = None,
 ) -> bytes:
+    """TODO: Describe `material_payload`.
+
+    Args:
+        source: TODO: Describe this parameter.
+        material: TODO: Describe this parameter.
+        bindings: TODO: Describe this parameter.
+        asset_path: TODO: Describe this parameter.
+        factors: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     shader = str(getattr(material, "get", lambda _key, default=None: default)("ce_shader", "pbr"))
     shader_id = MATERIAL_SHADER_IDS.get(shader.strip().lower())
     if shader_id is None:
@@ -576,6 +837,14 @@ def material_payload(
     strings = bytearray()
 
     def append_string(text: str) -> tuple[int, int]:
+        """TODO: Describe `append_string`.
+
+        Args:
+            text: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         encoded = text.encode("utf-8")
         offset = len(strings)
         strings.extend(encoded)
@@ -623,6 +892,22 @@ def write_material_asset(
     source_hash: int | None = None,
     dds_format: str = "DXT5",
 ) -> MaterialExport:
+    """TODO: Describe `write_material_asset`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        material: TODO: Describe this parameter.
+        image_source_path: TODO: Describe this parameter.
+        texture_output_path_for_source: TODO: Describe this parameter.
+        asset_path: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+        source_hash: TODO: Describe this parameter.
+        dds_format: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     start = time.perf_counter()
     bindings = material_texture_bindings(material, image_source_path, texture_output_path_for_source)
     factors = material_factors(material, bindings)
@@ -703,6 +988,22 @@ def write_material_assets(
     source_hash: int | None = None,
     dds_format: str = "DXT5",
 ) -> list[MaterialExport]:
+    """TODO: Describe `write_material_assets`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        objects: TODO: Describe this parameter.
+        image_source_path: TODO: Describe this parameter.
+        texture_output_path_for_source: TODO: Describe this parameter.
+        asset_path: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+        source_hash: TODO: Describe this parameter.
+        dds_format: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     materials = object_materials(objects)
     if logger is not None:
         logger(f"Material export queue: {len(materials)} unique material(s)")

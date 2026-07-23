@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/camera.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "renderer/camera.h"
 
 #include <algorithm>
@@ -8,6 +23,12 @@
 namespace CEngine::Renderer
 {
 
+/**
+ * @brief TODO: Describe Camera::BuildFrameData.
+ *
+ * @param aspect_ratio TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 CameraFrameData Camera::BuildFrameData(float aspect_ratio) const
 {
     const glm::vec3 view_direction =

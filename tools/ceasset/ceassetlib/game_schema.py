@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import json
@@ -12,6 +27,8 @@ GAME_FORMAT_VERSION = 1
 
 @dataclass(frozen=True)
 class GameSchema:
+    """TODO: Describe `GameSchema`."""
+
     path: Path
     game: dict[str, Any]
     content: dict[str, Any]
@@ -19,6 +36,14 @@ class GameSchema:
     entities: tuple[dict[str, Any], ...]
 
     def entity(self, classname: str) -> dict[str, Any] | None:
+        """TODO: Describe `entity`.
+
+        Args:
+            classname: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         return next(
             (entity for entity in self.entities
              if entity.get("classname") == classname),
@@ -28,17 +53,34 @@ class GameSchema:
 
 @dataclass(frozen=True)
 class SchemaEntity:
+    """TODO: Describe `SchemaEntity`."""
+
     schema: dict[str, Any]
     values: dict[str, Any]
 
     @property
     def classname(self) -> str:
+        """TODO: Describe `classname`.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         return str(self.schema["classname"])
 
 
 def make_schema_entity(
     game: GameSchema, classname: str, **overrides: object
 ) -> SchemaEntity:
+    """TODO: Describe `make_schema_entity`.
+
+    Args:
+        game: TODO: Describe this parameter.
+        classname: TODO: Describe this parameter.
+        **overrides: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     schema = game.entity(classname)
     if schema is None:
         raise ValueError(f"game does not define entity {classname}")
@@ -85,6 +127,14 @@ WIRE_FORMATS = {
 
 
 def entity_struct(entity: dict[str, Any]) -> struct.Struct:
+    """TODO: Describe `entity_struct`.
+
+    Args:
+        entity: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     try:
         return struct.Struct(
             "<" + "".join(WIRE_FORMATS[field["type"]] for field in entity["fields"]))
@@ -94,6 +144,14 @@ def entity_struct(entity: dict[str, Any]) -> struct.Struct:
 
 
 def _read_document(path: Path) -> dict[str, Any]:
+    """TODO: Describe `_read_document`.
+
+    Args:
+        path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -105,11 +163,24 @@ def _read_document(path: Path) -> dict[str, Any]:
 
 
 def load_game_schema(path: Path) -> GameSchema:
+    """TODO: Describe `load_game_schema`.
+
+    Args:
+        path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     loaded: set[Path] = set()
     visiting: set[Path] = set()
     documents: list[dict[str, Any]] = []
 
     def visit(candidate: Path) -> None:
+        """TODO: Describe `visit`.
+
+        Args:
+            candidate: TODO: Describe this parameter.
+        """
         resolved = candidate.resolve()
         if resolved in visiting:
             raise ValueError(f"CEngine game file import cycle contains {resolved}")
@@ -158,6 +229,11 @@ def load_game_schema(path: Path) -> GameSchema:
 
 
 def bundled_game_path() -> Path:
+    """TODO: Describe `bundled_game_path`.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     packaged = Path(__file__).with_name("game.json")
     if packaged.is_file():
         return packaged
@@ -166,4 +242,9 @@ def bundled_game_path() -> Path:
 
 
 def load_bundled_game() -> GameSchema:
+    """TODO: Describe `load_bundled_game`.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return load_game_schema(bundled_game_path())

@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/opengl/shaders/fullscreen_blit.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "fullscreen_blit.h"
 
 #include "renderer/render_system.h"
@@ -7,17 +22,30 @@
 namespace CEngine::Renderer::OpenGL
 {
 
+/**
+ * @brief TODO: Describe FullscreenBlit::FullscreenBlit.
+ */
 FullscreenBlit::FullscreenBlit()
 {
     shader_program_.Load("shaders/opengl/ssao.vert", "shaders/opengl/fullscreen_blit.frag");
     InitializeParameters();
 }
 
+/**
+ * @brief TODO: Describe FullscreenBlit::Use.
+ */
 void FullscreenBlit::Use() const
 {
     shader_program_.Use();
 }
 
+/**
+ * @brief TODO: Describe FullscreenBlit::Update.
+ *
+ * @param rendering TODO: Describe this parameter.
+ * @param source_texture TODO: Describe this parameter.
+ * @param depth_texture TODO: Describe this parameter.
+ */
 void FullscreenBlit::Update(const RenderSystem &rendering, GLuint source_texture, GLuint depth_texture) const
 {
     const PostProcessSettings &settings = rendering.GetPostProcessSettings();
@@ -59,6 +87,9 @@ void FullscreenBlit::Update(const RenderSystem &rendering, GLuint source_texture
     glUniform1f(far_clip_id_, frame.far_clip);
 }
 
+/**
+ * @brief TODO: Describe FullscreenBlit::InitializeParameters.
+ */
 void FullscreenBlit::InitializeParameters()
 {
     const GLuint program = shader_program_.GetId();

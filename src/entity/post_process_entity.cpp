@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/entity/post_process_entity.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "entity/post_process_entity.h"
 
 #include "context.h"
@@ -6,11 +21,21 @@
 namespace CEngine::Entities
 {
 
+/**
+ * @brief TODO: Describe PostProcessEntity::Classname.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::string_view PostProcessEntity::Classname() const
 {
     return "post_process";
 }
 
+/**
+ * @brief TODO: Describe PostProcessEntity::Update.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void PostProcessEntity::Update(Context &context, float /*unused*/)
 {
     if (context.rendering == nullptr || !Enabled())
@@ -45,6 +70,11 @@ void PostProcessEntity::Update(Context &context, float /*unused*/)
     context.rendering->SetSSAOSettings(ssao);
 }
 
+/**
+ * @brief TODO: Describe PostProcessEntity::Shutdown.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void PostProcessEntity::Shutdown(Context &context)
 {
     if (context.rendering == nullptr)

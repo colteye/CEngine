@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/light.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #ifndef LIGHT_H
 #define LIGHT_H
 
@@ -12,6 +27,9 @@ namespace CEngine::Renderer
 struct LightSlotTag;
 using LightHandle = Handle<LightSlotTag>;
 
+/**
+ * @brief TODO: Describe LightType.
+ */
 enum class LightType
 {
     Directional = 0,
@@ -19,6 +37,9 @@ enum class LightType
     Spot = 2
 };
 
+/**
+ * @brief TODO: Describe Light.
+ */
 struct Light
 {
     LightType type = LightType::Point;
@@ -36,6 +57,9 @@ struct Light
     float shadow_normal_bias = 0.015f;
 };
 
+/**
+ * @brief TODO: Describe GpuLight.
+ */
 struct GpuLight
 {
     glm::vec4 position_range;
@@ -44,11 +68,20 @@ struct GpuLight
     glm::vec4 params; // x: type, y: spot inner cos, z: shadow index, w: shadow type
 };
 
+/**
+ * @brief TODO: Describe LightShadowBinding.
+ */
 struct LightShadowBinding
 {
     int32_t index = -1;
     int32_t type = 0;
 
+    /**
+     * @brief TODO: Describe operator==.
+     *
+     * @param other TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     bool operator==(const LightShadowBinding &other) const
     {
         return index == other.index && type == other.type;

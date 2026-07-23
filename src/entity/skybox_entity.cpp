@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/entity/skybox_entity.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "entity/skybox_entity.h"
 
 #include "assets/asset_store.h"
@@ -9,11 +24,21 @@
 
 namespace CEngine::Entities
 {
+/**
+ * @brief TODO: Describe SkyboxEntity::Classname.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::string_view SkyboxEntity::Classname() const
 {
     return "skybox";
 }
 
+/**
+ * @brief TODO: Describe SkyboxEntity::Initialize.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void SkyboxEntity::Initialize(Context &context)
 {
     if (context.assets == nullptr || context.scene == nullptr)
@@ -32,6 +57,11 @@ void SkyboxEntity::Initialize(Context &context)
     }
 }
 
+/**
+ * @brief TODO: Describe SkyboxEntity::Update.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void SkyboxEntity::Update(Context &context, float /*unused*/)
 {
     if (context.rendering == nullptr)
@@ -53,6 +83,11 @@ void SkyboxEntity::Update(Context &context, float /*unused*/)
     }
 }
 
+/**
+ * @brief TODO: Describe SkyboxEntity::Shutdown.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void SkyboxEntity::Shutdown(Context &context)
 {
     if (context.rendering != nullptr)

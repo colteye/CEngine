@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/assets/cscene_reader.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/cscene_reader.h"
 
 #include "assets/asset_error.h"
@@ -12,6 +27,15 @@ namespace CEngine::Assets
 namespace
 {
 
+/**
+ * @brief TODO: Describe RangeFits.
+ *
+ * @param offset TODO: Describe this parameter.
+ * @param count TODO: Describe this parameter.
+ * @param stride TODO: Describe this parameter.
+ * @param size TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool RangeFits(std::uint64_t offset, std::uint64_t count, std::uint64_t stride, std::size_t size)
 {
     if (count != 0 && stride > std::numeric_limits<std::uint64_t>::max() / count)
@@ -22,6 +46,13 @@ bool RangeFits(std::uint64_t offset, std::uint64_t count, std::uint64_t stride, 
     return offset <= size && bytes <= static_cast<std::uint64_t>(size) - offset;
 }
 
+/**
+ * @brief TODO: Describe ReadHeader.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadHeader(ByteView bytes, CSceneFormat::DiskSceneHeader &value)
 {
     if (bytes.size < sizeof(value))
@@ -42,6 +73,14 @@ bool ReadHeader(ByteView bytes, CSceneFormat::DiskSceneHeader &value)
            ReadU64LE(bytes, offset, value.string_table_offset) && ReadU64LE(bytes, offset, value.string_table_size);
 }
 
+/**
+ * @brief TODO: Describe ReadSettings.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadSettings(ByteView bytes, std::size_t offset, CSceneFormat::DiskSceneSettings &value)
 {
     for (float &component : value.ambient_color)
@@ -76,6 +115,14 @@ bool ReadSettings(ByteView bytes, std::size_t offset, CSceneFormat::DiskSceneSet
     return true;
 }
 
+/**
+ * @brief TODO: Describe ReadAssetReference.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadAssetReference(ByteView bytes, std::size_t offset, CSceneFormat::DiskAssetReference &value)
 {
     if (offset > bytes.size || bytes.size - offset < value.guid.size())
@@ -88,6 +135,14 @@ bool ReadAssetReference(ByteView bytes, std::size_t offset, CSceneFormat::DiskAs
            ReadU32LE(bytes, offset, value.path_offset) && ReadU32LE(bytes, offset, value.path_size);
 }
 
+/**
+ * @brief TODO: Describe ReadEntity.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadEntity(ByteView bytes, std::size_t offset, CSceneFormat::DiskSceneEntity &value)
 {
     return ReadU32LE(bytes, offset, value.classname_offset) && ReadU32LE(bytes, offset, value.classname_size) &&
@@ -95,6 +150,14 @@ bool ReadEntity(ByteView bytes, std::size_t offset, CSceneFormat::DiskSceneEntit
            ReadU32LE(bytes, offset, value.flags);
 }
 
+/**
+ * @brief TODO: Describe ReadClassBlock.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadClassBlock(ByteView bytes, std::size_t offset, CSceneFormat::DiskEntityClassBlock &value)
 {
     return ReadU32LE(bytes, offset, value.classname_offset) && ReadU32LE(bytes, offset, value.classname_size) &&
@@ -104,6 +167,14 @@ bool ReadClassBlock(ByteView bytes, std::size_t offset, CSceneFormat::DiskEntity
            ReadU64LE(bytes, offset, value.auxiliary_offset) && ReadU64LE(bytes, offset, value.auxiliary_size);
 }
 
+/**
+ * @brief TODO: Describe ReadConnection.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadConnection(ByteView bytes, std::size_t offset, CSceneFormat::DiskEntityConnection &value)
 {
     return ReadU32LE(bytes, offset, value.source_entity) && ReadU32LE(bytes, offset, value.target_entity) &&
@@ -114,6 +185,12 @@ bool ReadConnection(ByteView bytes, std::size_t offset, CSceneFormat::DiskEntity
 
 } // namespace
 
+/**
+ * @brief TODO: Describe CSceneFile::Load.
+ *
+ * @param path TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool CSceneFile::Load(const std::filesystem::path &path)
 {
     payload_ = {};
@@ -136,6 +213,11 @@ bool CSceneFile::Load(const std::filesystem::path &path)
     return Validate();
 }
 
+/**
+ * @brief TODO: Describe CSceneFile::Validate.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool CSceneFile::Validate()
 {
     using namespace CSceneFormat;
@@ -330,26 +412,52 @@ bool CSceneFile::Validate()
     return true;
 }
 
+/**
+ * @brief TODO: Describe CSceneFile::AssetReferences.
+ *
+ * @return TODO: Describe the return value.
+ */
 DiskView<CSceneFormat::DiskAssetReference> CSceneFile::AssetReferences() const
 {
     return {asset_references_.data(), asset_references_.size()};
 }
 
+/**
+ * @brief TODO: Describe CSceneFile::Entities.
+ *
+ * @return TODO: Describe the return value.
+ */
 DiskView<CSceneFormat::DiskSceneEntity> CSceneFile::Entities() const
 {
     return {entities_.data(), entities_.size()};
 }
 
+/**
+ * @brief TODO: Describe CSceneFile::ClassBlocks.
+ *
+ * @return TODO: Describe the return value.
+ */
 DiskView<CSceneFormat::DiskEntityClassBlock> CSceneFile::ClassBlocks() const
 {
     return {class_blocks_.data(), class_blocks_.size()};
 }
 
+/**
+ * @brief TODO: Describe CSceneFile::Connections.
+ *
+ * @return TODO: Describe the return value.
+ */
 DiskView<CSceneFormat::DiskEntityConnection> CSceneFile::Connections() const
 {
     return {connections_.data(), connections_.size()};
 }
 
+/**
+ * @brief TODO: Describe CSceneFile::ClassEntities.
+ *
+ * @param block TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 DiskView<std::uint32_t> CSceneFile::ClassEntities(const CSceneFormat::DiskEntityClassBlock &block) const
 {
     for (std::size_t index = 0; index < class_blocks_.size(); ++index)
@@ -362,16 +470,35 @@ DiskView<std::uint32_t> CSceneFile::ClassEntities(const CSceneFormat::DiskEntity
     return {};
 }
 
+/**
+ * @brief TODO: Describe CSceneFile::ClassRecords.
+ *
+ * @param block TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 ByteView CSceneFile::ClassRecords(const CSceneFormat::DiskEntityClassBlock &block) const
 {
     return {At(block.records_offset), static_cast<std::size_t>(block.count) * block.record_stride};
 }
 
+/**
+ * @brief TODO: Describe CSceneFile::ClassAuxiliary.
+ *
+ * @param block TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 ByteView CSceneFile::ClassAuxiliary(const CSceneFormat::DiskEntityClassBlock &block) const
 {
     return {At(block.auxiliary_offset), static_cast<std::size_t>(block.auxiliary_size)};
 }
 
+/**
+ * @brief TODO: Describe CSceneFile::String.
+ *
+ * @param offset TODO: Describe this parameter.
+ * @param size TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::string_view CSceneFile::String(std::uint32_t offset, std::uint32_t size) const
 {
     return {reinterpret_cast<const char *>(At(header_.string_table_offset + offset)), size};

@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import sys
@@ -35,11 +50,22 @@ from .texture import convert_texture_to_dds
 
 @dataclass
 class BuildOptions:
+    """TODO: Describe `BuildOptions`."""
+
     force: bool = False
     dds_format: str = "DXT5"
 
 
 def import_asset(paths: ProjectPaths, source_arg: Path) -> int:
+    """TODO: Describe `import_asset`.
+
+    Args:
+        paths: TODO: Describe this parameter.
+        source_arg: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     source = source_arg.resolve()
     if not source.exists():
         print(f"source file does not exist: {source}", file=sys.stderr)
@@ -70,6 +96,14 @@ def import_asset(paths: ProjectPaths, source_arg: Path) -> int:
 
 
 def register_conversion(paths: ProjectPaths, source: Path, asset_type: AssetType, output: Path) -> None:
+    """TODO: Describe `register_conversion`.
+
+    Args:
+        paths: TODO: Describe this parameter.
+        source: TODO: Describe this parameter.
+        asset_type: TODO: Describe this parameter.
+        output: TODO: Describe this parameter.
+    """
     records = load_registry(paths)
     stored_source = stored_path(paths.root, source)
     stored_output = stored_path(paths.root, output)
@@ -88,6 +122,13 @@ def register_conversion(paths: ProjectPaths, source: Path, asset_type: AssetType
 
 
 def build_asset(paths: ProjectPaths, record: AssetRecord, options: BuildOptions) -> None:
+    """TODO: Describe `build_asset`.
+
+    Args:
+        paths: TODO: Describe this parameter.
+        record: TODO: Describe this parameter.
+        options: TODO: Describe this parameter.
+    """
     source = project_path(paths, record.source)
     output = project_path(paths, record.output)
     source_ext = source.suffix.lower()
@@ -105,6 +146,15 @@ def build_asset(paths: ProjectPaths, record: AssetRecord, options: BuildOptions)
 
 
 def build(paths: ProjectPaths, options: BuildOptions) -> int:
+    """TODO: Describe `build`.
+
+    Args:
+        paths: TODO: Describe this parameter.
+        options: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     records = load_registry(paths)
     if not records:
         print("no assets registered; use ceasset import <file> first")
@@ -139,6 +189,15 @@ def build(paths: ProjectPaths, options: BuildOptions) -> int:
 
 
 def convert_source(paths: ProjectPaths, source: Path) -> int:
+    """TODO: Describe `convert_source`.
+
+    Args:
+        paths: TODO: Describe this parameter.
+        source: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     result = import_asset(paths, source)
     if result != 0:
         return result
@@ -146,6 +205,16 @@ def convert_source(paths: ProjectPaths, source: Path) -> int:
 
 
 def convert_texture_source(paths: ProjectPaths, source_arg: Path, dds_format: str) -> int:
+    """TODO: Describe `convert_texture_source`.
+
+    Args:
+        paths: TODO: Describe this parameter.
+        source_arg: TODO: Describe this parameter.
+        dds_format: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     source = source_arg.resolve()
     if not source.exists():
         print(f"source file does not exist: {source}", file=sys.stderr)
@@ -160,6 +229,13 @@ def convert_texture_source(paths: ProjectPaths, source_arg: Path, dds_format: st
 
 
 def watch(paths: ProjectPaths, options: BuildOptions, interval_ms: int) -> int:
+    """TODO: Describe `watch`.
+
+    Args:
+        paths: TODO: Describe this parameter.
+        options: TODO: Describe this parameter.
+        interval_ms: TODO: Describe this parameter.
+    """
     print(f"watching {paths.registry_path} every {interval_ms}ms")
     while True:
         build(paths, options)

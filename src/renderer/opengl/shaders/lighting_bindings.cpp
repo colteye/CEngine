@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/opengl/shaders/lighting_bindings.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "lighting_bindings.h"
 
 #include "renderer/light.h"
@@ -18,6 +33,13 @@ constexpr GLuint KShadowBindingPoint = 1;
 constexpr GLint KShadowAtlasTextureUnit = 5;
 constexpr GLint KPointShadowFirstTextureUnit = 6;
 
+/**
+ * @brief TODO: Describe SameShadowData.
+ *
+ * @param left TODO: Describe this parameter.
+ * @param right TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool SameShadowData(const ShadowGpuData &left, const ShadowGpuData &right)
 {
     return left.spot_matrices == right.spot_matrices && left.cascade_matrices == right.cascade_matrices &&
@@ -28,11 +50,20 @@ bool SameShadowData(const ShadowGpuData &left, const ShadowGpuData &right)
 }
 } // namespace
 
+/**
+ * @brief TODO: Describe DirectLightBuffer::~DirectLightBuffer.
+ */
 DirectLightBuffer::~DirectLightBuffer()
 {
     Destroy();
 }
 
+/**
+ * @brief TODO: Describe DirectLightBuffer::Initialize.
+ *
+ * @param shader_id TODO: Describe this parameter.
+ * @param block_name TODO: Describe this parameter.
+ */
 void DirectLightBuffer::Initialize(GLuint shader_id, const char *block_name)
 {
     const GLuint block_index = glGetUniformBlockIndex(shader_id, block_name);
@@ -50,6 +81,11 @@ void DirectLightBuffer::Initialize(GLuint shader_id, const char *block_name)
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
 
+/**
+ * @brief TODO: Describe DirectLightBuffer::BindAndUploadIfNeeded.
+ *
+ * @param rendering TODO: Describe this parameter.
+ */
 void DirectLightBuffer::BindAndUploadIfNeeded(RenderSystem &rendering)
 {
     glBindBufferBase(GL_UNIFORM_BUFFER, KDirectLightBindingPoint, buffer_);
@@ -75,6 +111,9 @@ void DirectLightBuffer::BindAndUploadIfNeeded(RenderSystem &rendering)
     uploaded_revision_ = light_revision;
 }
 
+/**
+ * @brief TODO: Describe DirectLightBuffer::Destroy.
+ */
 void DirectLightBuffer::Destroy()
 {
     if (buffer_ != 0)
@@ -85,11 +124,20 @@ void DirectLightBuffer::Destroy()
     uploaded_revision_ = 0;
 }
 
+/**
+ * @brief TODO: Describe ShadowBuffer::~ShadowBuffer.
+ */
 ShadowBuffer::~ShadowBuffer()
 {
     Destroy();
 }
 
+/**
+ * @brief TODO: Describe ShadowBuffer::Initialize.
+ *
+ * @param shader_id TODO: Describe this parameter.
+ * @param block_name TODO: Describe this parameter.
+ */
 void ShadowBuffer::Initialize(GLuint shader_id, const char *block_name)
 {
     const GLuint block_index = glGetUniformBlockIndex(shader_id, block_name);
@@ -105,6 +153,11 @@ void ShadowBuffer::Initialize(GLuint shader_id, const char *block_name)
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
 
+/**
+ * @brief TODO: Describe ShadowBuffer::Upload.
+ *
+ * @param data TODO: Describe this parameter.
+ */
 void ShadowBuffer::Upload(const ShadowGpuData &data)
 {
     glBindBufferBase(GL_UNIFORM_BUFFER, KShadowBindingPoint, buffer_);
@@ -119,6 +172,9 @@ void ShadowBuffer::Upload(const ShadowGpuData &data)
     uploaded_ = true;
 }
 
+/**
+ * @brief TODO: Describe ShadowBuffer::Destroy.
+ */
 void ShadowBuffer::Destroy()
 {
     if (buffer_ != 0)
@@ -130,6 +186,11 @@ void ShadowBuffer::Destroy()
     uploaded_ = false;
 }
 
+/**
+ * @brief TODO: Describe ShadowSamplers::Initialize.
+ *
+ * @param shader_id TODO: Describe this parameter.
+ */
 void ShadowSamplers::Initialize(GLuint shader_id)
 {
     atlas = glGetUniformLocation(shader_id, "shadow_atlas");
@@ -140,6 +201,12 @@ void ShadowSamplers::Initialize(GLuint shader_id)
     }
 }
 
+/**
+ * @brief TODO: Describe ShadowSamplers::Bind.
+ *
+ * @param atlas_texture TODO: Describe this parameter.
+ * @param point_textures TODO: Describe this parameter.
+ */
 void ShadowSamplers::Bind(GLuint atlas_texture,
                           const std::array<GLuint, ShadowLimits::KMaxPointShadows> &point_textures) const
 {
@@ -155,6 +222,11 @@ void ShadowSamplers::Bind(GLuint atlas_texture,
     }
 }
 
+/**
+ * @brief TODO: Describe AmbientUniforms::Initialize.
+ *
+ * @param shader_id TODO: Describe this parameter.
+ */
 void AmbientUniforms::Initialize(GLuint shader_id)
 {
     sky_color = glGetUniformLocation(shader_id, "ambient_sky_color");
@@ -163,6 +235,11 @@ void AmbientUniforms::Initialize(GLuint shader_id)
     enabled = glGetUniformLocation(shader_id, "ambient_enabled");
 }
 
+/**
+ * @brief TODO: Describe AmbientUniforms::Upload.
+ *
+ * @param rendering TODO: Describe this parameter.
+ */
 void AmbientUniforms::Upload(const RenderSystem &rendering) const
 {
     const AmbientLighting &ambient = rendering.GetAmbientLighting();
@@ -172,6 +249,11 @@ void AmbientUniforms::Upload(const RenderSystem &rendering) const
     glUniform1i(enabled, ambient.enabled ? 1 : 0);
 }
 
+/**
+ * @brief TODO: Describe EnvironmentUniforms::Initialize.
+ *
+ * @param shader_id TODO: Describe this parameter.
+ */
 void EnvironmentUniforms::Initialize(GLuint shader_id)
 {
     irradiance = glGetUniformLocation(shader_id, "ibl_irradiance");
@@ -189,6 +271,13 @@ void EnvironmentUniforms::Initialize(GLuint shader_id)
     fog_cutoff_distance = glGetUniformLocation(shader_id, "fog_cutoff_distance");
 }
 
+/**
+ * @brief TODO: Describe EnvironmentUniforms::BindAndUpload.
+ *
+ * @param rendering TODO: Describe this parameter.
+ * @param irradiance_texture TODO: Describe this parameter.
+ * @param prefiltered_texture TODO: Describe this parameter.
+ */
 void EnvironmentUniforms::BindAndUpload(const RenderSystem &rendering, GLuint irradiance_texture,
                                         GLuint prefiltered_texture) const
 {

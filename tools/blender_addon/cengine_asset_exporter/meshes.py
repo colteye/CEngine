@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import struct
@@ -31,6 +46,8 @@ MAX_SKIN_INFLUENCES = 4
 
 @dataclass(frozen=True)
 class MeshExport:
+    """TODO: Describe `MeshExport`."""
+
     source: object
     output: Path
     material_name: str = ""
@@ -38,6 +55,8 @@ class MeshExport:
 
 @dataclass(frozen=True)
 class MeshBuffers:
+    """TODO: Describe `MeshBuffers`."""
+
     vertex_count: int
     index_count: int
     bounds_min: tuple[float, float, float]
@@ -50,6 +69,14 @@ class MeshBuffers:
 
 
 def elapsed(start: float) -> str:
+    """TODO: Describe `elapsed`.
+
+    Args:
+        start: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return f"{time.perf_counter() - start:.2f}s"
 
 
@@ -59,6 +86,17 @@ def mesh_output_path(
     mesh_name: str,
     material_name: str | None = None,
 ) -> Path:
+    """TODO: Describe `mesh_output_path`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        mesh_name: TODO: Describe this parameter.
+        material_name: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     name = clean_asset_name(mesh_name)
     if material_name:
         name = f"{name}__{clean_asset_name(material_name)}"
@@ -66,6 +104,14 @@ def mesh_output_path(
 
 
 def mesh_objects(objects: Iterable[object]) -> list[object]:
+    """TODO: Describe `mesh_objects`.
+
+    Args:
+        objects: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     meshes: list[object] = []
     seen: set[int] = set()
     for obj in objects:
@@ -80,19 +126,51 @@ def mesh_objects(objects: Iterable[object]) -> list[object]:
 
 
 def tuple3(value: object) -> tuple[float, float, float]:
+    """TODO: Describe `tuple3`.
+
+    Args:
+        value: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return (float(value[0]), float(value[1]), float(value[2]))
 
 
 def blender_to_engine_vector(value: object) -> tuple[float, float, float]:
+    """TODO: Describe `blender_to_engine_vector`.
+
+    Args:
+        value: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     x, y, z = tuple3(value)
     return (y, -x, z)
 
 
 def tuple2(value: object) -> tuple[float, float]:
+    """TODO: Describe `tuple2`.
+
+    Args:
+        value: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return (float(value[0]), float(value[1]))
 
 
 def mesh_material_names(obj: object) -> list[str]:
+    """TODO: Describe `mesh_material_names`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     materials = object_slot_materials(obj)
     if materials:
         return [material.name for material in materials]
@@ -100,6 +178,14 @@ def mesh_material_names(obj: object) -> list[str]:
 
 
 def mesh_armature(obj: object) -> object | None:
+    """TODO: Describe `mesh_armature`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     parent = getattr(obj, "parent", None)
     if getattr(parent, "type", "") == "ARMATURE":
         return parent
@@ -112,6 +198,14 @@ def mesh_armature(obj: object) -> object | None:
 
 
 def bone_indices(armature: object | None) -> dict[str, int]:
+    """TODO: Describe `bone_indices`.
+
+    Args:
+        armature: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     bones = getattr(getattr(armature, "data", None), "bones", ()) if armature is not None else ()
     indices = {bone.name: index for index, bone in enumerate(bones)}
     if any(index > 0xFFFF for index in indices.values()):
@@ -120,6 +214,15 @@ def bone_indices(armature: object | None) -> dict[str, int]:
 
 
 def vertex_group_name(obj: object, group_index: int) -> str:
+    """TODO: Describe `vertex_group_name`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+        group_index: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     groups = getattr(obj, "vertex_groups", ())
     if group_index < 0 or group_index >= len(groups):
         return ""
@@ -127,6 +230,16 @@ def vertex_group_name(obj: object, group_index: int) -> str:
 
 
 def skin_influences(obj: object | None, vertex: object, bone_lookup: dict[str, int]) -> tuple[list[int], list[int]]:
+    """TODO: Describe `skin_influences`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+        vertex: TODO: Describe this parameter.
+        bone_lookup: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if obj is None or not bone_lookup:
         return [0, 0, 0, 0], [0, 0, 0, 0]
 
@@ -161,6 +274,14 @@ MATERIAL_UV_EXCLUDED = {"Lightmap", "CEngineLightmap", "CEngineBake"}
 
 
 def material_uv_data(mesh: object):
+    """TODO: Describe `material_uv_data`.
+
+    Args:
+        mesh: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     uv_layers = getattr(mesh, "uv_layers", None)
     if uv_layers is None:
         return ()
@@ -181,6 +302,14 @@ def material_uv_data(mesh: object):
 
 
 def lightmap_uv_data(mesh: object):
+    """TODO: Describe `lightmap_uv_data`.
+
+    Args:
+        mesh: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     uv_layers = getattr(mesh, "uv_layers", None)
     if uv_layers is None:
         return ()
@@ -197,10 +326,26 @@ def lightmap_uv_data(mesh: object):
 
 
 def polygon_loop_indices(polygon: object) -> list[int]:
+    """TODO: Describe `polygon_loop_indices`.
+
+    Args:
+        polygon: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return [int(index) for index in getattr(polygon, "loop_indices", ())]
 
 
 def polygon_triangles(polygon: object) -> list[tuple[int, int, int]]:
+    """TODO: Describe `polygon_triangles`.
+
+    Args:
+        polygon: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     loop_indices = polygon_loop_indices(polygon)
     if len(loop_indices) < 3:
         return []
@@ -218,6 +363,17 @@ def mesh_buffers(
     armature: object | None = None,
     material_index: int | None = None,
 ) -> MeshBuffers:
+    """TODO: Describe `mesh_buffers`.
+
+    Args:
+        mesh: TODO: Describe this parameter.
+        obj: TODO: Describe this parameter.
+        armature: TODO: Describe this parameter.
+        material_index: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     vertices = getattr(mesh, "vertices", ())
     loops = getattr(mesh, "loops", ())
     polygons = getattr(mesh, "polygons", ())
@@ -291,6 +447,16 @@ def mesh_metadata_payload(
     material_slot_count: int,
     geometry_offset: int,
 ) -> bytes:
+    """TODO: Describe `mesh_metadata_payload`.
+
+    Args:
+        buffers: TODO: Describe this parameter.
+        material_slot_count: TODO: Describe this parameter.
+        geometry_offset: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     flags = (MESH_FLAG_SKINNED if buffers.skinned else 0) | \
         (MESH_FLAG_LIGHTMAP_UV if buffers.lightmap_uv else 0)
     return MESH_METADATA.pack(
@@ -325,6 +491,24 @@ def write_mesh_asset(
     material_name: str | None = None,
     split_by_material: bool = False,
 ) -> MeshExport:
+    """TODO: Describe `write_mesh_asset`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        obj: TODO: Describe this parameter.
+        material_output_path_for_name: TODO: Describe this parameter.
+        skeleton_output_path_for_name: TODO: Describe this parameter.
+        asset_path: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+        source_hash: TODO: Describe this parameter.
+        material_index: TODO: Describe this parameter.
+        material_name: TODO: Describe this parameter.
+        split_by_material: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     start = time.perf_counter()
     material_names = mesh_material_names(obj)
     export_material_name = material_name or (material_names[material_index] if material_index < len(material_names) else material_names[0])
@@ -370,6 +554,21 @@ def write_mesh_assets(
     logger: Callable[[str], None] | None = None,
     source_hash: int | None = None,
 ) -> list[MeshExport]:
+    """TODO: Describe `write_mesh_assets`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        objects: TODO: Describe this parameter.
+        material_output_path_for_name: TODO: Describe this parameter.
+        skeleton_output_path_for_name: TODO: Describe this parameter.
+        asset_path: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+        source_hash: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     meshes = mesh_objects(objects)
     if logger is not None:
         logger(f"Mesh export queue: {len(meshes)} mesh object(s)")

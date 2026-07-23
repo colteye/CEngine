@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/opengl/shadow_system.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "renderer/opengl/shadow_system.h"
 #include "renderer/render_system.h"
 
@@ -17,6 +32,13 @@ namespace
 constexpr float KDirectionalShadowDistance = 200.0f;
 constexpr float KCascadeSplitLambda = 0.9f;
 
+/**
+ * @brief TODO: Describe NormalizeOrDefault.
+ *
+ * @param value TODO: Describe this parameter.
+ * @param fallback TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 glm::vec3 NormalizeOrDefault(const glm::vec3 &value, const glm::vec3 &fallback)
 {
     const float length = glm::length(value);
@@ -27,6 +49,12 @@ glm::vec3 NormalizeOrDefault(const glm::vec3 &value, const glm::vec3 &fallback)
     return value / length;
 }
 
+/**
+ * @brief TODO: Describe StableUpForDirection.
+ *
+ * @param direction TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 glm::vec3 StableUpForDirection(const glm::vec3 &direction)
 {
     if (std::abs(glm::dot(direction, glm::vec3(0.0f, 0.0f, 1.0f))) > 0.95f)
@@ -36,6 +64,12 @@ glm::vec3 StableUpForDirection(const glm::vec3 &direction)
     return {0.0f, 0.0f, 1.0f};
 }
 
+/**
+ * @brief TODO: Describe BoundsCorners.
+ *
+ * @param bounds TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::array<glm::vec3, 8> BoundsCorners(const Bounds &bounds)
 {
     return {
@@ -46,12 +80,25 @@ std::array<glm::vec3, 8> BoundsCorners(const Bounds &bounds)
     };
 }
 
+/**
+ * @brief TODO: Describe LookAlong.
+ *
+ * @param position TODO: Describe this parameter.
+ * @param direction TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 glm::mat4 LookAlong(const glm::vec3 &position, const glm::vec3 &direction)
 {
     const glm::vec3 forward = NormalizeOrDefault(direction, glm::vec3(0.0f, 0.0f, -1.0f));
     return glm::lookAt(position, position + forward, StableUpForDirection(forward));
 }
 
+/**
+ * @brief TODO: Describe ClampShadowResolution.
+ *
+ * @param resolution TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 int ClampShadowResolution(uint32_t resolution)
 {
     const uint32_t clamped = std::max<uint32_t>(64, std::min<uint32_t>(resolution, ShadowLimits::KAtlasSize));
@@ -63,16 +110,37 @@ int ClampShadowResolution(uint32_t resolution)
     return power_of_two;
 }
 
+/**
+ * @brief TODO: Describe ProjectionNear.
+ *
+ * @param projection TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 float ProjectionNear(const glm::mat4 &projection)
 {
     return projection[3][2] / (projection[2][2] - 1.0f);
 }
 
+/**
+ * @brief TODO: Describe ProjectionFar.
+ *
+ * @param projection TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 float ProjectionFar(const glm::mat4 &projection)
 {
     return projection[3][2] / (projection[2][2] + 1.0f);
 }
 
+/**
+ * @brief TODO: Describe FrustumSliceCorners.
+ *
+ * @param inverse_view TODO: Describe this parameter.
+ * @param projection TODO: Describe this parameter.
+ * @param near_depth TODO: Describe this parameter.
+ * @param far_depth TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::array<glm::vec3, 8> FrustumSliceCorners(const glm::mat4 &inverse_view, const glm::mat4 &projection,
                                              float near_depth, float far_depth)
 {
@@ -94,6 +162,12 @@ std::array<glm::vec3, 8> FrustumSliceCorners(const glm::mat4 &inverse_view, cons
     return corners;
 }
 
+/**
+ * @brief TODO: Describe AtlasRect.
+ *
+ * @param tile TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 glm::vec4 AtlasRect(const ShadowSystem::AtlasTile &tile)
 {
     const auto atlas_size = static_cast<float>(ShadowLimits::KAtlasSize);
@@ -103,17 +177,40 @@ glm::vec4 AtlasRect(const ShadowSystem::AtlasTile &tile)
             size};
 }
 
+/**
+ * @brief TODO: Describe SpotOuterDegrees.
+ *
+ * @param light TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 float SpotOuterDegrees(const Light &light)
 {
     return glm::degrees(std::acos(std::max(-1.0f, std::min(1.0f, light.spot_outer_cos))));
 }
 
+/**
+ * @brief TODO: Describe CascadeBlendRange.
+ *
+ * @param split_depth TODO: Describe this parameter.
+ * @param last_cascade TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 float CascadeBlendRange(float split_depth, bool last_cascade)
 {
     return last_cascade ? 0.0f : std::max(0.75f, split_depth * 0.05f);
 }
 } // namespace
 
+/**
+ * @brief TODO: Describe BuildDirectionalShadowCascade.
+ *
+ * @param receiver_corners TODO: Describe this parameter.
+ * @param requested_light_direction TODO: Describe this parameter.
+ * @param resolution TODO: Describe this parameter.
+ * @param shadow_caster_bounds TODO: Describe this parameter.
+ * @param unbounded_caster_depth TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 DirectionalShadowCascade BuildDirectionalShadowCascade(const std::array<glm::vec3, 8> &receiver_corners,
                                                        const glm::vec3 &requested_light_direction, int resolution,
                                                        const std::vector<Bounds> &shadow_caster_bounds,
@@ -212,21 +309,44 @@ DirectionalShadowCascade BuildDirectionalShadowCascade(const std::array<glm::vec
     return cascade;
 }
 
+/**
+ * @brief TODO: Describe ShadowSystem::SameMatrix.
+ *
+ * @param left TODO: Describe this parameter.
+ * @param right TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ShadowSystem::SameMatrix(const glm::mat4 &left, const glm::mat4 &right)
 {
     return left == right;
 }
 
+/**
+ * @brief TODO: Describe ShadowSystem::SameRect.
+ *
+ * @param left TODO: Describe this parameter.
+ * @param right TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ShadowSystem::SameRect(const glm::vec4 &left, const glm::vec4 &right)
 {
     return left == right;
 }
 
+/**
+ * @brief TODO: Describe ShadowSystem::~ShadowSystem.
+ */
 ShadowSystem::~ShadowSystem()
 {
     Destroy();
 }
 
+/**
+ * @brief TODO: Describe ShadowSystem::Initialize.
+ *
+ * @param in_rendering TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ShadowSystem::Initialize(RenderSystem &in_rendering)
 {
     rendering_ = &in_rendering;
@@ -273,6 +393,9 @@ bool ShadowSystem::Initialize(RenderSystem &in_rendering)
     return atlas_texture_ != 0 && depth_fbo_ != 0;
 }
 
+/**
+ * @brief TODO: Describe ShadowSystem::Destroy.
+ */
 void ShadowSystem::Destroy()
 {
     for (GLuint &texture : point_textures_)
@@ -309,6 +432,12 @@ void ShadowSystem::Destroy()
     rendering_ = nullptr;
 }
 
+/**
+ * @brief TODO: Describe ShadowSystem::AllocateAtlasTile.
+ *
+ * @param requested_size TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 ShadowSystem::AtlasTile ShadowSystem::AllocateAtlasTile(int requested_size)
 {
     const int size = ClampShadowResolution(static_cast<uint32_t>(requested_size));
@@ -332,6 +461,13 @@ ShadowSystem::AtlasTile ShadowSystem::AllocateAtlasTile(int requested_size)
     return tile;
 }
 
+/**
+ * @brief TODO: Describe ShadowSystem::AllocatePointSlot.
+ *
+ * @param light_index TODO: Describe this parameter.
+ * @param resolution TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 int ShadowSystem::AllocatePointSlot(size_t light_index, int resolution)
 {
     for (int slot = 0; slot < ShadowLimits::KMaxPointShadows; ++slot)
@@ -386,6 +522,12 @@ int ShadowSystem::AllocatePointSlot(size_t light_index, int resolution)
     return -1;
 }
 
+/**
+ * @brief TODO: Describe ShadowSystem::Render.
+ *
+ * @param draw_items TODO: Describe this parameter.
+ * @param queues TODO: Describe this parameter.
+ */
 void ShadowSystem::Render(const std::vector<DrawItem> &draw_items, const RenderQueues &queues)
 {
     if (atlas_texture_ == 0 || depth_fbo_ == 0)
@@ -446,6 +588,15 @@ void ShadowSystem::Render(const std::vector<DrawItem> &draw_items, const RenderQ
     rendering_->SetLightShadowHandles(handles);
 }
 
+/**
+ * @brief TODO: Describe ShadowSystem::RenderSpotShadow.
+ *
+ * @param light_index TODO: Describe this parameter.
+ * @param light TODO: Describe this parameter.
+ * @param draw_items TODO: Describe this parameter.
+ * @param queues TODO: Describe this parameter.
+ * @param handles TODO: Describe this parameter.
+ */
 void ShadowSystem::RenderSpotShadow(size_t light_index, const Light &light, const std::vector<DrawItem> &draw_items,
                                     const RenderQueues &queues, std::vector<LightShadowBinding> &handles)
 {
@@ -493,6 +644,15 @@ void ShadowSystem::RenderSpotShadow(size_t light_index, const Light &light, cons
     }
 }
 
+/**
+ * @brief TODO: Describe ShadowSystem::RenderDirectionalShadow.
+ *
+ * @param light_index TODO: Describe this parameter.
+ * @param light TODO: Describe this parameter.
+ * @param draw_items TODO: Describe this parameter.
+ * @param queues TODO: Describe this parameter.
+ * @param handles TODO: Describe this parameter.
+ */
 void ShadowSystem::RenderDirectionalShadow(size_t light_index, const Light &light,
                                            const std::vector<DrawItem> &draw_items, const RenderQueues &queues,
                                            std::vector<LightShadowBinding> &handles)
@@ -576,6 +736,15 @@ void ShadowSystem::RenderDirectionalShadow(size_t light_index, const Light &ligh
     handles[light_index] = {cascade_base, ShadowLimits::KTypeDirectional};
 }
 
+/**
+ * @brief TODO: Describe ShadowSystem::RenderPointShadow.
+ *
+ * @param light_index TODO: Describe this parameter.
+ * @param light TODO: Describe this parameter.
+ * @param draw_items TODO: Describe this parameter.
+ * @param queues TODO: Describe this parameter.
+ * @param handles TODO: Describe this parameter.
+ */
 void ShadowSystem::RenderPointShadow(size_t light_index, const Light &light, const std::vector<DrawItem> &draw_items,
                                      const RenderQueues &queues, std::vector<LightShadowBinding> &handles)
 {
@@ -615,6 +784,15 @@ void ShadowSystem::RenderPointShadow(size_t light_index, const Light &light, con
     }
 }
 
+/**
+ * @brief TODO: Describe ShadowSystem::RenderDepthToAtlas.
+ *
+ * @param tile TODO: Describe this parameter.
+ * @param view TODO: Describe this parameter.
+ * @param projection TODO: Describe this parameter.
+ * @param draw_items TODO: Describe this parameter.
+ * @param queues TODO: Describe this parameter.
+ */
 void ShadowSystem::RenderDepthToAtlas(const AtlasTile &tile, const glm::mat4 &view, const glm::mat4 &projection,
                                       const std::vector<DrawItem> &draw_items, const RenderQueues &queues)
 {
@@ -664,6 +842,19 @@ void ShadowSystem::RenderDepthToAtlas(const AtlasTile &tile, const glm::mat4 &vi
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+/**
+ * @brief TODO: Describe ShadowSystem::RenderPointFace.
+ *
+ * @param face TODO: Describe this parameter.
+ * @param texture TODO: Describe this parameter.
+ * @param resolution TODO: Describe this parameter.
+ * @param view TODO: Describe this parameter.
+ * @param projection TODO: Describe this parameter.
+ * @param position TODO: Describe this parameter.
+ * @param far_plane TODO: Describe this parameter.
+ * @param draw_items TODO: Describe this parameter.
+ * @param queues TODO: Describe this parameter.
+ */
 void ShadowSystem::RenderPointFace(GLenum face, GLuint texture, int resolution, const glm::mat4 &view,
                                    const glm::mat4 &projection, const glm::vec3 &position, float far_plane,
                                    const std::vector<DrawItem> &draw_items, const RenderQueues &queues)

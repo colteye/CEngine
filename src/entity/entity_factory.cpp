@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/entity/entity_factory.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "entity/entity_factory.h"
 
 #include "engine/engine_entities.generated.h"
@@ -12,6 +27,9 @@
 namespace CEngine::Entities
 {
 
+/**
+ * @brief TODO: Describe EntityFactory::EntityFactory.
+ */
 EntityFactory::EntityFactory()
 {
     Register<PropEntity, Generated::EngineEntities::Prop>("prop");
@@ -22,6 +40,14 @@ EntityFactory::EntityFactory()
     Register<PostProcessEntity, Generated::EngineEntities::PostProcess>("post_process");
 }
 
+/**
+ * @brief TODO: Describe EntityFactory::Register.
+ *
+ * @param classname TODO: Describe this parameter.
+ * @param version TODO: Describe this parameter.
+ * @param loader TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool EntityFactory::Register(std::string classname, std::uint16_t version, Loader loader)
 {
     if (classname.empty() || version == 0 || !loader)
@@ -31,6 +57,16 @@ bool EntityFactory::Register(std::string classname, std::uint16_t version, Loade
     return registrations_.emplace(std::move(classname), Registration{version, std::move(loader)}).second;
 }
 
+/**
+ * @brief TODO: Describe EntityFactory::Load.
+ *
+ * @param classname TODO: Describe this parameter.
+ * @param version TODO: Describe this parameter.
+ * @param bytes TODO: Describe this parameter.
+ * @param size TODO: Describe this parameter.
+ * @param auxiliary_base TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::unique_ptr<Scene::Entity> EntityFactory::Load(std::string_view classname, std::uint16_t version,
                                                    const std::uint8_t *bytes, std::size_t size,
                                                    std::uint32_t auxiliary_base) const

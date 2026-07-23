@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/opengl/shaders/pbr_standard.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "pbr_standard.h"
 
 #include "renderer/render_system.h"
@@ -8,17 +23,33 @@
 namespace CEngine::Renderer::OpenGL
 {
 
+/**
+ * @brief TODO: Describe PBRStandard::PBRStandard.
+ */
 PBRStandard::PBRStandard()
 {
     shader_program_.Load("shaders/opengl/pbr_standard.vert", "shaders/opengl/pbr_standard.frag");
     InitializeParameters();
 }
 
+/**
+ * @brief TODO: Describe PBRStandard::Use.
+ */
 void PBRStandard::Use() const
 {
     shader_program_.Use();
 }
 
+/**
+ * @brief TODO: Describe PBRStandard::UpdateFrame.
+ *
+ * @param rendering TODO: Describe this parameter.
+ * @param shadow_data TODO: Describe this parameter.
+ * @param shadow_atlas TODO: Describe this parameter.
+ * @param point_shadow_maps TODO: Describe this parameter.
+ * @param irradiance_map TODO: Describe this parameter.
+ * @param prefiltered_map TODO: Describe this parameter.
+ */
 void PBRStandard::UpdateFrame(RenderSystem &rendering, const ShadowGpuData &shadow_data, GLuint shadow_atlas,
                               const std::array<GLuint, ShadowLimits::KMaxPointShadows> &point_shadow_maps,
                               GLuint irradiance_map, GLuint prefiltered_map)
@@ -34,6 +65,15 @@ void PBRStandard::UpdateFrame(RenderSystem &rendering, const ShadowGpuData &shad
     environment_uniforms_.BindAndUpload(rendering, irradiance_map, prefiltered_map);
 }
 
+/**
+ * @brief TODO: Describe PBRStandard::UpdateObject.
+ *
+ * @param model TODO: Describe this parameter.
+ * @param material TODO: Describe this parameter.
+ * @param lightmap_scale TODO: Describe this parameter.
+ * @param lightmap_offset TODO: Describe this parameter.
+ * @param lightmap_rgbm_range TODO: Describe this parameter.
+ */
 void PBRStandard::UpdateObject(const glm::mat4 &model, const Material &material, const glm::vec2 &lightmap_scale,
                                const glm::vec2 &lightmap_offset, float lightmap_rgbm_range)
 {
@@ -45,6 +85,9 @@ void PBRStandard::UpdateObject(const glm::mat4 &model, const Material &material,
     glUniform1i(has_lightmap_id_, lightmap_tex != 0 ? 1 : 0);
 }
 
+/**
+ * @brief TODO: Describe PBRStandard::InitializeParameters.
+ */
 void PBRStandard::InitializeParameters()
 {
     const GLuint shader_id = shader_program_.GetId();
@@ -74,6 +117,14 @@ void PBRStandard::InitializeParameters()
     has_lightmap_id_ = glGetUniformLocation(shader_id, "has_lightmap");
 }
 
+/**
+ * @brief TODO: Describe PBRStandard::SetTextures.
+ *
+ * @param albedo TODO: Describe this parameter.
+ * @param normal TODO: Describe this parameter.
+ * @param metallic_roughness_ao TODO: Describe this parameter.
+ * @param lightmap TODO: Describe this parameter.
+ */
 void PBRStandard::SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao, GLuint lightmap)
 {
     albedo_tex = albedo;
@@ -82,6 +133,9 @@ void PBRStandard::SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roug
     lightmap_tex = lightmap;
 }
 
+/**
+ * @brief TODO: Describe PBRStandard::SetParametersStatic.
+ */
 void PBRStandard::SetParametersStatic()
 {
     glActiveTexture(GL_TEXTURE0);
@@ -101,6 +155,11 @@ void PBRStandard::SetParametersStatic()
     glUniform1i(lightmap_id_, 3);
 }
 
+/**
+ * @brief TODO: Describe PBRStandard::SetMaterialParameters.
+ *
+ * @param material TODO: Describe this parameter.
+ */
 void PBRStandard::SetMaterialParameters(const Material &material) const
 {
     const glm::vec4 &base_color = material.base_color_factor;

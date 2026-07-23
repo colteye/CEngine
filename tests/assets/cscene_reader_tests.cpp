@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file tests/assets/cscene_reader_tests.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/cscene_reader.h"
 #include "test_asset_writer.h"
 
@@ -12,11 +27,25 @@ namespace
 using namespace CEngine::Assets;
 using namespace CEngine::Assets::CSceneFormat;
 
+/**
+ * @brief TODO: Describe Append.
+ *
+ * @tparam T TODO: Describe this template parameter.
+ * @param out TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ */
 template <typename T> void Append(std::vector<std::uint8_t> &out, const T &value)
 {
     const auto *bytes = reinterpret_cast<const std::uint8_t *>(&value);
     out.insert(out.end(), bytes, bytes + sizeof(T));
 }
+/**
+ * @brief TODO: Describe Expect.
+ *
+ * @param value TODO: Describe this parameter.
+ * @param message TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Expect(bool value, const char *message)
 {
     if (!value)
@@ -26,12 +55,22 @@ bool Expect(bool value, const char *message)
     return value;
 }
 
+/**
+ * @brief TODO: Describe Root.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::filesystem::path Root()
 {
     return std::filesystem::current_path() / "build" / "cscene-tests" /
            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
 }
 
+/**
+ * @brief TODO: Describe MinimalPayload.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::vector<std::uint8_t> MinimalPayload()
 {
     DiskSceneHeader header;
@@ -71,11 +110,23 @@ std::vector<std::uint8_t> MinimalPayload()
     return payload;
 }
 
+/**
+ * @brief TODO: Describe Write.
+ *
+ * @param path TODO: Describe this parameter.
+ * @param payload TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Write(const std::filesystem::path &path, const std::vector<std::uint8_t> &payload)
 {
     return CEngine::Tests::WriteTestAsset(path, AssetType::Scene, payload);
 }
 
+/**
+ * @brief TODO: Describe ValidFixtureLoads.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool ValidFixtureLoads()
 {
     const auto root = Root();
@@ -96,6 +147,11 @@ bool ValidFixtureLoads()
     return result;
 }
 
+/**
+ * @brief TODO: Describe InvalidRangesFail.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool InvalidRangesFail()
 {
     const auto root = Root();
@@ -131,6 +187,13 @@ bool InvalidRangesFail()
 }
 } // namespace
 
+/**
+ * @brief TODO: Describe main.
+ *
+ * @param argc TODO: Describe this parameter.
+ * @param argv TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 int main(int argc, char **argv)
 {
     if (argc == 2)

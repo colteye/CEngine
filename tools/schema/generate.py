@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
-"""Generate tiny, dependency-free C++ readers from a CEngine game file."""
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""Generate tiny, dependency-free C++ readers from a CEngine game file.
+
+Author:
+    Erik Coltey"""
 
 from __future__ import annotations
 
@@ -31,11 +43,21 @@ WIRE_SIZES = {
 
 @dataclass(frozen=True)
 class LoadedManifest:
+    """TODO: Describe `LoadedManifest`."""
+
     path: Path
     document: dict[str, Any]
 
 
 def _read_manifest(path: Path) -> dict[str, Any]:
+    """TODO: Describe `_read_manifest`.
+
+    Args:
+        path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -49,11 +71,24 @@ def _read_manifest(path: Path) -> dict[str, Any]:
 
 
 def _load_manifest_tree(root: Path) -> list[LoadedManifest]:
+    """TODO: Describe `_load_manifest_tree`.
+
+    Args:
+        root: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     ordered: list[LoadedManifest] = []
     visiting: set[Path] = set()
     loaded: set[Path] = set()
 
     def visit(path: Path) -> None:
+        """TODO: Describe `visit`.
+
+        Args:
+            path: TODO: Describe this parameter.
+        """
         resolved = path.resolve()
         if resolved in visiting:
             raise ValueError(f"game file import cycle contains {resolved}")
@@ -75,6 +110,14 @@ def _load_manifest_tree(root: Path) -> list[LoadedManifest]:
 
 
 def _identifier(value: str) -> str:
+    """TODO: Describe `_identifier`.
+
+    Args:
+        value: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     result = re.sub(r"[^A-Za-z0-9_]", "_", value)
     if not result or result[0].isdigit():
         result = f"_{result}"
@@ -82,6 +125,14 @@ def _identifier(value: str) -> str:
 
 
 def _pascal(value: str) -> str:
+    """TODO: Describe `_pascal`.
+
+    Args:
+        value: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     words = [word for word in re.split(r"[^A-Za-z0-9]+", value) if word]
     result = "".join(word[0].upper() + word[1:] for word in words)
     if not result or result[0].isdigit():
@@ -90,12 +141,27 @@ def _pascal(value: str) -> str:
 
 
 def _require_string(value: Any, label: str) -> str:
+    """TODO: Describe `_require_string`.
+
+    Args:
+        value: TODO: Describe this parameter.
+        label: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if not isinstance(value, str) or not value:
         raise ValueError(f"{label} must be a non-empty string")
     return value
 
 
 def _validate_field(field: dict[str, Any], entity: str) -> None:
+    """TODO: Describe `_validate_field`.
+
+    Args:
+        field: TODO: Describe this parameter.
+        entity: TODO: Describe this parameter.
+    """
     name = _require_string(field.get("name"), f"{entity} field name")
     if _identifier(name) != name:
         raise ValueError(f"{entity}.{name} is not a C++ identifier")
@@ -132,6 +198,12 @@ def _validate_field(field: dict[str, Any], entity: str) -> None:
 
 
 def _validate_entity(entity: dict[str, Any], source: Path) -> None:
+    """TODO: Describe `_validate_entity`.
+
+    Args:
+        entity: TODO: Describe this parameter.
+        source: TODO: Describe this parameter.
+    """
     classname = _require_string(entity.get("classname"), f"entity classname in {source}")
     if not isinstance(entity.get("version"), int) or entity["version"] <= 0:
         raise ValueError(f"{classname} must have a positive version")
@@ -163,6 +235,14 @@ def _validate_entity(entity: dict[str, Any], source: Path) -> None:
 
 
 def load_game(path: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
+    """TODO: Describe `load_game`.
+
+    Args:
+        path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     manifests = _load_manifest_tree(path)
     root = manifests[-1].document
     entities: list[dict[str, Any]] = []
@@ -202,6 +282,14 @@ def load_game(path: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[str
 
 
 def _cpp_float(value: Any) -> str:
+    """TODO: Describe `_cpp_float`.
+
+    Args:
+        value: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     number = float(value)
     if not math.isfinite(number):
         raise ValueError("schema defaults must be finite")
@@ -212,6 +300,14 @@ def _cpp_float(value: Any) -> str:
 
 
 def _enum_default(field: dict[str, Any]) -> str:
+    """TODO: Describe `_enum_default`.
+
+    Args:
+        field: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     default = int(field.get("default", next(iter(field["values"].values()))))
     for name, value in field["values"].items():
         if value == default:
@@ -220,6 +316,14 @@ def _enum_default(field: dict[str, Any]) -> str:
 
 
 def _field_default(field: dict[str, Any]) -> str:
+    """TODO: Describe `_field_default`.
+
+    Args:
+        field: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     field_type = field["type"]
     value = field.get("default")
     if field_type == "f32":
@@ -247,6 +351,14 @@ def _field_default(field: dict[str, Any]) -> str:
 
 
 def _field_type(field: dict[str, Any]) -> str:
+    """TODO: Describe `_field_type`.
+
+    Args:
+        field: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return {
         "f32": "float",
         "u32": "std::uint32_t",
@@ -262,10 +374,27 @@ def _field_type(field: dict[str, Any]) -> str:
 
 
 def _record_size(entity: dict[str, Any]) -> int:
+    """TODO: Describe `_record_size`.
+
+    Args:
+        entity: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return sum(WIRE_SIZES[field["type"]] for field in entity["fields"])
 
 
 def _bounds(field: dict[str, Any], expression: str) -> list[str]:
+    """TODO: Describe `_bounds`.
+
+    Args:
+        field: TODO: Describe this parameter.
+        expression: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     checks = [f"!Detail::IsFinite({expression})"]
     if "min" in field:
         op = "<=" if field.get("min_exclusive", False) else "<"
@@ -277,6 +406,12 @@ def _bounds(field: dict[str, Any], expression: str) -> list[str]:
 
 
 def _emit_read(lines: list[str], entity: dict[str, Any]) -> None:
+    """TODO: Describe `_emit_read`.
+
+    Args:
+        lines: TODO: Describe this parameter.
+        entity: TODO: Describe this parameter.
+    """
     symbol = _pascal(entity["classname"])
     lines.extend(
         [
@@ -412,6 +547,14 @@ def generate_cpp(
     namespace: str,
     header_path: Path,
 ) -> None:
+    """TODO: Describe `generate_cpp`.
+
+    Args:
+        root: TODO: Describe this parameter.
+        entities: TODO: Describe this parameter.
+        namespace: TODO: Describe this parameter.
+        header_path: TODO: Describe this parameter.
+    """
     namespace_parts = namespace.split("::")
     if any(not part or _identifier(part) != part for part in namespace_parts):
         raise ValueError(f"invalid C++ namespace: {namespace}")
@@ -533,11 +676,25 @@ def generate_cpp(
 
 
 def write_bundle(bundle: dict[str, Any], path: Path) -> None:
+    """TODO: Describe `write_bundle`.
+
+    Args:
+        bundle: TODO: Describe this parameter.
+        path: TODO: Describe this parameter.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:
+    """TODO: Describe `main`.
+
+    Args:
+        argv: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     parser = argparse.ArgumentParser(
         description="Generate CEngine schema readers and a flattened game file."
     )

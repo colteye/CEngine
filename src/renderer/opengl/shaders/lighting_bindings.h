@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/opengl/shaders/lighting_bindings.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #ifndef CENGINE_RENDERER_OPENGL_SHADERS_LIGHTING_BINDINGS_H
 #define CENGINE_RENDERER_OPENGL_SHADERS_LIGHTING_BINDINGS_H
 
@@ -15,18 +30,57 @@ class RenderSystem;
 
 namespace CEngine::Renderer::OpenGL
 {
+/**
+ * @brief TODO: Describe DirectLightBuffer.
+ */
 class DirectLightBuffer
 {
   public:
+    /**
+     * @brief TODO: Describe DirectLightBuffer.
+     */
     DirectLightBuffer() = default;
+    /**
+     * @brief TODO: Describe DirectLightBuffer.
+     */
     DirectLightBuffer(const DirectLightBuffer &) = delete;
+    /**
+     * @brief TODO: Describe operator=.
+     *
+     * @return TODO: Describe the return value.
+     */
     DirectLightBuffer &operator=(const DirectLightBuffer &) = delete;
+    /**
+     * @brief TODO: Describe DirectLightBuffer.
+     */
     DirectLightBuffer(DirectLightBuffer &&) = delete;
+    /**
+     * @brief TODO: Describe operator=.
+     *
+     * @return TODO: Describe the return value.
+     */
     DirectLightBuffer &operator=(DirectLightBuffer &&) = delete;
+    /**
+     * @brief TODO: Describe ~DirectLightBuffer.
+     */
     ~DirectLightBuffer();
 
+    /**
+     * @brief TODO: Describe Initialize.
+     *
+     * @param shader_id TODO: Describe this parameter.
+     * @param block_name TODO: Describe this parameter.
+     */
     void Initialize(GLuint shader_id, const char *block_name);
+    /**
+     * @brief TODO: Describe BindAndUploadIfNeeded.
+     *
+     * @param rendering TODO: Describe this parameter.
+     */
     void BindAndUploadIfNeeded(RenderSystem &rendering);
+    /**
+     * @brief TODO: Describe Destroy.
+     */
     void Destroy();
 
   private:
@@ -34,18 +88,57 @@ class DirectLightBuffer
     uint64_t uploaded_revision_ = 0;
 };
 
+/**
+ * @brief TODO: Describe ShadowBuffer.
+ */
 class ShadowBuffer
 {
   public:
+    /**
+     * @brief TODO: Describe ShadowBuffer.
+     */
     ShadowBuffer() = default;
+    /**
+     * @brief TODO: Describe ShadowBuffer.
+     */
     ShadowBuffer(const ShadowBuffer &) = delete;
+    /**
+     * @brief TODO: Describe operator=.
+     *
+     * @return TODO: Describe the return value.
+     */
     ShadowBuffer &operator=(const ShadowBuffer &) = delete;
+    /**
+     * @brief TODO: Describe ShadowBuffer.
+     */
     ShadowBuffer(ShadowBuffer &&) = delete;
+    /**
+     * @brief TODO: Describe operator=.
+     *
+     * @return TODO: Describe the return value.
+     */
     ShadowBuffer &operator=(ShadowBuffer &&) = delete;
+    /**
+     * @brief TODO: Describe ~ShadowBuffer.
+     */
     ~ShadowBuffer();
 
+    /**
+     * @brief TODO: Describe Initialize.
+     *
+     * @param shader_id TODO: Describe this parameter.
+     * @param block_name TODO: Describe this parameter.
+     */
     void Initialize(GLuint shader_id, const char *block_name);
+    /**
+     * @brief TODO: Describe Upload.
+     *
+     * @param data TODO: Describe this parameter.
+     */
     void Upload(const ShadowGpuData &data);
+    /**
+     * @brief TODO: Describe Destroy.
+     */
     void Destroy();
 
   private:
@@ -54,15 +147,32 @@ class ShadowBuffer
     bool uploaded_ = false;
 };
 
+/**
+ * @brief TODO: Describe ShadowSamplers.
+ */
 struct ShadowSamplers
 {
     GLint atlas = -1;
     std::array<GLint, ShadowLimits::KMaxPointShadows> point_maps{};
 
+    /**
+     * @brief TODO: Describe Initialize.
+     *
+     * @param shader_id TODO: Describe this parameter.
+     */
     void Initialize(GLuint shader_id);
+    /**
+     * @brief TODO: Describe Bind.
+     *
+     * @param atlas_texture TODO: Describe this parameter.
+     * @param point_textures TODO: Describe this parameter.
+     */
     void Bind(GLuint atlas_texture, const std::array<GLuint, ShadowLimits::KMaxPointShadows> &point_textures) const;
 };
 
+/**
+ * @brief TODO: Describe AmbientUniforms.
+ */
 struct AmbientUniforms
 {
     GLint sky_color = -1;
@@ -70,10 +180,23 @@ struct AmbientUniforms
     GLint intensity = -1;
     GLint enabled = -1;
 
+    /**
+     * @brief TODO: Describe Initialize.
+     *
+     * @param shader_id TODO: Describe this parameter.
+     */
     void Initialize(GLuint shader_id);
+    /**
+     * @brief TODO: Describe Upload.
+     *
+     * @param rendering TODO: Describe this parameter.
+     */
     void Upload(const RenderSystem &rendering) const;
 };
 
+/**
+ * @brief TODO: Describe EnvironmentUniforms.
+ */
 struct EnvironmentUniforms
 {
     GLint irradiance = -1;
@@ -90,7 +213,19 @@ struct EnvironmentUniforms
     GLint fog_max_opacity = -1;
     GLint fog_cutoff_distance = -1;
 
+    /**
+     * @brief TODO: Describe Initialize.
+     *
+     * @param shader_id TODO: Describe this parameter.
+     */
     void Initialize(GLuint shader_id);
+    /**
+     * @brief TODO: Describe BindAndUpload.
+     *
+     * @param rendering TODO: Describe this parameter.
+     * @param irradiance_texture TODO: Describe this parameter.
+     * @param prefiltered_texture TODO: Describe this parameter.
+     */
     void BindAndUpload(const RenderSystem &rendering, GLuint irradiance_texture, GLuint prefiltered_texture) const;
 };
 

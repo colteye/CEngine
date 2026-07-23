@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/assets/material_loader.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/material_loader.h"
 
 #include "assets/asset_error.h"
@@ -26,6 +41,9 @@ constexpr std::uint32_t TextureSlotNormal = 2;
 constexpr std::uint32_t TextureSlotMetallicRoughnessAo = 3;
 
 #pragma pack(push, 1)
+/**
+ * @brief TODO: Describe DiskMaterialHeader.
+ */
 struct DiskMaterialHeader
 {
     std::array<char, 4> magic = MaterialPayloadMagic;
@@ -46,6 +64,9 @@ struct DiskMaterialHeader
     float alpha_cutoff = 0.5f;
 };
 
+/**
+ * @brief TODO: Describe DiskMaterialTexture.
+ */
 struct DiskMaterialTexture
 {
     std::uint32_t slot = 0;
@@ -57,6 +78,13 @@ struct DiskMaterialTexture
 static_assert(sizeof(DiskMaterialHeader) == 72, "DiskMaterialHeader must stay packed and stable.");
 static_assert(sizeof(DiskMaterialTexture) == 12, "DiskMaterialTexture must stay packed and stable.");
 
+/**
+ * @brief TODO: Describe ReadHeader.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadHeader(ByteView bytes, DiskMaterialHeader &value)
 {
     if (bytes.size < sizeof(value))
@@ -85,12 +113,29 @@ bool ReadHeader(ByteView bytes, DiskMaterialHeader &value)
            ReadF32LE(bytes, offset, value.ao_factor) && ReadF32LE(bytes, offset, value.alpha_cutoff);
 }
 
+/**
+ * @brief TODO: Describe ReadTextureRow.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadTextureRow(ByteView bytes, std::size_t offset, DiskMaterialTexture &value)
 {
     return ReadU32LE(bytes, offset, value.slot) && ReadU32LE(bytes, offset, value.path_offset) &&
            ReadU32LE(bytes, offset, value.path_size);
 }
 
+/**
+ * @brief TODO: Describe StringViewAt.
+ *
+ * @param string_table TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param size TODO: Describe this parameter.
+ * @param view TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool StringViewAt(ByteView string_table, std::uint32_t offset, std::uint32_t size, std::string_view &view)
 {
     if (offset > string_table.size || size > string_table.size - offset)
@@ -101,6 +146,12 @@ bool StringViewAt(ByteView string_table, std::uint32_t offset, std::uint32_t siz
     return true;
 }
 
+/**
+ * @brief TODO: Describe MaterialShaderFromDisk.
+ *
+ * @param shader TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 Renderer::MaterialShaderType MaterialShaderFromDisk(std::uint32_t shader)
 {
     switch (shader)
@@ -114,6 +165,13 @@ Renderer::MaterialShaderType MaterialShaderFromDisk(std::uint32_t shader)
     }
 }
 
+/**
+ * @brief TODO: Describe MaterialRenderModeFromDisk.
+ *
+ * @param value TODO: Describe this parameter.
+ * @param mode TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool MaterialRenderModeFromDisk(std::uint32_t value, Renderer::MaterialRenderMode &mode)
 {
     switch (value)
@@ -138,11 +196,23 @@ bool MaterialRenderModeFromDisk(std::uint32_t value, Renderer::MaterialRenderMod
     }
 }
 
+/**
+ * @brief TODO: Describe IsUnitValue.
+ *
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool IsUnitValue(float value)
 {
     return std::isfinite(value) && value >= 0.0f && value <= 1.0f;
 }
 
+/**
+ * @brief TODO: Describe ProjectRootForAsset.
+ *
+ * @param asset_path TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::filesystem::path ProjectRootForAsset(const std::filesystem::path &asset_path)
 {
     std::error_code error;
@@ -165,6 +235,12 @@ std::filesystem::path ProjectRootForAsset(const std::filesystem::path &asset_pat
     return {};
 }
 
+/**
+ * @brief TODO: Describe IsDdsPath.
+ *
+ * @param path TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool IsDdsPath(const std::filesystem::path &path)
 {
     std::string extension = path.extension().string();
@@ -175,6 +251,14 @@ bool IsDdsPath(const std::filesystem::path &path)
     return extension == ".dds";
 }
 
+/**
+ * @brief TODO: Describe ResolveTexturePath.
+ *
+ * @param material_path TODO: Describe this parameter.
+ * @param stored_path TODO: Describe this parameter.
+ * @param resolved_path TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ResolveTexturePath(const std::filesystem::path &material_path, std::string_view stored_path,
                         std::filesystem::path &resolved_path)
 {
@@ -212,6 +296,13 @@ bool ResolveTexturePath(const std::filesystem::path &material_path, std::string_
 
 } // namespace
 
+/**
+ * @brief TODO: Describe LoadMaterialAsset.
+ *
+ * @param path TODO: Describe this parameter.
+ * @param material TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool LoadMaterialAsset(const std::filesystem::path &path, Renderer::Material &material)
 {
     AssetFile asset;

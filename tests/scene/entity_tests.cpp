@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file tests/scene/entity_tests.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/asset_store.h"
 #include "assets/scene_loader.h"
 #include "context.h"
@@ -19,6 +34,13 @@
 namespace
 {
 using namespace CEngine::Scene;
+/**
+ * @brief TODO: Describe Expect.
+ *
+ * @param value TODO: Describe this parameter.
+ * @param message TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Expect(bool value, const char *message)
 {
     if (!value)
@@ -27,18 +49,38 @@ bool Expect(bool value, const char *message)
     }
     return value;
 }
+/**
+ * @brief TODO: Describe Near.
+ *
+ * @param left TODO: Describe this parameter.
+ * @param right TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Near(float left, float right)
 {
     return std::abs(left - right) < 0.0001f;
 }
 
+/**
+ * @brief TODO: Describe CustomEntity.
+ */
 class CustomEntity final : public Entity
 {
   public:
+    /**
+     * @brief TODO: Describe Classname.
+     *
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] std::string_view Classname() const override
     {
         return "game_custom";
     }
+    /**
+     * @brief TODO: Describe Update.
+     *
+     * @param delta_seconds TODO: Describe this parameter.
+     */
     void Update(CEngine::Context & /*unused*/, float delta_seconds) override
     {
         elapsed += delta_seconds;
@@ -46,21 +88,43 @@ class CustomEntity final : public Entity
     float elapsed = 0.0f;
 };
 
+/**
+ * @brief TODO: Describe FakeInputBackend.
+ */
 class FakeInputBackend final : public CEngine::Input::IInputBackend
 {
   public:
+    /**
+     * @brief TODO: Describe BeginFrame.
+     */
     void BeginFrame() override
     {
         ++frames;
     }
+    /**
+     * @brief TODO: Describe IsDown.
+     *
+     * @param key TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] bool IsDown(CEngine::Input::Key key) const override
     {
         return key == CEngine::Input::Key::W || key == CEngine::Input::Key::LeftShift;
     }
+    /**
+     * @brief TODO: Describe PointerDelta.
+     *
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] glm::vec2 PointerDelta() const override
     {
         return {4.0f, -2.0f};
     }
+    /**
+     * @brief TODO: Describe SetPointerCaptured.
+     *
+     * @param value TODO: Describe this parameter.
+     */
     void SetPointerCaptured(bool value) override
     {
         pointer_captured = value;
@@ -70,6 +134,11 @@ class FakeInputBackend final : public CEngine::Input::IInputBackend
     bool pointer_captured = false;
 };
 
+/**
+ * @brief TODO: Describe GenerationalSlotsRejectStaleHandles.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool GenerationalSlotsRejectStaleHandles()
 {
     Scene scene;
@@ -86,6 +155,11 @@ bool GenerationalSlotsRejectStaleHandles()
            Expect(scene.GetEntity(old) == nullptr, "stale handle should not resolve");
 }
 
+/**
+ * @brief TODO: Describe EntityClassesOwnTheirFields.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool EntityClassesOwnTheirFields()
 {
     Scene scene;
@@ -105,6 +179,11 @@ bool EntityClassesOwnTheirFields()
            Expect(scene.EntityCount() == 2, "scene should own both entities");
 }
 
+/**
+ * @brief TODO: Describe EnvironmentEntitiesOwnTheirFields.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool EnvironmentEntitiesOwnTheirFields()
 {
     Scene scene;
@@ -126,6 +205,11 @@ bool EnvironmentEntitiesOwnTheirFields()
                   "post-process entity should own the scene image settings");
 }
 
+/**
+ * @brief TODO: Describe SlotLookupWorks.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool SlotLookupWorks()
 {
     Scene scene;
@@ -134,6 +218,11 @@ bool SlotLookupWorks()
            Expect(scene.Entities()[prop.GetHandle().Index()].get() == &prop, "single entity list should own entity");
 }
 
+/**
+ * @brief TODO: Describe LightModesHaveExplicitRuntimeDirectSemantics.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool LightModesHaveExplicitRuntimeDirectSemantics()
 {
     using CEngine::Entities::HasRuntimeDirectLighting;
@@ -145,6 +234,11 @@ bool LightModesHaveExplicitRuntimeDirectSemantics()
                   "baked lights should not be submitted to runtime direct lighting");
 }
 
+/**
+ * @brief TODO: Describe LightRendererRecordFollowsEntityLifetime.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool LightRendererRecordFollowsEntityLifetime()
 {
     CEngine::Renderer::RenderSystem rendering;
@@ -181,6 +275,11 @@ bool LightRendererRecordFollowsEntityLifetime()
                   "the renderer light should be released exactly once during shutdown");
 }
 
+/**
+ * @brief TODO: Describe GameLayerCanAddEntitiesAndDriveLifecycle.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool GameLayerCanAddEntitiesAndDriveLifecycle()
 {
     Scene scene;
@@ -205,6 +304,11 @@ bool GameLayerCanAddEntitiesAndDriveLifecycle()
                   "post-process entity should update the renderer APIs");
 }
 
+/**
+ * @brief TODO: Describe InputSystemOwnsPlatformBackend.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool InputSystemOwnsPlatformBackend()
 {
     auto backend = std::make_unique<FakeInputBackend>();
@@ -224,6 +328,13 @@ bool InputSystemOwnsPlatformBackend()
 }
 } // namespace
 
+/**
+ * @brief TODO: Describe main.
+ *
+ * @param argc TODO: Describe this parameter.
+ * @param argv TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 int main(int argc, char **argv)
 {
     if (argc == 2)

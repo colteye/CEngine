@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import struct
@@ -28,6 +43,8 @@ ASSET_HEADER = struct.Struct("<4sHHI16sQ16sQQQ")
 
 
 class FakeObject:
+    """TODO: Describe `FakeObject`."""
+
     def __init__(
         self,
         name: str,
@@ -36,6 +53,15 @@ class FakeObject:
         props: dict[str, str] | None = None,
         matrix_world: list[list[float]] | None = None,
     ) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            name: TODO: Describe this parameter.
+            obj_type: TODO: Describe this parameter.
+            parent: TODO: Describe this parameter.
+            props: TODO: Describe this parameter.
+            matrix_world: TODO: Describe this parameter.
+        """
         self.name = name
         self.type = obj_type
         self.parent = parent
@@ -44,24 +70,55 @@ class FakeObject:
         self.material_slots: list[object] = []
 
     def get(self, key: str, default: object = None) -> object:
+        """TODO: Describe `get`.
+
+        Args:
+            key: TODO: Describe this parameter.
+            default: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         return self.props.get(key, default)
 
 
 class FakeCollection:
+    """TODO: Describe `FakeCollection`."""
+
     def __init__(self, name: str, objects: list[FakeObject], props: dict[str, str] | None = None) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            name: TODO: Describe this parameter.
+            objects: TODO: Describe this parameter.
+            props: TODO: Describe this parameter.
+        """
         self.name = name
         self.objects = objects
         self.props = props or {}
 
     def get(self, key: str, default: object = None) -> object:
+        """TODO: Describe `get`.
+
+        Args:
+            key: TODO: Describe this parameter.
+            default: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         return self.props.get(key, default)
 
 
 class CollectionExportTests(unittest.TestCase):
+    """TODO: Describe `CollectionExportTests`."""
+
     def test_occluder_prefix_maps_to_existing_shadow_blocker_role(self) -> None:
+        """TODO: Describe `test_occluder_prefix_maps_to_existing_shadow_blocker_role`."""
         self.assertEqual(object_role(FakeObject("OCC_SunBlocker", "MESH")), "occluder")
 
     def test_collection_prefix_selects_prefab_asset(self) -> None:
+        """TODO: Describe `test_collection_prefix_selects_prefab_asset`."""
         spec = collection_export_spec(FakeCollection("PREFAB_Hero", []))
 
         self.assertIsNotNone(spec)
@@ -70,6 +127,7 @@ class CollectionExportTests(unittest.TestCase):
         self.assertEqual(spec.asset_name, "Hero")
 
     def test_collection_custom_properties_select_scene_asset(self) -> None:
+        """TODO: Describe `test_collection_custom_properties_select_scene_asset`."""
         collection = FakeCollection(
             "Lighting Blockout",
             [],
@@ -84,6 +142,7 @@ class CollectionExportTests(unittest.TestCase):
         self.assertEqual(spec.asset_name, "lighting_blockout")
 
     def test_collection_payload_records_roles_parents_and_transforms(self) -> None:
+        """TODO: Describe `test_collection_payload_records_roles_parents_and_transforms`."""
         root = FakeObject(
             "ARM_Hero",
             "ARMATURE",
@@ -124,6 +183,7 @@ class CollectionExportTests(unittest.TestCase):
         self.assertEqual(strings[component[1] : component[1] + component[2]], b"compiled/hero/meshes/SM_Body.cmesh")
 
     def test_blender_to_engine_matrix_rows_maps_to_x_forward_y_left_z_up(self) -> None:
+        """TODO: Describe `test_blender_to_engine_matrix_rows_maps_to_x_forward_y_left_z_up`."""
         rows = blender_to_engine_matrix_rows(
             [
                 [1.0, 0.0, 0.0, 10.0],
@@ -138,6 +198,7 @@ class CollectionExportTests(unittest.TestCase):
         self.assertEqual(rows[11], 30.0)
 
     def test_bundle_relative_path_removes_casset_directory_prefix(self) -> None:
+        """TODO: Describe `test_bundle_relative_path_removes_casset_directory_prefix`."""
         bundle = Path("/repo/assets/compiled/statue")
 
         self.assertEqual(
@@ -151,6 +212,7 @@ class CollectionExportTests(unittest.TestCase):
         self.assertEqual(bundle_relative_path("meshes/Statue.cmesh", bundle), "meshes/Statue.cmesh")
 
     def test_collection_export_writes_common_prefab_asset_directly(self) -> None:
+        """TODO: Describe `test_collection_export_writes_common_prefab_asset_directly`."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "hero.blend"
@@ -177,6 +239,7 @@ class CollectionExportTests(unittest.TestCase):
             self.assertEqual(second_object[2], 1)
 
     def test_collection_export_writes_component_paths(self) -> None:
+        """TODO: Describe `test_collection_export_writes_component_paths`."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "hero.blend"

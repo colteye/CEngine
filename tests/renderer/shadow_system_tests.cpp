@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file tests/renderer/shadow_system_tests.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "renderer/opengl/shadow_system.h"
 
 #include <array>
@@ -13,6 +28,13 @@ using CEngine::Renderer::Bounds;
 using CEngine::Renderer::OpenGL::BuildDirectionalShadowCascade;
 using CEngine::Renderer::OpenGL::DirectionalShadowCascade;
 
+/**
+ * @brief TODO: Describe BoxCorners.
+ *
+ * @param minimum TODO: Describe this parameter.
+ * @param maximum TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::array<glm::vec3, 8> BoxCorners(const glm::vec3 &minimum, const glm::vec3 &maximum)
 {
     return {
@@ -23,6 +45,13 @@ std::array<glm::vec3, 8> BoxCorners(const glm::vec3 &minimum, const glm::vec3 &m
     };
 }
 
+/**
+ * @brief TODO: Describe MakeBounds.
+ *
+ * @param minimum TODO: Describe this parameter.
+ * @param maximum TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 Bounds MakeBounds(const glm::vec3 &minimum, const glm::vec3 &maximum)
 {
     Bounds bounds;
@@ -32,6 +61,13 @@ Bounds MakeBounds(const glm::vec3 &minimum, const glm::vec3 &maximum)
     return bounds;
 }
 
+/**
+ * @brief TODO: Describe Contains.
+ *
+ * @param cascade TODO: Describe this parameter.
+ * @param corners TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Contains(const DirectionalShadowCascade &cascade, const std::array<glm::vec3, 8> &corners)
 {
     const glm::mat4 view_projection = cascade.projection * cascade.view;
@@ -49,6 +85,13 @@ bool Contains(const DirectionalShadowCascade &cascade, const std::array<glm::vec
     return true;
 }
 
+/**
+ * @brief TODO: Describe SameMatrix.
+ *
+ * @param left TODO: Describe this parameter.
+ * @param right TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool SameMatrix(const glm::mat4 &left, const glm::mat4 &right)
 {
     for (int column = 0; column < 4; ++column)
@@ -64,6 +107,13 @@ bool SameMatrix(const glm::mat4 &left, const glm::mat4 &right)
     return true;
 }
 
+/**
+ * @brief TODO: Describe Expect.
+ *
+ * @param condition TODO: Describe this parameter.
+ * @param message TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Expect(bool condition, const std::string &message)
 {
     if (!condition)
@@ -73,6 +123,11 @@ bool Expect(bool condition, const std::string &message)
     return condition;
 }
 
+/**
+ * @brief TODO: Describe TestDistantOverlappingCasterIsIncluded.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool TestDistantOverlappingCasterIsIncluded()
 {
     const auto receiver = BoxCorners(glm::vec3(-5.0f), glm::vec3(5.0f));
@@ -85,6 +140,11 @@ bool TestDistantOverlappingCasterIsIncluded()
                   "depth-clipped");
 }
 
+/**
+ * @brief TODO: Describe TestCasterOutsideFootprintDoesNotExpandDepth.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool TestCasterOutsideFootprintDoesNotExpandDepth()
 {
     const auto receiver = BoxCorners(glm::vec3(-5.0f), glm::vec3(5.0f));
@@ -98,6 +158,11 @@ bool TestCasterOutsideFootprintDoesNotExpandDepth()
                   "casters outside the cascade footprint must not reduce its depth precision");
 }
 
+/**
+ * @brief TODO: Describe TestCasterRemainsIncludedAsReceiverMovesInDepth.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool TestCasterRemainsIncludedAsReceiverMovesInDepth()
 {
     const Bounds caster = MakeBounds(glm::vec3(-1.0f, -1.0f, 49.0f), glm::vec3(1.0f, 1.0f, 51.0f));
@@ -117,6 +182,11 @@ bool TestCasterRemainsIncludedAsReceiverMovesInDepth()
     return true;
 }
 
+/**
+ * @brief TODO: Describe TestObliqueLightFacingCasterIsIncluded.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool TestObliqueLightFacingCasterIsIncluded()
 {
     const auto receiver = BoxCorners(glm::vec3(-5.0f), glm::vec3(5.0f));
@@ -132,6 +202,11 @@ bool TestObliqueLightFacingCasterIsIncluded()
 
 } // namespace
 
+/**
+ * @brief TODO: Describe main.
+ *
+ * @return TODO: Describe the return value.
+ */
 int main()
 {
     bool ok = true;

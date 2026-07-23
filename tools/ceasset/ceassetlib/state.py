@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import struct
@@ -19,6 +34,8 @@ CACHE_RECORD = struct.Struct("<16sQ")
 
 @dataclass
 class AssetRecord:
+    """TODO: Describe `AssetRecord`."""
+
     guid: bytes
     source: Path
     output: Path
@@ -28,11 +45,22 @@ class AssetRecord:
 
 @dataclass
 class CacheRecord:
+    """TODO: Describe `CacheRecord`."""
+
     guid: bytes
     source_hash: int
 
 
 def append_string(strings: bytearray, text: str) -> tuple[int, int]:
+    """TODO: Describe `append_string`.
+
+    Args:
+        strings: TODO: Describe this parameter.
+        text: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     encoded = text.encode("utf-8")
     offset = len(strings)
     strings.extend(encoded)
@@ -40,6 +68,14 @@ def append_string(strings: bytearray, text: str) -> tuple[int, int]:
 
 
 def load_registry(paths: ProjectPaths) -> list[AssetRecord]:
+    """TODO: Describe `load_registry`.
+
+    Args:
+        paths: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if not paths.registry_path.exists():
         return []
 
@@ -71,6 +107,12 @@ def load_registry(paths: ProjectPaths) -> list[AssetRecord]:
 
 
 def save_registry(paths: ProjectPaths, records: Iterable[AssetRecord]) -> None:
+    """TODO: Describe `save_registry`.
+
+    Args:
+        paths: TODO: Describe this parameter.
+        records: TODO: Describe this parameter.
+    """
     strings = bytearray()
     packed_records = bytearray()
     record_list = list(records)
@@ -96,6 +138,14 @@ def save_registry(paths: ProjectPaths, records: Iterable[AssetRecord]) -> None:
 
 
 def load_cache(paths: ProjectPaths) -> list[CacheRecord]:
+    """TODO: Describe `load_cache`.
+
+    Args:
+        paths: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if not paths.cache_path.exists():
         return []
 
@@ -119,6 +169,12 @@ def load_cache(paths: ProjectPaths) -> list[CacheRecord]:
 
 
 def save_cache(paths: ProjectPaths, records: Iterable[AssetRecord]) -> None:
+    """TODO: Describe `save_cache`.
+
+    Args:
+        paths: TODO: Describe this parameter.
+        records: TODO: Describe this parameter.
+    """
     record_list = list(records)
     header = STATE_HEADER.pack(CACHE_MAGIC, STATE_VERSION, CACHE_RECORD.size, len(record_list), 0)
     payload = bytearray()
@@ -128,10 +184,26 @@ def save_cache(paths: ProjectPaths, records: Iterable[AssetRecord]) -> None:
 
 
 def cache_matches(cache: Iterable[CacheRecord], guid: bytes, source_hash: int) -> bool:
+    """TODO: Describe `cache_matches`.
+
+    Args:
+        cache: TODO: Describe this parameter.
+        guid: TODO: Describe this parameter.
+        source_hash: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return any(record.guid == guid and record.source_hash == source_hash for record in cache)
 
 
 def upsert_records(paths: ProjectPaths, new_records: Iterable[AssetRecord]) -> None:
+    """TODO: Describe `upsert_records`.
+
+    Args:
+        paths: TODO: Describe this parameter.
+        new_records: TODO: Describe this parameter.
+    """
     records = load_registry(paths)
     for record in new_records:
         for index, existing in enumerate(records):

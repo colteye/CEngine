@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -19,6 +34,14 @@ from .scene_inspect import inspect_scene, print_scene
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
+    """TODO: Describe `parse_args`.
+
+    Args:
+        argv: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     parser = argparse.ArgumentParser(prog="ceasset")
     parser.add_argument("--project", type=Path, default=Path.cwd())
 
@@ -48,6 +71,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def main(argv: list[str]) -> int:
+    """TODO: Describe `main`.
+
+    Args:
+        argv: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     try:
         args = parse_args(argv)
         paths = make_project_paths(args.project)

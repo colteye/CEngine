@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import struct
@@ -5,6 +20,14 @@ from pathlib import Path
 
 
 def normalize_pillow_dds_format(dds_format: str) -> str:
+    """TODO: Describe `normalize_pillow_dds_format`.
+
+    Args:
+        dds_format: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     pillow_format = dds_format.upper()
     if pillow_format == "BC1":
         return "DXT1"
@@ -18,6 +41,13 @@ def normalize_pillow_dds_format(dds_format: str) -> str:
 
 
 def convert_texture_to_dds(source: Path, output: Path, dds_format: str) -> None:
+    """TODO: Describe `convert_texture_to_dds`.
+
+    Args:
+        source: TODO: Describe this parameter.
+        output: TODO: Describe this parameter.
+        dds_format: TODO: Describe this parameter.
+    """
     try:
         from PIL import Image
     except ImportError as error:
@@ -37,22 +67,57 @@ def convert_texture_to_dds(source: Path, output: Path, dds_format: str) -> None:
 
 
 def _rgb565(red: int, green: int, blue: int) -> int:
+    """TODO: Describe `_rgb565`.
+
+    Args:
+        red: TODO: Describe this parameter.
+        green: TODO: Describe this parameter.
+        blue: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return ((red * 31 + 127) // 255 << 11) | ((green * 63 + 127) // 255 << 5) | \
         ((blue * 31 + 127) // 255)
 
 
 def _rgb888(value: int) -> tuple[int, int, int]:
+    """TODO: Describe `_rgb888`.
+
+    Args:
+        value: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return (((value >> 11) & 31) * 255 // 31,
             ((value >> 5) & 63) * 255 // 63,
             (value & 31) * 255 // 31)
 
 
 def _nearest(value: tuple[int, ...], palette: list[tuple[int, ...]]) -> int:
+    """TODO: Describe `_nearest`.
+
+    Args:
+        value: TODO: Describe this parameter.
+        palette: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return min(range(len(palette)), key=lambda index: sum(
         (value[channel] - palette[index][channel]) ** 2 for channel in range(len(value))))
 
 
 def _dxt5_block(pixels: list[tuple[int, int, int, int]]) -> bytes:
+    """TODO: Describe `_dxt5_block`.
+
+    Args:
+        pixels: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     alpha0 = max(pixel[3] for pixel in pixels)
     alpha1 = min(pixel[3] for pixel in pixels)
     if alpha0 == alpha1:
@@ -86,6 +151,14 @@ def _dxt5_block(pixels: list[tuple[int, int, int, int]]) -> bytes:
 
 
 def write_rgba_dxt5(output: Path, width: int, height: int, rgba: bytes) -> None:
+    """TODO: Describe `write_rgba_dxt5`.
+
+    Args:
+        output: TODO: Describe this parameter.
+        width: TODO: Describe this parameter.
+        height: TODO: Describe this parameter.
+        rgba: TODO: Describe this parameter.
+    """
     if width <= 0 or height <= 0 or width % 4 or height % 4:
         raise ValueError("DXT5 dimensions must be positive multiples of four")
     if len(rgba) != width * height * 4:
@@ -113,6 +186,14 @@ def write_rgba_dxt5(output: Path, width: int, height: int, rgba: bytes) -> None:
 
 
 def write_rgbexp32_dds(output: Path, width: int, height: int, rgba: bytes) -> None:
+    """TODO: Describe `write_rgbexp32_dds`.
+
+    Args:
+        output: TODO: Describe this parameter.
+        width: TODO: Describe this parameter.
+        height: TODO: Describe this parameter.
+        rgba: TODO: Describe this parameter.
+    """
     if width <= 0 or height <= 0:
         raise ValueError("RGBExp32 dimensions must be positive")
     if len(rgba) != width * height * 4:

@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/opengl/shaders/point_shadow_depth.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "point_shadow_depth.h"
 
 #include <glm/gtc/type_ptr.hpp>
@@ -5,17 +20,31 @@
 namespace CEngine::Renderer::OpenGL
 {
 
+/**
+ * @brief TODO: Describe PointShadowDepth::PointShadowDepth.
+ */
 PointShadowDepth::PointShadowDepth()
 {
     shader_program_.Load("shaders/opengl/point_shadow_depth.vert", "shaders/opengl/point_shadow_depth.frag");
     InitializeParameters();
 }
 
+/**
+ * @brief TODO: Describe PointShadowDepth::Use.
+ */
 void PointShadowDepth::Use() const
 {
     shader_program_.Use();
 }
 
+/**
+ * @brief TODO: Describe PointShadowDepth::UpdateFrame.
+ *
+ * @param view TODO: Describe this parameter.
+ * @param projection TODO: Describe this parameter.
+ * @param light_position TODO: Describe this parameter.
+ * @param far_plane TODO: Describe this parameter.
+ */
 void PointShadowDepth::UpdateFrame(const glm::mat4 &view, const glm::mat4 &projection, const glm::vec3 &light_position,
                                    float far_plane) const
 {
@@ -25,6 +54,13 @@ void PointShadowDepth::UpdateFrame(const glm::mat4 &view, const glm::mat4 &proje
     glUniform1f(far_plane_id_, far_plane);
 }
 
+/**
+ * @brief TODO: Describe PointShadowDepth::UpdateObject.
+ *
+ * @param model TODO: Describe this parameter.
+ * @param material TODO: Describe this parameter.
+ * @param albedo_texture TODO: Describe this parameter.
+ */
 void PointShadowDepth::UpdateObject(const glm::mat4 &model, const Material &material, GLuint albedo_texture) const
 {
     const bool alpha_test = RequiresAlphaTest(material.render_mode);
@@ -42,6 +78,9 @@ void PointShadowDepth::UpdateObject(const glm::mat4 &model, const Material &mate
     }
 }
 
+/**
+ * @brief TODO: Describe PointShadowDepth::InitializeParameters.
+ */
 void PointShadowDepth::InitializeParameters()
 {
     const GLuint shader_id = shader_program_.GetId();

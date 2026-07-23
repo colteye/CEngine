@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file samples/viewer/main.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/asset_store.h"
 #include "assets/scene_loader.h"
 #include "context.h"
@@ -32,6 +47,12 @@ namespace Renderer = CEngine::Renderer;
 namespace
 {
 
+/**
+ * @brief TODO: Describe UseExecutableDirectory.
+ *
+ * @param executable TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool UseExecutableDirectory(const char *executable)
 {
     if (executable == nullptr)
@@ -48,6 +69,13 @@ bool UseExecutableDirectory(const char *executable)
     return !error;
 }
 
+/**
+ * @brief TODO: Describe ParseScenePath.
+ *
+ * @param argc TODO: Describe this parameter.
+ * @param argv TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::filesystem::path ParseScenePath(int argc, char **argv)
 {
     for (int index = 1; index < argc; ++index)
@@ -61,6 +89,12 @@ std::filesystem::path ParseScenePath(int argc, char **argv)
     return {};
 }
 
+/**
+ * @brief TODO: Describe FindSponzaScene.
+ *
+ * @param executable TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::filesystem::path FindSponzaScene(const char *executable)
 {
     constexpr std::string_view RelativeScene = "assets/compiled/sponza/Sponza.cscene";
@@ -106,6 +140,12 @@ std::filesystem::path FindSponzaScene(const char *executable)
     return {};
 }
 
+/**
+ * @brief TODO: Describe ProjectRootForScene.
+ *
+ * @param scene_path TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::filesystem::path ProjectRootForScene(const std::filesystem::path &scene_path)
 {
     for (std::filesystem::path path = scene_path.parent_path(); !path.empty(); path = path.parent_path())
@@ -122,6 +162,11 @@ std::filesystem::path ProjectRootForScene(const std::filesystem::path &scene_pat
     return std::filesystem::current_path();
 }
 
+/**
+ * @brief TODO: Describe CreateWindow.
+ *
+ * @return TODO: Describe the return value.
+ */
 GLFWwindow *CreateWindow()
 {
     if (glfwInit() == GLFW_FALSE)
@@ -165,6 +210,12 @@ GLFWwindow *CreateWindow()
 }
 
 #ifdef CENGINE_ENABLE_OPENGL
+/**
+ * @brief TODO: Describe ActivePlayer.
+ *
+ * @param scene TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 Viewer::PlayerEntity *ActivePlayer(CEngine::Scene::Scene &scene)
 {
     CEngine::Scene::Entity *entity = scene.GetEntity(scene.Settings().active_entity);
@@ -182,6 +233,12 @@ Viewer::PlayerEntity *ActivePlayer(CEngine::Scene::Scene &scene)
     return nullptr;
 }
 
+/**
+ * @brief TODO: Describe DrawTuningPanel.
+ *
+ * @param renderer TODO: Describe this parameter.
+ * @param player TODO: Describe this parameter.
+ */
 void DrawTuningPanel(Renderer::RenderSystem &renderer, Viewer::PlayerEntity *player)
 {
     ImGui::SetNextWindowBgAlpha(0.82f);
@@ -278,6 +335,11 @@ void DrawTuningPanel(Renderer::RenderSystem &renderer, Viewer::PlayerEntity *pla
     ImGui::End();
 }
 
+/**
+ * @brief TODO: Describe DrawFpsCounter.
+ *
+ * @param delta_seconds TODO: Describe this parameter.
+ */
 void DrawFpsCounter(float delta_seconds)
 {
     static float smoothed_fps = 60.0f;
@@ -295,6 +357,9 @@ void DrawFpsCounter(float delta_seconds)
     ImGui::End();
 }
 
+/**
+ * @brief TODO: Describe BeginTuningFrame.
+ */
 void BeginTuningFrame()
 {
     ImGui_ImplOpenGL3_NewFrame();
@@ -302,6 +367,9 @@ void BeginTuningFrame()
     ImGui::NewFrame();
 }
 
+/**
+ * @brief TODO: Describe EndTuningFrame.
+ */
 void EndTuningFrame()
 {
     ImGui::Render();
@@ -309,6 +377,15 @@ void EndTuningFrame()
 }
 #endif
 
+/**
+ * @brief TODO: Describe RunScene.
+ *
+ * @param window TODO: Describe this parameter.
+ * @param scene_path TODO: Describe this parameter.
+ * @param project_root TODO: Describe this parameter.
+ * @param renderer TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 int RunScene(GLFWwindow *window, const std::filesystem::path &scene_path, const std::filesystem::path &project_root,
              Renderer::RenderSystem &renderer)
 {
@@ -477,6 +554,13 @@ int RunScene(GLFWwindow *window, const std::filesystem::path &scene_path, const 
 
 } // namespace
 
+/**
+ * @brief TODO: Describe main.
+ *
+ * @param argc TODO: Describe this parameter.
+ * @param argv TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 int main(int argc, char **argv)
 {
     std::filesystem::path scene_path = ParseScenePath(argc, argv);

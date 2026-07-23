@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/assets/asset_store_load.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/asset_store.h"
 
 #include "assets/asset_error.h"
@@ -11,6 +26,12 @@
 namespace CEngine::Assets
 {
 
+/**
+ * @brief TODO: Describe AssetStore::LoadMaterial.
+ *
+ * @param reference TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::shared_ptr<const Renderer::Material> AssetStore::LoadMaterial(const AssetReference &reference) const
 {
     if (reference.type != AssetType::Material)
@@ -41,6 +62,12 @@ std::shared_ptr<const Renderer::Material> AssetStore::LoadMaterial(const AssetRe
     return materials_.emplace(reference.path, std::make_pair(reference.guid, std::move(material))).first->second.second;
 }
 
+/**
+ * @brief TODO: Describe AssetStore::LoadMesh.
+ *
+ * @param reference TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::shared_ptr<const Renderer::Mesh> AssetStore::LoadMesh(const AssetReference &reference) const
 {
     if (reference.type != AssetType::Mesh)
@@ -71,6 +98,13 @@ std::shared_ptr<const Renderer::Mesh> AssetStore::LoadMesh(const AssetReference 
     return meshes_.emplace(reference.path, std::make_pair(reference.guid, std::move(mesh))).first->second.second;
 }
 
+/**
+ * @brief TODO: Describe AssetStore::LoadTexture.
+ *
+ * @param reference TODO: Describe this parameter.
+ * @param flip_vertical TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::shared_ptr<const Renderer::Texture> AssetStore::LoadTexture(const AssetReference &reference,
                                                                  bool flip_vertical) const
 {
@@ -105,6 +139,12 @@ std::shared_ptr<const Renderer::Texture> AssetStore::LoadTexture(const AssetRefe
     return cache.emplace(reference.path, std::make_pair(reference.guid, std::move(texture))).first->second.second;
 }
 
+/**
+ * @brief TODO: Describe AssetStore::LoadPhysics.
+ *
+ * @param reference TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::shared_ptr<const PhysicsShape> AssetStore::LoadPhysics(const AssetReference &reference) const
 {
     if (reference.type != AssetType::Physics)

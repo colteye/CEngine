@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/input/glfw/glfw_input_backend.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "input/glfw/glfw_input_backend.h"
 #include "input/input_system.h"
 
@@ -8,6 +23,12 @@ namespace CEngine::Input
 namespace
 {
 
+/**
+ * @brief TODO: Describe GlfwKey.
+ *
+ * @param key TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 int GlfwKey(Key key)
 {
     switch (key)
@@ -260,10 +281,18 @@ int GlfwKey(Key key)
 
 } // namespace
 
+/**
+ * @brief TODO: Describe GlfwInputBackend::GlfwInputBackend.
+ *
+ * @param window TODO: Describe this parameter.
+ */
 GlfwInputBackend::GlfwInputBackend(GLFWwindow *window) : window_(window)
 {
 }
 
+/**
+ * @brief TODO: Describe GlfwInputBackend::BeginFrame.
+ */
 void GlfwInputBackend::BeginFrame()
 {
     pointer_delta_ = glm::vec2(0.0f);
@@ -287,12 +316,23 @@ void GlfwInputBackend::BeginFrame()
     was_focused_ = focused;
 }
 
+/**
+ * @brief TODO: Describe GlfwInputBackend::IsDown.
+ *
+ * @param key TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool GlfwInputBackend::IsDown(Key key) const
 {
     const int glfw_key = GlfwKey(key);
     return window_ != nullptr && glfw_key != GLFW_KEY_UNKNOWN && glfwGetKey(window_, glfw_key) == GLFW_PRESS;
 }
 
+/**
+ * @brief TODO: Describe GlfwInputBackend::SetPointerCaptured.
+ *
+ * @param captured TODO: Describe this parameter.
+ */
 void GlfwInputBackend::SetPointerCaptured(bool captured)
 {
     if (window_ == nullptr || pointer_captured_ == captured)

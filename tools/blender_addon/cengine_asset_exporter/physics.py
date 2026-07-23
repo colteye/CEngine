@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import math
@@ -29,6 +44,8 @@ HEIGHT = struct.Struct("<f")
 
 
 class ShapeType(IntEnum):
+    """TODO: Describe `ShapeType`."""
+
     BOX = 0
     SPHERE = 1
     CAPSULE = 2
@@ -42,6 +59,8 @@ class ShapeType(IntEnum):
 
 @dataclass
 class CollisionShape:
+    """TODO: Describe `CollisionShape`."""
+
     shape_type: ShapeType = ShapeType.BOX
     local_position: tuple[float, float, float] = (0.0, 0.0, 0.0)
     local_rotation: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)
@@ -59,15 +78,31 @@ class CollisionShape:
 
 @dataclass(frozen=True)
 class PhysicsExport:
+    """TODO: Describe `PhysicsExport`."""
+
     source: object
     output: Path
 
 
 def _finite(values: Iterable[float]) -> bool:
+    """TODO: Describe `_finite`.
+
+    Args:
+        values: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return all(math.isfinite(float(value)) for value in values)
 
 
 def validate_shape(shape: CollisionShape, depth: int = 0) -> None:
+    """TODO: Describe `validate_shape`.
+
+    Args:
+        shape: TODO: Describe this parameter.
+        depth: TODO: Describe this parameter.
+    """
     if depth > 8:
         raise ValueError("collision compound nesting exceeds 8 levels")
     if not _finite((*shape.local_position, *shape.local_rotation)):
@@ -124,16 +159,38 @@ def validate_shape(shape: CollisionShape, depth: int = 0) -> None:
 
 
 def _movable(shape: CollisionShape) -> bool:
+    """TODO: Describe `_movable`.
+
+    Args:
+        shape: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return shape.shape_type not in {
         ShapeType.TRIANGLE_MESH, ShapeType.HEIGHT_FIELD, ShapeType.PLANE
     } and all(_movable(child) for child in shape.children)
 
 
 def physics_payload(root: CollisionShape) -> bytes:
+    """TODO: Describe `physics_payload`.
+
+    Args:
+        root: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     validate_shape(root)
     flattened: list[tuple[CollisionShape, int]] = []
 
     def visit(shape: CollisionShape, parent: int) -> None:
+        """TODO: Describe `visit`.
+
+        Args:
+            shape: TODO: Describe this parameter.
+            parent: TODO: Describe this parameter.
+        """
         index = len(flattened)
         flattened.append((shape, parent))
         for child in shape.children:
@@ -188,17 +245,45 @@ def physics_payload(root: CollisionShape) -> bytes:
 def physics_output_path(
     blend_source: Path, output_root: Path, object_name: str
 ) -> Path:
+    """TODO: Describe `physics_output_path`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        object_name: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return output_dir_for_source(
         blend_source, output_root
     ) / "physics" / f"{clean_asset_name(object_name)}.cphys"
 
 
 def _property(obj: object, name: str, default: object) -> object:
+    """TODO: Describe `_property`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+        name: TODO: Describe this parameter.
+        default: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     getter = getattr(obj, "get", None)
     return getter(name, default) if callable(getter) else default
 
 
 def _object_scale(obj: object) -> tuple[float, float, float]:
+    """TODO: Describe `_object_scale`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     scale = tuple(float(value) for value in getattr(obj, "scale", (1.0, 1.0, 1.0)))
     if len(scale) != 3 or not _finite(scale) or any(value <= 0.0 for value in scale):
         raise ValueError(f"collision object scale must be positive: {getattr(obj, 'name', '<unnamed>')}")
@@ -209,6 +294,14 @@ def _object_scale(obj: object) -> tuple[float, float, float]:
 def _mesh_geometry(obj: object) -> tuple[
     list[tuple[float, float, float]], list[int]
 ]:
+    """TODO: Describe `_mesh_geometry`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     mesh = getattr(obj, "data", None)
     source_vertices = list(getattr(mesh, "vertices", ()))
     scale = _object_scale(obj)
@@ -235,6 +328,14 @@ def _mesh_geometry(obj: object) -> tuple[
 
 
 def _height_field(obj: object) -> CollisionShape:
+    """TODO: Describe `_height_field`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     vertices, _ = _mesh_geometry(obj)
     side = math.isqrt(len(vertices))
     if side < 2 or side * side != len(vertices):
@@ -273,6 +374,14 @@ def _height_field(obj: object) -> CollisionShape:
 
 
 def _compound_shape(obj: object) -> CollisionShape:
+    """TODO: Describe `_compound_shape`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     children = []
     for child in sorted(
             getattr(obj, "children", ()),
@@ -294,6 +403,14 @@ def _compound_shape(obj: object) -> CollisionShape:
 
 
 def collision_shape_for_object(obj: object) -> CollisionShape:
+    """TODO: Describe `collision_shape_for_object`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     collider_name = str(_property(obj, "ce_collider", "box")).lower()
     try:
         shape_type = {
@@ -355,6 +472,14 @@ def collision_shape_for_object(obj: object) -> CollisionShape:
 
 
 def physics_objects(objects: Iterable[object]) -> list[object]:
+    """TODO: Describe `physics_objects`.
+
+    Args:
+        objects: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return sorted((
         obj for obj in objects
         if getattr(obj, "type", "") == "MESH"
@@ -371,6 +496,19 @@ def write_physics_asset(
     source_hash: int = 0,
     collision_source: object | None = None,
 ) -> PhysicsExport:
+    """TODO: Describe `write_physics_asset`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        obj: TODO: Describe this parameter.
+        asset_path: TODO: Describe this parameter.
+        source_hash: TODO: Describe this parameter.
+        collision_source: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     motion = str(_property(
         obj, "ce_physics_motion", "None")).lower()
     if motion not in ("static", "dynamic", "kinematic"):
@@ -416,6 +554,18 @@ def write_physics_assets(
     asset_path: Callable[[Path], str] = generic_path,
     source_hash: int = 0,
 ) -> list[PhysicsExport]:
+    """TODO: Describe `write_physics_assets`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        objects: TODO: Describe this parameter.
+        asset_path: TODO: Describe this parameter.
+        source_hash: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     objects = tuple(objects)
     by_name = {
         str(getattr(obj, "name", "")): obj for obj in objects

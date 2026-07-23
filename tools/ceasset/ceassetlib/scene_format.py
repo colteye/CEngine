@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import struct
@@ -24,6 +39,14 @@ _GAME_SCHEMA = load_bundled_game()
 
 
 def _entity_record(classname: str) -> struct.Struct | None:
+    """TODO: Describe `_entity_record`.
+
+    Args:
+        classname: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     entity = _GAME_SCHEMA.entity(classname)
     return entity_struct(entity) if entity is not None else None
 

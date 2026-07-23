@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import struct
@@ -26,20 +41,45 @@ ASSET_HEADER = struct.Struct("<4sHHI16sQ16sQQQ")
 
 
 class FakeKeyframe:
+    """TODO: Describe `FakeKeyframe`."""
+
     def __init__(self, frame: float, value: float, interpolation: str = "BEZIER") -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            frame: TODO: Describe this parameter.
+            value: TODO: Describe this parameter.
+            interpolation: TODO: Describe this parameter.
+        """
         self.co = (frame, value)
         self.interpolation = interpolation
 
 
 class FakeFcurve:
+    """TODO: Describe `FakeFcurve`."""
+
     def __init__(self, data_path: str, array_index: int, keyframes: list[FakeKeyframe]) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            data_path: TODO: Describe this parameter.
+            array_index: TODO: Describe this parameter.
+            keyframes: TODO: Describe this parameter.
+        """
         self.data_path = data_path
         self.array_index = array_index
         self.keyframe_points = keyframes
 
 
 class FakeAction:
+    """TODO: Describe `FakeAction`."""
+
     def __init__(self, name: str) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            name: TODO: Describe this parameter.
+        """
         self.name = name
         self.frame_range = (1.0, 24.0)
         self.fcurves = [
@@ -48,35 +88,70 @@ class FakeAction:
 
 
 class FakeStrip:
+    """TODO: Describe `FakeStrip`."""
+
     def __init__(self, action: FakeAction) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            action: TODO: Describe this parameter.
+        """
         self.action = action
 
 
 class FakeTrack:
+    """TODO: Describe `FakeTrack`."""
+
     def __init__(self, actions: list[FakeAction]) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            actions: TODO: Describe this parameter.
+        """
         self.strips = [FakeStrip(action) for action in actions]
 
 
 class FakeAnimationData:
+    """TODO: Describe `FakeAnimationData`."""
+
     def __init__(self, action: FakeAction | None, nla_actions: list[FakeAction] | None = None) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            action: TODO: Describe this parameter.
+            nla_actions: TODO: Describe this parameter.
+        """
         self.action = action
         self.nla_tracks = [FakeTrack(nla_actions or [])]
 
 
 class FakeObject:
+    """TODO: Describe `FakeObject`."""
+
     def __init__(self, name: str, obj_type: str, animation_data: FakeAnimationData | None = None) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            name: TODO: Describe this parameter.
+            obj_type: TODO: Describe this parameter.
+            animation_data: TODO: Describe this parameter.
+        """
         self.name = name
         self.type = obj_type
         self.animation_data = animation_data
 
 
 class BlenderAnimationTests(unittest.TestCase):
+    """TODO: Describe `BlenderAnimationTests`."""
+
     def test_animation_output_path_uses_armature_and_action(self) -> None:
+        """TODO: Describe `test_animation_output_path_uses_armature_and_action`."""
         output = animation_output_path(Path("hero.blend"), Path("compiled"), "ARM Hero", "Walk Forward")
 
         self.assertEqual(output, Path("compiled/hero/animations/ARM_Hero_Walk_Forward.canim"))
 
     def test_armature_actions_are_unique_and_sorted(self) -> None:
+        """TODO: Describe `test_armature_actions_are_unique_and_sorted`."""
         walk = FakeAction("Walk")
         idle = FakeAction("Idle")
         armature = FakeObject("ARM_Hero", "ARMATURE", FakeAnimationData(walk, [idle, walk]))
@@ -86,6 +161,7 @@ class BlenderAnimationTests(unittest.TestCase):
         self.assertEqual([action.name for action in actions], ["Idle", "Walk"])
 
     def test_action_targets_use_exported_armatures_only(self) -> None:
+        """TODO: Describe `test_action_targets_use_exported_armatures_only`."""
         action = FakeAction("Walk")
         armature = FakeObject("ARM_Hero", "ARMATURE", FakeAnimationData(action))
         mesh = FakeObject("SK_Body", "MESH", FakeAnimationData(FakeAction("MeshAction")))
@@ -95,6 +171,7 @@ class BlenderAnimationTests(unittest.TestCase):
         self.assertEqual(targets, [(armature, action)])
 
     def test_animation_payload_records_fcurves_and_keyframes(self) -> None:
+        """TODO: Describe `test_animation_payload_records_fcurves_and_keyframes`."""
         action = FakeAction("Walk")
         armature = FakeObject("ARM_Hero", "ARMATURE", FakeAnimationData(action))
 
@@ -114,6 +191,7 @@ class BlenderAnimationTests(unittest.TestCase):
         self.assertEqual(keyframe[2], 2)
 
     def test_write_animation_asset_writes_common_canim(self) -> None:
+        """TODO: Describe `test_write_animation_asset_writes_common_canim`."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             blend = root / "hero.blend"

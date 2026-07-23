@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/assets/skeleton_loader.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/skeleton_loader.h"
 
 #include "assets/asset_error.h"
@@ -10,6 +25,13 @@ namespace CEngine::Assets
 namespace
 {
 
+/**
+ * @brief TODO: Describe ReadHeader.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadHeader(ByteView bytes, DiskSkeletonHeader &value)
 {
     if (bytes.size < sizeof(value))
@@ -25,6 +47,14 @@ bool ReadHeader(ByteView bytes, DiskSkeletonHeader &value)
            ReadU32LE(bytes, offset, value.armature_name_offset) && ReadU32LE(bytes, offset, value.armature_name_size);
 }
 
+/**
+ * @brief TODO: Describe ReadBoneRow.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadBoneRow(ByteView bytes, std::size_t offset, DiskSkeletonBone &value)
 {
     if (!ReadI32LE(bytes, offset, value.parent_index) || !ReadU32LE(bytes, offset, value.name_offset) ||
@@ -44,6 +74,12 @@ bool ReadBoneRow(ByteView bytes, std::size_t offset, DiskSkeletonBone &value)
 
 } // namespace
 
+/**
+ * @brief TODO: Describe SkeletonAsset::Load.
+ *
+ * @param path TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool SkeletonAsset::Load(const std::filesystem::path &path)
 {
     file_ = {};
@@ -58,6 +94,11 @@ bool SkeletonAsset::Load(const std::filesystem::path &path)
     return Parse();
 }
 
+/**
+ * @brief TODO: Describe SkeletonAsset::Parse.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool SkeletonAsset::Parse()
 {
     if (file_.Type() != AssetType::Skeleton)
@@ -115,6 +156,11 @@ bool SkeletonAsset::Parse()
     return true;
 }
 
+/**
+ * @brief TODO: Describe SkeletonAsset::ArmatureName.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::string_view SkeletonAsset::ArmatureName() const
 {
     std::string_view view;
@@ -122,6 +168,13 @@ std::string_view SkeletonAsset::ArmatureName() const
     return view;
 }
 
+/**
+ * @brief TODO: Describe SkeletonAsset::Bone.
+ *
+ * @param index TODO: Describe this parameter.
+ * @param bone TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool SkeletonAsset::Bone(std::uint32_t index, DiskSkeletonBone &bone) const
 {
     if (index >= header_.bone_count)
@@ -131,6 +184,12 @@ bool SkeletonAsset::Bone(std::uint32_t index, DiskSkeletonBone &bone) const
     return ReadBoneRow(bone_table_, static_cast<std::size_t>(index) * sizeof(DiskSkeletonBone), bone);
 }
 
+/**
+ * @brief TODO: Describe SkeletonAsset::BoneName.
+ *
+ * @param index TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::string_view SkeletonAsset::BoneName(std::uint32_t index) const
 {
     DiskSkeletonBone bone;
@@ -144,6 +203,14 @@ std::string_view SkeletonAsset::BoneName(std::uint32_t index) const
     return view;
 }
 
+/**
+ * @brief TODO: Describe SkeletonAsset::StringViewAt.
+ *
+ * @param offset TODO: Describe this parameter.
+ * @param size TODO: Describe this parameter.
+ * @param view TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool SkeletonAsset::StringViewAt(std::uint32_t offset, std::uint32_t size, std::string_view &view) const
 {
     if (offset > string_table_.size || size > string_table_.size - offset)

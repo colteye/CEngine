@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/assets/texture_loader.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/texture_loader.h"
 
 #include "assets/asset_error.h"
@@ -16,6 +31,15 @@ namespace CEngine::Assets
 namespace
 {
 
+/**
+ * @brief TODO: Describe MakeFourCc.
+ *
+ * @param a TODO: Describe this parameter.
+ * @param b TODO: Describe this parameter.
+ * @param c TODO: Describe this parameter.
+ * @param d TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 constexpr std::uint32_t MakeFourCc(char a, char b, char c, char d)
 {
     return static_cast<std::uint32_t>(a) | (static_cast<std::uint32_t>(b) << 8u) |
@@ -29,11 +53,25 @@ constexpr std::uint32_t Dxt5 = MakeFourCc('D', 'X', 'T', '5');
 constexpr std::uint32_t Rgbe = MakeFourCc('R', 'G', 'B', 'E');
 constexpr std::size_t DdsHeaderSize = 128;
 
+/**
+ * @brief TODO: Describe ReadU32At.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadU32At(ByteView bytes, std::size_t offset, std::uint32_t &value)
 {
     return ReadU32LE(bytes, offset, value);
 }
 
+/**
+ * @brief TODO: Describe ReverseBytes.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param count TODO: Describe this parameter.
+ */
 void ReverseBytes(std::uint8_t *bytes, std::uint32_t count)
 {
     for (std::uint32_t first = 0, last = count - 1; first < last; ++first, --last)
@@ -42,6 +80,12 @@ void ReverseBytes(std::uint8_t *bytes, std::uint32_t count)
     }
 }
 
+/**
+ * @brief TODO: Describe ReversePairs.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param count TODO: Describe this parameter.
+ */
 void ReversePairs(std::uint8_t *bytes, std::uint32_t count)
 {
     for (std::uint32_t first = 0, last = count - 1; first < last; ++first, --last)
@@ -51,6 +95,12 @@ void ReversePairs(std::uint8_t *bytes, std::uint32_t count)
     }
 }
 
+/**
+ * @brief TODO: Describe FlipDxt5Alpha.
+ *
+ * @param block TODO: Describe this parameter.
+ * @param row_count TODO: Describe this parameter.
+ */
 void FlipDxt5Alpha(std::uint8_t *block, std::uint32_t row_count)
 {
     std::array<std::uint8_t, 16> indices{};
@@ -83,6 +133,13 @@ void FlipDxt5Alpha(std::uint8_t *block, std::uint32_t row_count)
     }
 }
 
+/**
+ * @brief TODO: Describe FlipBlock.
+ *
+ * @param block TODO: Describe this parameter.
+ * @param format TODO: Describe this parameter.
+ * @param row_count TODO: Describe this parameter.
+ */
 void FlipBlock(std::uint8_t *block, Renderer::TextureFormat format, std::uint32_t row_count)
 {
     if (format == Renderer::TextureFormat::Dxt1)
@@ -102,6 +159,13 @@ void FlipBlock(std::uint8_t *block, Renderer::TextureFormat format, std::uint32_
     ReverseBytes(block + 12, row_count);
 }
 
+/**
+ * @brief TODO: Describe FlipDxt.
+ *
+ * @param mip TODO: Describe this parameter.
+ * @param format TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool FlipDxt(Renderer::TextureMip &mip, Renderer::TextureFormat format)
 {
     if (mip.height > 4 && mip.height % 4 != 0)
@@ -136,6 +200,11 @@ bool FlipDxt(Renderer::TextureMip &mip, Renderer::TextureFormat format)
     return true;
 }
 
+/**
+ * @brief TODO: Describe FlipRgbe.
+ *
+ * @param mip TODO: Describe this parameter.
+ */
 void FlipRgbe(Renderer::TextureMip &mip)
 {
     const std::size_t row_size = static_cast<std::size_t>(mip.width) * 4u;
@@ -152,6 +221,14 @@ void FlipRgbe(Renderer::TextureMip &mip)
 
 } // namespace
 
+/**
+ * @brief TODO: Describe LoadTextureAsset.
+ *
+ * @param path TODO: Describe this parameter.
+ * @param texture TODO: Describe this parameter.
+ * @param flip_vertical TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool LoadTextureAsset(const std::filesystem::path &path, Renderer::Texture &texture, bool flip_vertical)
 {
     std::vector<std::uint8_t> bytes;

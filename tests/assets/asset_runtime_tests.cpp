@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file tests/assets/asset_runtime_tests.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/asset_store.h"
 #include "assets/casset_loader.h"
 #include "assets/material_loader.h"
@@ -30,6 +45,9 @@ constexpr std::array<char, 4> MaterialPayloadMagic = {'C', 'E', 'M', 'A'};
 constexpr std::uint16_t MaterialPayloadVersion = 4;
 
 #pragma pack(push, 1)
+/**
+ * @brief TODO: Describe DiskMaterialHeader.
+ */
 struct DiskMaterialHeader
 {
     std::array<char, 4> magic = MaterialPayloadMagic;
@@ -50,6 +68,9 @@ struct DiskMaterialHeader
     float alpha_cutoff = 0.5f;
 };
 
+/**
+ * @brief TODO: Describe DiskMaterialTexture.
+ */
 struct DiskMaterialTexture
 {
     std::uint32_t slot = 0;
@@ -57,6 +78,9 @@ struct DiskMaterialTexture
     std::uint32_t path_size = 0;
 };
 
+/**
+ * @brief TODO: Describe DiskMeshMetadata.
+ */
 struct DiskMeshMetadata
 {
     std::array<char, 4> magic = MeshMetadataMagic;
@@ -77,6 +101,13 @@ struct DiskMeshMetadata
 };
 #pragma pack(pop)
 
+/**
+ * @brief TODO: Describe Expect.
+ *
+ * @param condition TODO: Describe this parameter.
+ * @param message TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Expect(bool condition, const char *message)
 {
     if (!condition)
@@ -87,17 +118,35 @@ bool Expect(bool condition, const char *message)
     return true;
 }
 
+/**
+ * @brief TODO: Describe TestRoot.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::filesystem::path TestRoot()
 {
     const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
     return std::filesystem::current_path() / "build" / "asset-tests" / ("runtime_" + std::to_string(now));
 }
 
+/**
+ * @brief TODO: Describe Bytes.
+ *
+ * @param text TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::vector<std::uint8_t> Bytes(std::string_view text)
 {
     return {text.begin(), text.end()};
 }
 
+/**
+ * @brief TODO: Describe AppendString.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param text TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::uint32_t AppendString(std::vector<std::uint8_t> &bytes, std::string_view text)
 {
     const auto offset = static_cast<std::uint32_t>(bytes.size());
@@ -105,22 +154,46 @@ std::uint32_t AppendString(std::vector<std::uint8_t> &bytes, std::string_view te
     return offset;
 }
 
+/**
+ * @brief TODO: Describe AppendStruct.
+ *
+ * @tparam T TODO: Describe this template parameter.
+ * @param bytes TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ */
 template <typename T> void AppendStruct(std::vector<std::uint8_t> &bytes, const T &value)
 {
     const auto *data = reinterpret_cast<const std::uint8_t *>(&value);
     bytes.insert(bytes.end(), data, data + sizeof(T));
 }
 
+/**
+ * @brief TODO: Describe AppendF32.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ */
 void AppendF32(std::vector<std::uint8_t> &bytes, float value)
 {
     AppendStruct(bytes, value);
 }
 
+/**
+ * @brief TODO: Describe AppendU32.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ */
 void AppendU32(std::vector<std::uint8_t> &bytes, std::uint32_t value)
 {
     AppendStruct(bytes, value);
 }
 
+/**
+ * @brief TODO: Describe WriteDdsStub.
+ *
+ * @param path TODO: Describe this parameter.
+ */
 void WriteDdsStub(const std::filesystem::path &path)
 {
     std::vector<std::uint8_t> bytes(128 + 8);
@@ -141,6 +214,19 @@ void WriteDdsStub(const std::filesystem::path &path)
     stream.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
 }
 
+/**
+ * @brief TODO: Describe AppendStaticVertex.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param x TODO: Describe this parameter.
+ * @param y TODO: Describe this parameter.
+ * @param z TODO: Describe this parameter.
+ * @param nx TODO: Describe this parameter.
+ * @param ny TODO: Describe this parameter.
+ * @param nz TODO: Describe this parameter.
+ * @param u TODO: Describe this parameter.
+ * @param v TODO: Describe this parameter.
+ */
 void AppendStaticVertex(std::vector<std::uint8_t> &bytes, float x, float y, float z, float nx, float ny, float nz,
                         float u, float v)
 {
@@ -154,6 +240,19 @@ void AppendStaticVertex(std::vector<std::uint8_t> &bytes, float x, float y, floa
     AppendF32(bytes, v);
 }
 
+/**
+ * @brief TODO: Describe AppendSkinnedStaticVertex.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param x TODO: Describe this parameter.
+ * @param y TODO: Describe this parameter.
+ * @param z TODO: Describe this parameter.
+ * @param nx TODO: Describe this parameter.
+ * @param ny TODO: Describe this parameter.
+ * @param nz TODO: Describe this parameter.
+ * @param u TODO: Describe this parameter.
+ * @param v TODO: Describe this parameter.
+ */
 void AppendSkinnedStaticVertex(std::vector<std::uint8_t> &bytes, float x, float y, float z, float nx, float ny,
                                float nz, float u, float v)
 {
@@ -167,6 +266,21 @@ void AppendSkinnedStaticVertex(std::vector<std::uint8_t> &bytes, float x, float 
     }
 }
 
+/**
+ * @brief TODO: Describe AppendLightmappedVertex.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param x TODO: Describe this parameter.
+ * @param y TODO: Describe this parameter.
+ * @param z TODO: Describe this parameter.
+ * @param nx TODO: Describe this parameter.
+ * @param ny TODO: Describe this parameter.
+ * @param nz TODO: Describe this parameter.
+ * @param u TODO: Describe this parameter.
+ * @param v TODO: Describe this parameter.
+ * @param lightmap_u TODO: Describe this parameter.
+ * @param lightmap_v TODO: Describe this parameter.
+ */
 void AppendLightmappedVertex(std::vector<std::uint8_t> &bytes, float x, float y, float z, float nx, float ny, float nz,
                              float u, float v, float lightmap_u, float lightmap_v)
 {
@@ -175,6 +289,11 @@ void AppendLightmappedVertex(std::vector<std::uint8_t> &bytes, float x, float y,
     AppendF32(bytes, lightmap_v);
 }
 
+/**
+ * @brief TODO: Describe StaticTriangleGeometry.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::vector<std::uint8_t> StaticTriangleGeometry()
 {
     std::vector<std::uint8_t> geometry;
@@ -188,6 +307,11 @@ std::vector<std::uint8_t> StaticTriangleGeometry()
     return geometry;
 }
 
+/**
+ * @brief TODO: Describe SkinnedTriangleGeometry.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::vector<std::uint8_t> SkinnedTriangleGeometry()
 {
     std::vector<std::uint8_t> geometry;
@@ -201,6 +325,11 @@ std::vector<std::uint8_t> SkinnedTriangleGeometry()
     return geometry;
 }
 
+/**
+ * @brief TODO: Describe LightmappedTriangleGeometry.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::vector<std::uint8_t> LightmappedTriangleGeometry()
 {
     std::vector<std::uint8_t> geometry;
@@ -214,6 +343,13 @@ std::vector<std::uint8_t> LightmappedTriangleGeometry()
     return geometry;
 }
 
+/**
+ * @brief TODO: Describe StaticMeshPayload.
+ *
+ * @param flags TODO: Describe this parameter.
+ * @param vertex_stride TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::vector<std::uint8_t> StaticMeshPayload(std::uint32_t flags = 0, std::uint32_t vertex_stride = 40)
 {
     DiskMeshMetadata mesh_metadata;
@@ -247,6 +383,11 @@ std::vector<std::uint8_t> StaticMeshPayload(std::uint32_t flags = 0, std::uint32
     return payload;
 }
 
+/**
+ * @brief TODO: Describe CommonAssetPayloadRemainsDirectlyAddressable.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool CommonAssetPayloadRemainsDirectlyAddressable()
 {
     const std::filesystem::path root = TestRoot();
@@ -282,6 +423,11 @@ bool CommonAssetPayloadRemainsDirectlyAddressable()
     return true;
 }
 
+/**
+ * @brief TODO: Describe MeshLoaderBuildsRendererMeshFromTargetAsset.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool MeshLoaderBuildsRendererMeshFromTargetAsset()
 {
     const std::filesystem::path root = TestRoot();
@@ -334,6 +480,11 @@ bool MeshLoaderBuildsRendererMeshFromTargetAsset()
     return true;
 }
 
+/**
+ * @brief TODO: Describe MeshLoaderTreatsSkinnedMeshesAsStaticGeometry.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool MeshLoaderTreatsSkinnedMeshesAsStaticGeometry()
 {
     const std::filesystem::path root = TestRoot();
@@ -362,6 +513,11 @@ bool MeshLoaderTreatsSkinnedMeshesAsStaticGeometry()
     return true;
 }
 
+/**
+ * @brief TODO: Describe MeshLoaderReadsLightmapUvStream.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool MeshLoaderReadsLightmapUvStream()
 {
     const std::filesystem::path root = TestRoot();
@@ -388,6 +544,11 @@ bool MeshLoaderReadsLightmapUvStream()
     return result;
 }
 
+/**
+ * @brief TODO: Describe MaterialLoaderAllowsNeutralSurfaceSlots.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool MaterialLoaderAllowsNeutralSurfaceSlots()
 {
     const std::filesystem::path root = TestRoot();
@@ -472,6 +633,11 @@ bool MaterialLoaderAllowsNeutralSurfaceSlots()
     return true;
 }
 
+/**
+ * @brief TODO: Describe MaterialLoaderResolvesProjectTexturePaths.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool MaterialLoaderResolvesProjectTexturePaths()
 {
     const std::filesystem::path root = TestRoot();
@@ -529,6 +695,11 @@ bool MaterialLoaderResolvesProjectTexturePaths()
     return true;
 }
 
+/**
+ * @brief TODO: Describe CAssetLoaderReadsBinaryComposition.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool CAssetLoaderReadsBinaryComposition()
 {
     const std::filesystem::path root = TestRoot();
@@ -632,6 +803,11 @@ bool CAssetLoaderReadsBinaryComposition()
     return true;
 }
 
+/**
+ * @brief TODO: Describe SkeletonViewReadsBinaryBonesAndNames.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool SkeletonViewReadsBinaryBonesAndNames()
 {
     const std::filesystem::path root = TestRoot();
@@ -721,6 +897,11 @@ bool SkeletonViewReadsBinaryBonesAndNames()
     return true;
 }
 
+/**
+ * @brief TODO: Describe TextureLoadsAreShared.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool TextureLoadsAreShared()
 {
     const std::filesystem::path root = TestRoot();
@@ -747,6 +928,11 @@ bool TextureLoadsAreShared()
 
 } // namespace
 
+/**
+ * @brief TODO: Describe main.
+ *
+ * @return TODO: Describe the return value.
+ */
 int main()
 {
     if (!CommonAssetPayloadRemainsDirectlyAddressable() || !MeshLoaderBuildsRendererMeshFromTargetAsset() ||

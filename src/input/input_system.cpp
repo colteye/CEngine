@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/input/input_system.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "input/input_system.h"
 
 #include <cmath>
@@ -5,6 +20,12 @@
 namespace CEngine::Input
 {
 
+/**
+ * @brief TODO: Describe InputSystem::RegisterAction.
+ *
+ * @param name TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 ActionHandle InputSystem::RegisterAction(std::string name)
 {
     if (name.empty())
@@ -22,6 +43,14 @@ ActionHandle InputSystem::RegisterAction(std::string name)
     return action;
 }
 
+/**
+ * @brief TODO: Describe InputSystem::BindKey.
+ *
+ * @param action TODO: Describe this parameter.
+ * @param key TODO: Describe this parameter.
+ * @param scale TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool InputSystem::BindKey(ActionHandle action, Key key, float scale)
 {
     if (!action || action.Index() >= values_.size() || !std::isfinite(scale))
@@ -32,6 +61,14 @@ bool InputSystem::BindKey(ActionHandle action, Key key, float scale)
     return true;
 }
 
+/**
+ * @brief TODO: Describe InputSystem::BindPointerAxis.
+ *
+ * @param action TODO: Describe this parameter.
+ * @param axis TODO: Describe this parameter.
+ * @param scale TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool InputSystem::BindPointerAxis(ActionHandle action, PointerAxis axis, float scale)
 {
     if (!action || action.Index() >= values_.size() || !std::isfinite(scale))
@@ -42,6 +79,12 @@ bool InputSystem::BindPointerAxis(ActionHandle action, PointerAxis axis, float s
     return true;
 }
 
+/**
+ * @brief TODO: Describe InputSystem::Set.
+ *
+ * @param action TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ */
 void InputSystem::Set(ActionHandle action, float value)
 {
     if (action && action.Index() < values_.size())
@@ -50,6 +93,12 @@ void InputSystem::Set(ActionHandle action, float value)
     }
 }
 
+/**
+ * @brief TODO: Describe InputSystem::Value.
+ *
+ * @param action TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 float InputSystem::Value(ActionHandle action) const
 {
     return action && action.Index() < values_.size() ? values_[action.Index()] : 0.0f;

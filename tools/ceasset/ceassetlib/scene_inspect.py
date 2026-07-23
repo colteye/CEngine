@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import math
@@ -27,6 +42,8 @@ CLASS_RECORDS = {
 
 @dataclass(frozen=True)
 class SceneInspection:
+    """TODO: Describe `SceneInspection`."""
+
     path: Path
     entities: int
     classes: tuple[tuple[str, int], ...]
@@ -36,6 +53,18 @@ class SceneInspection:
 
 
 def _range(data: bytes, offset: int, count: int, stride: int, name: str) -> memoryview:
+    """TODO: Describe `_range`.
+
+    Args:
+        data: TODO: Describe this parameter.
+        offset: TODO: Describe this parameter.
+        count: TODO: Describe this parameter.
+        stride: TODO: Describe this parameter.
+        name: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if offset < 0 or count < 0 or stride < 0:
         raise ValueError(f"{name} has a negative range")
     size = count * stride
@@ -45,6 +74,14 @@ def _range(data: bytes, offset: int, count: int, stride: int, name: str) -> memo
 
 
 def _asset_payload(path: Path) -> bytes:
+    """TODO: Describe `_asset_payload`.
+
+    Args:
+        path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     data = path.read_bytes()
     if len(data) < ASSET_HEADER.size:
         raise ValueError("asset header is truncated")
@@ -61,6 +98,14 @@ def _asset_payload(path: Path) -> bytes:
 
 
 def _validate_dependency(project_root: Path, asset_type: AssetType, path: str, guid: bytes) -> None:
+    """TODO: Describe `_validate_dependency`.
+
+    Args:
+        project_root: TODO: Describe this parameter.
+        asset_type: TODO: Describe this parameter.
+        path: TODO: Describe this parameter.
+        guid: TODO: Describe this parameter.
+    """
     target = project_root / path
     if not target.is_file():
         raise ValueError(f"referenced asset does not exist: {path}")
@@ -79,6 +124,14 @@ def _validate_dependency(project_root: Path, asset_type: AssetType, path: str, g
 
 
 def _schema_asset_type(field: dict[str, object]) -> AssetType:
+    """TODO: Describe `_schema_asset_type`.
+
+    Args:
+        field: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     try:
         return AssetType[str(field["asset_type"]).upper()]
     except KeyError as error:
@@ -90,6 +143,13 @@ def _schema_asset_type(field: dict[str, object]) -> AssetType:
 def _validate_scalar(
     classname: str, field: dict[str, object], value: float
 ) -> None:
+    """TODO: Describe `_validate_scalar`.
+
+    Args:
+        classname: TODO: Describe this parameter.
+        field: TODO: Describe this parameter.
+        value: TODO: Describe this parameter.
+    """
     name = str(field["name"])
     if not math.isfinite(value):
         raise ValueError(f"{classname}.{name} must be finite")
@@ -113,11 +173,28 @@ def _validate_entity_record(
     assets: list[tuple[AssetType, str]],
     entity_count: int,
 ) -> None:
+    """TODO: Describe `_validate_entity_record`.
+
+    Args:
+        classname: TODO: Describe this parameter.
+        schema: TODO: Describe this parameter.
+        record: TODO: Describe this parameter.
+        auxiliary: TODO: Describe this parameter.
+        assets: TODO: Describe this parameter.
+        entity_count: TODO: Describe this parameter.
+    """
     values = CLASS_RECORDS[classname].unpack(record)
     cursor = 0
     decoded: dict[str, float | int] = {}
 
     def require_asset(index: int, asset_type: AssetType, name: str) -> None:
+        """TODO: Describe `require_asset`.
+
+        Args:
+            index: TODO: Describe this parameter.
+            asset_type: TODO: Describe this parameter.
+            name: TODO: Describe this parameter.
+        """
         if index >= len(assets) or assets[index][0] != asset_type:
             raise ValueError(f"{classname}.{name} asset reference is invalid")
 
@@ -206,6 +283,16 @@ def _validate_entity_record(
 
 
 def inspect_scene(path: Path, project_root: Path, validate_assets: bool = False) -> SceneInspection:
+    """TODO: Describe `inspect_scene`.
+
+    Args:
+        path: TODO: Describe this parameter.
+        project_root: TODO: Describe this parameter.
+        validate_assets: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     payload = _asset_payload(path)
     if len(payload) < SCENE_HEADER.size:
         raise ValueError("scene header is truncated")
@@ -235,6 +322,16 @@ def inspect_scene(path: Path, project_root: Path, validate_assets: bool = False)
     strings = _range(payload, strings_offset, 1, strings_size, "string table")
 
     def text(offset: int, size: int, name: str) -> str:
+        """TODO: Describe `text`.
+
+        Args:
+            offset: TODO: Describe this parameter.
+            size: TODO: Describe this parameter.
+            name: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         if offset > len(strings) or size > len(strings) - offset:
             raise ValueError(f"{name} is outside the string table")
         try:
@@ -318,6 +415,11 @@ def inspect_scene(path: Path, project_root: Path, validate_assets: bool = False)
 
 
 def print_scene(inspection: SceneInspection) -> None:
+    """TODO: Describe `print_scene`.
+
+    Args:
+        inspection: TODO: Describe this parameter.
+    """
     print(f"scene: {inspection.path}")
     print(f"entities: {inspection.entities}")
     print(f"classes: {len(inspection.classes)}")

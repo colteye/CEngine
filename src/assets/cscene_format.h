@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/assets/cscene_format.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #ifndef CENGINE_ASSETS_CSCENE_FORMAT_H
 #define CENGINE_ASSETS_CSCENE_FORMAT_H
 
@@ -20,6 +35,9 @@ inline constexpr std::uint32_t EntityEnabled = 1u << 0u;
 inline constexpr std::uint32_t EntityClassBlockRequired = 1u << 0u;
 
 #pragma pack(push, 1)
+/**
+ * @brief TODO: Describe DiskSceneHeader.
+ */
 struct DiskSceneHeader
 {
     std::array<char, 4> magic = SceneMagic;
@@ -42,6 +60,9 @@ struct DiskSceneHeader
     std::uint64_t string_table_size = 0;
 };
 
+/**
+ * @brief TODO: Describe DiskSceneSettings.
+ */
 struct DiskSceneSettings
 {
     float ambient_color[3] = {};
@@ -51,6 +72,9 @@ struct DiskSceneSettings
     std::uint32_t reserved[4] = {};
 };
 
+/**
+ * @brief TODO: Describe DiskAssetReference.
+ */
 struct DiskAssetReference
 {
     Guid guid = {};
@@ -60,6 +84,9 @@ struct DiskAssetReference
     std::uint32_t path_size = 0;
 };
 
+/**
+ * @brief TODO: Describe DiskSceneEntity.
+ */
 struct DiskSceneEntity
 {
     std::uint32_t classname_offset = 0;
@@ -69,6 +96,9 @@ struct DiskSceneEntity
     std::uint32_t flags = EntityEnabled;
 };
 
+/**
+ * @brief TODO: Describe DiskEntityClassBlock.
+ */
 struct DiskEntityClassBlock
 {
     std::uint32_t classname_offset = 0;
@@ -83,6 +113,9 @@ struct DiskEntityClassBlock
     std::uint64_t auxiliary_size = 0;
 };
 
+/**
+ * @brief TODO: Describe DiskEntityConnection.
+ */
 struct DiskEntityConnection
 {
     std::uint32_t source_entity = InvalidEntityIndex;
@@ -94,6 +127,9 @@ struct DiskEntityConnection
     float delay_seconds = 0.0f;
 };
 
+/**
+ * @brief TODO: Describe DiskTransform.
+ */
 struct DiskTransform
 {
     float position[3] = {};

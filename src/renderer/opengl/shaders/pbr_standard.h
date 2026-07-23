@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/opengl/shaders/pbr_standard.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #ifndef CENGINE_RENDERER_OPENGL_SHADERS_PBR_STANDARD_H
 #define CENGINE_RENDERER_OPENGL_SHADERS_PBR_STANDARD_H
 
@@ -13,6 +28,9 @@ class RenderSystem;
 
 namespace CEngine::Renderer::OpenGL
 {
+/**
+ * @brief TODO: Describe PBRStandard.
+ */
 class PBRStandard
 {
   public:
@@ -21,18 +39,62 @@ class PBRStandard
     GLuint metallic_roughness_ao_tex{0};
     GLuint lightmap_tex{0};
 
+    /**
+     * @brief TODO: Describe PBRStandard.
+     */
     PBRStandard();
+    /**
+     * @brief TODO: Describe Use.
+     */
     void Use() const;
+    /**
+     * @brief TODO: Describe UpdateFrame.
+     *
+     * @param rendering TODO: Describe this parameter.
+     * @param shadow_data TODO: Describe this parameter.
+     * @param shadow_atlas TODO: Describe this parameter.
+     * @param point_shadow_maps TODO: Describe this parameter.
+     * @param irradiance_map TODO: Describe this parameter.
+     * @param prefiltered_map TODO: Describe this parameter.
+     */
     void UpdateFrame(RenderSystem &rendering, const ShadowGpuData &shadow_data, GLuint shadow_atlas,
                      const std::array<GLuint, ShadowLimits::KMaxPointShadows> &point_shadow_maps, GLuint irradiance_map,
                      GLuint prefiltered_map);
+    /**
+     * @brief TODO: Describe UpdateObject.
+     *
+     * @param model TODO: Describe this parameter.
+     * @param material TODO: Describe this parameter.
+     * @param lightmap_scale TODO: Describe this parameter.
+     * @param lightmap_offset TODO: Describe this parameter.
+     * @param lightmap_rgbm_range TODO: Describe this parameter.
+     */
     void UpdateObject(const glm::mat4 &model, const Material &material, const glm::vec2 &lightmap_scale,
                       const glm::vec2 &lightmap_offset, float lightmap_rgbm_range);
+    /**
+     * @brief TODO: Describe SetTextures.
+     *
+     * @param albedo TODO: Describe this parameter.
+     * @param normal TODO: Describe this parameter.
+     * @param metallic_roughness_ao TODO: Describe this parameter.
+     * @param lightmap TODO: Describe this parameter.
+     */
     void SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao, GLuint lightmap);
 
   private:
+    /**
+     * @brief TODO: Describe InitializeParameters.
+     */
     void InitializeParameters();
+    /**
+     * @brief TODO: Describe SetParametersStatic.
+     */
     void SetParametersStatic();
+    /**
+     * @brief TODO: Describe SetMaterialParameters.
+     *
+     * @param material TODO: Describe this parameter.
+     */
     void SetMaterialParameters(const Material &material) const;
 
     ShaderProgram shader_program_;

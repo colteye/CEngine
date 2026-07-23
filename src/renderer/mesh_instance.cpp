@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/mesh_instance.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "renderer/mesh_instance.h"
 
 #include <array>
@@ -5,6 +20,13 @@
 namespace CEngine::Renderer
 {
 
+/**
+ * @brief TODO: Describe TransformBounds.
+ *
+ * @param bounds TODO: Describe this parameter.
+ * @param transform TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 Bounds TransformBounds(const Bounds &bounds, const glm::mat4 &transform)
 {
     if (!bounds.valid)
@@ -39,6 +61,12 @@ Bounds TransformBounds(const Bounds &bounds, const glm::mat4 &transform)
     return transformed;
 }
 
+/**
+ * @brief TODO: Describe ExtractFrustum.
+ *
+ * @param view_projection TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 Frustum ExtractFrustum(const glm::mat4 &view_projection)
 {
     const glm::mat4 rows = glm::transpose(view_projection);
@@ -57,6 +85,13 @@ Frustum ExtractFrustum(const glm::mat4 &view_projection)
     return frustum;
 }
 
+/**
+ * @brief TODO: Describe IntersectsFrustum.
+ *
+ * @param bounds TODO: Describe this parameter.
+ * @param frustum TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool IntersectsFrustum(const Bounds &bounds, const Frustum &frustum)
 {
     // Missing bounds must remain visible; culling is only safe with valid spatial data.

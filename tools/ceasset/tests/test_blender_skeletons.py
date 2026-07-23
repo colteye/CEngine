@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import struct
@@ -24,31 +39,60 @@ ASSET_HEADER = struct.Struct("<4sHHI16sQ16sQQQ")
 
 
 class FakeBone:
+    """TODO: Describe `FakeBone`."""
+
     def __init__(self, name: str, parent: "FakeBone | None" = None, matrix=None) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            name: TODO: Describe this parameter.
+            parent: TODO: Describe this parameter.
+            matrix: TODO: Describe this parameter.
+        """
         self.name = name
         self.parent = parent
         self.matrix_local = matrix
 
 
 class FakeArmatureData:
+    """TODO: Describe `FakeArmatureData`."""
+
     def __init__(self, bones: list[FakeBone]) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            bones: TODO: Describe this parameter.
+        """
         self.bones = bones
 
 
 class FakeObject:
+    """TODO: Describe `FakeObject`."""
+
     def __init__(self, name: str, obj_type: str, bones: list[FakeBone] | None = None) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            name: TODO: Describe this parameter.
+            obj_type: TODO: Describe this parameter.
+            bones: TODO: Describe this parameter.
+        """
         self.name = name
         self.type = obj_type
         self.data = FakeArmatureData(bones or [])
 
 
 class BlenderSkeletonTests(unittest.TestCase):
+    """TODO: Describe `BlenderSkeletonTests`."""
+
     def test_skeleton_output_path_is_sanitized_cskel(self) -> None:
+        """TODO: Describe `test_skeleton_output_path_is_sanitized_cskel`."""
         output = skeleton_output_path(Path("hero.blend"), Path("compiled"), "ARM Hero")
 
         self.assertEqual(output, Path("compiled/hero/skeletons/ARM_Hero.cskel"))
 
     def test_armature_objects_are_unique_and_sorted(self) -> None:
+        """TODO: Describe `test_armature_objects_are_unique_and_sorted`."""
         first = FakeObject("ARM_B", "ARMATURE")
         second = FakeObject("ARM_A", "ARMATURE")
         mesh = FakeObject("SM_Body", "MESH")
@@ -58,6 +102,7 @@ class BlenderSkeletonTests(unittest.TestCase):
         self.assertEqual([obj.name for obj in armatures], ["ARM_A", "ARM_B"])
 
     def test_skeleton_payload_records_bone_hierarchy_and_matrices(self) -> None:
+        """TODO: Describe `test_skeleton_payload_records_bone_hierarchy_and_matrices`."""
         root = FakeBone(
             "root",
             matrix=[
@@ -86,6 +131,7 @@ class BlenderSkeletonTests(unittest.TestCase):
         self.assertEqual(strings[child_row[1] : child_row[1] + child_row[2]], b"spine")
 
     def test_write_skeleton_asset_writes_common_cskel(self) -> None:
+        """TODO: Describe `test_write_skeleton_asset_writes_common_cskel`."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             blend = root / "hero.blend"

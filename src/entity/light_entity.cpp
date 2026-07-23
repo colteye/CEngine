@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/entity/light_entity.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "entity/light_entity.h"
 
 #include "context.h"
@@ -8,11 +23,21 @@
 
 namespace CEngine::Entities
 {
+/**
+ * @brief TODO: Describe LightEntity::Classname.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::string_view LightEntity::Classname() const
 {
     return "light";
 }
 
+/**
+ * @brief TODO: Describe LightEntity::RenderLight.
+ *
+ * @return TODO: Describe the return value.
+ */
 Renderer::Light LightEntity::RenderLight() const
 {
     Renderer::Light light;
@@ -36,6 +61,11 @@ Renderer::Light LightEntity::RenderLight() const
     return light;
 }
 
+/**
+ * @brief TODO: Describe LightEntity::Initialize.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void LightEntity::Initialize(Context &context)
 {
     if (context.rendering == nullptr)
@@ -49,6 +79,11 @@ void LightEntity::Initialize(Context &context)
     }
 }
 
+/**
+ * @brief TODO: Describe LightEntity::Update.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void LightEntity::Update(Context &context, float /*unused*/)
 {
     if (context.rendering == nullptr || !renderer_light_)
@@ -58,6 +93,11 @@ void LightEntity::Update(Context &context, float /*unused*/)
     context.rendering->UpdateLight(renderer_light_, RenderLight());
 }
 
+/**
+ * @brief TODO: Describe LightEntity::Shutdown.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void LightEntity::Shutdown(Context &context)
 {
     if (context.rendering != nullptr && renderer_light_)

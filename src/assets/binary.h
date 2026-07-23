@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/assets/binary.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #ifndef CENGINE_ASSETS_BINARY_H
 #define CENGINE_ASSETS_BINARY_H
 
@@ -10,6 +25,14 @@
 namespace CEngine::Assets
 {
 
+/**
+ * @brief TODO: Describe ReadU16LE.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 inline bool ReadU16LE(ByteView bytes, std::size_t &offset, std::uint16_t &value)
 {
     if (offset > bytes.size || bytes.size - offset < 2u)
@@ -22,6 +45,14 @@ inline bool ReadU16LE(ByteView bytes, std::size_t &offset, std::uint16_t &value)
     return true;
 }
 
+/**
+ * @brief TODO: Describe ReadU32LE.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 inline bool ReadU32LE(ByteView bytes, std::size_t &offset, std::uint32_t &value)
 {
     if (offset > bytes.size || bytes.size - offset < 4u)
@@ -36,6 +67,14 @@ inline bool ReadU32LE(ByteView bytes, std::size_t &offset, std::uint32_t &value)
     return true;
 }
 
+/**
+ * @brief TODO: Describe ReadU64LE.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 inline bool ReadU64LE(ByteView bytes, std::size_t &offset, std::uint64_t &value)
 {
     if (offset > bytes.size || bytes.size - offset < 8u)
@@ -51,6 +90,14 @@ inline bool ReadU64LE(ByteView bytes, std::size_t &offset, std::uint64_t &value)
     return true;
 }
 
+/**
+ * @brief TODO: Describe ReadI32LE.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 inline bool ReadI32LE(ByteView bytes, std::size_t &offset, std::int32_t &value)
 {
     std::uint32_t bits = 0;
@@ -62,6 +109,14 @@ inline bool ReadI32LE(ByteView bytes, std::size_t &offset, std::int32_t &value)
     return true;
 }
 
+/**
+ * @brief TODO: Describe ReadF32LE.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 inline bool ReadF32LE(ByteView bytes, std::size_t &offset, float &value)
 {
     std::uint32_t bits = 0;

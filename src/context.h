@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/context.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #ifndef CENGINE_CONTEXT_H
 #define CENGINE_CONTEXT_H
 
@@ -22,6 +37,9 @@ class PhysicsSystem;
 namespace CEngine
 {
 
+/**
+ * @brief TODO: Describe Context.
+ */
 struct Context
 {
     Assets::AssetStore *assets = nullptr;

@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/vulkan/vulkan_render_backend.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "vulkan_render_backend.h"
 
 #ifdef CENGINE_ENABLE_VULKAN
@@ -18,6 +33,13 @@ constexpr int kMaxFramesInFlight = 2;
 
 const std::vector<const char *> kDeviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
+/**
+ * @brief TODO: Describe VkSucceeded.
+ *
+ * @param result TODO: Describe this parameter.
+ * @param message TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool VkSucceeded(VkResult result, const char *message)
 {
     if (result != VK_SUCCESS)
@@ -29,6 +51,14 @@ bool VkSucceeded(VkResult result, const char *message)
 }
 } // namespace
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::Initialize.
+ *
+ * @param window TODO: Describe this parameter.
+ * @param window_width TODO: Describe this parameter.
+ * @param window_height TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::Initialize(RenderSystem &, GLFWwindow *window, int window_width, int window_height)
 {
     if (window == nullptr)
@@ -49,6 +79,9 @@ bool VulkanRenderBackend::Initialize(RenderSystem &, GLFWwindow *window, int win
     return true;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::Shutdown.
+ */
 void VulkanRenderBackend::Shutdown()
 {
     if (device != VK_NULL_HANDLE)
@@ -108,6 +141,13 @@ void VulkanRenderBackend::Shutdown()
     initialized = false;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::Resize.
+ *
+ * @param window_width TODO: Describe this parameter.
+ * @param window_height TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::Resize(int window_width, int window_height)
 {
     if (!initialized || window_width <= 0 || window_height <= 0)
@@ -138,6 +178,9 @@ bool VulkanRenderBackend::Resize(int window_width, int window_height)
     return true;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::Render.
+ */
 void VulkanRenderBackend::Render()
 {
     if (!initialized)
@@ -209,6 +252,11 @@ void VulkanRenderBackend::Render()
     current_frame = (current_frame + 1) % kMaxFramesInFlight;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::RegisterMeshInstance.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::RegisterMeshInstance(std::uint32_t /*slot*/, const MeshInstance & /*mesh_instance*/,
                                                const Bounds & /*world_bounds*/)
 {
@@ -221,15 +269,26 @@ bool VulkanRenderBackend::RegisterMeshInstance(std::uint32_t /*slot*/, const Mes
     return true;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::RemoveMeshInstance.
+ */
 void VulkanRenderBackend::RemoveMeshInstance(std::uint32_t /*slot*/)
 {
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::UpdateMeshInstance.
+ */
 void VulkanRenderBackend::UpdateMeshInstance(std::uint32_t /*slot*/, const glm::mat4 & /*transform*/,
                                              const Bounds & /*world_bounds*/, std::uint32_t /*flags*/)
 {
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::CreateInstance.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::CreateInstance()
 {
     if (glfwVulkanSupported() != GLFW_TRUE)
@@ -264,12 +323,23 @@ bool VulkanRenderBackend::CreateInstance()
     return VkSucceeded(vkCreateInstance(&create_info, nullptr, &instance), "Failed to create Vulkan instance.");
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::CreateSurface.
+ *
+ * @param window TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::CreateSurface(GLFWwindow *window)
 {
     return VkSucceeded(glfwCreateWindowSurface(instance, window, nullptr, &surface),
                        "Failed to create Vulkan window surface.");
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::PickPhysicalDevice.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::PickPhysicalDevice()
 {
     uint32_t device_count = 0;
@@ -296,6 +366,11 @@ bool VulkanRenderBackend::PickPhysicalDevice()
     return false;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::CreateLogicalDevice.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::CreateLogicalDevice()
 {
     QueueFamilyIndices indices = FindQueueFamilies(physical_device);
@@ -336,6 +411,13 @@ bool VulkanRenderBackend::CreateLogicalDevice()
     return true;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::CreateSwapchain.
+ *
+ * @param window_width TODO: Describe this parameter.
+ * @param window_height TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::CreateSwapchain(int window_width, int window_height)
 {
     SwapChainSupportDetails swapchain_support = QuerySwapChainSupport(physical_device);
@@ -394,6 +476,11 @@ bool VulkanRenderBackend::CreateSwapchain(int window_width, int window_height)
     return true;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::CreateImageViews.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::CreateImageViews()
 {
     swapchain_image_views.resize(swapchain_images.size());
@@ -425,6 +512,11 @@ bool VulkanRenderBackend::CreateImageViews()
     return true;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::CreateRenderPass.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::CreateRenderPass()
 {
     VkAttachmentDescription color_attachment{};
@@ -467,6 +559,11 @@ bool VulkanRenderBackend::CreateRenderPass()
                        "Failed to create Vulkan render pass.");
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::CreateFramebuffers.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::CreateFramebuffers()
 {
     swapchain_framebuffers.resize(swapchain_image_views.size());
@@ -494,6 +591,11 @@ bool VulkanRenderBackend::CreateFramebuffers()
     return true;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::CreateCommandPool.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::CreateCommandPool()
 {
     QueueFamilyIndices queue_family_indices = FindQueueFamilies(physical_device);
@@ -507,6 +609,11 @@ bool VulkanRenderBackend::CreateCommandPool()
                        "Failed to create Vulkan command pool.");
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::CreateCommandBuffers.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::CreateCommandBuffers()
 {
     command_buffers.resize(swapchain_framebuffers.size());
@@ -521,6 +628,11 @@ bool VulkanRenderBackend::CreateCommandBuffers()
                        "Failed to allocate Vulkan command buffers.");
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::CreateSyncObjects.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::CreateSyncObjects()
 {
     image_available_semaphores.resize(kMaxFramesInFlight);
@@ -550,6 +662,9 @@ bool VulkanRenderBackend::CreateSyncObjects()
     return true;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::DestroySwapchainResources.
+ */
 void VulkanRenderBackend::DestroySwapchainResources()
 {
     for (VkFramebuffer framebuffer : swapchain_framebuffers)
@@ -578,6 +693,12 @@ void VulkanRenderBackend::DestroySwapchainResources()
     }
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::IsDeviceSuitable.
+ *
+ * @param candidate TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::IsDeviceSuitable(VkPhysicalDevice candidate) const
 {
     QueueFamilyIndices indices = FindQueueFamilies(candidate);
@@ -593,6 +714,12 @@ bool VulkanRenderBackend::IsDeviceSuitable(VkPhysicalDevice candidate) const
     return indices.IsComplete() && extensions_supported && swapchain_adequate;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::CheckDeviceExtensionSupport.
+ *
+ * @param candidate TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::CheckDeviceExtensionSupport(VkPhysicalDevice candidate) const
 {
     uint32_t extension_count = 0;
@@ -610,6 +737,12 @@ bool VulkanRenderBackend::CheckDeviceExtensionSupport(VkPhysicalDevice candidate
     return required_extensions.empty();
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::FindQueueFamilies.
+ *
+ * @param candidate TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 VulkanRenderBackend::QueueFamilyIndices VulkanRenderBackend::FindQueueFamilies(VkPhysicalDevice candidate) const
 {
     QueueFamilyIndices indices;
@@ -643,6 +776,12 @@ VulkanRenderBackend::QueueFamilyIndices VulkanRenderBackend::FindQueueFamilies(V
     return indices;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::QuerySwapChainSupport.
+ *
+ * @param candidate TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 VulkanRenderBackend::SwapChainSupportDetails VulkanRenderBackend::QuerySwapChainSupport(
     VkPhysicalDevice candidate) const
 {
@@ -669,6 +808,12 @@ VulkanRenderBackend::SwapChainSupportDetails VulkanRenderBackend::QuerySwapChain
     return details;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::ChooseSwapSurfaceFormat.
+ *
+ * @param available_formats TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 VkSurfaceFormatKHR VulkanRenderBackend::ChooseSwapSurfaceFormat(
     const std::vector<VkSurfaceFormatKHR> &available_formats) const
 {
@@ -684,6 +829,12 @@ VkSurfaceFormatKHR VulkanRenderBackend::ChooseSwapSurfaceFormat(
     return available_formats[0];
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::ChooseSwapPresentMode.
+ *
+ * @param available_present_modes TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 VkPresentModeKHR VulkanRenderBackend::ChooseSwapPresentMode(
     const std::vector<VkPresentModeKHR> &available_present_modes) const
 {
@@ -698,6 +849,14 @@ VkPresentModeKHR VulkanRenderBackend::ChooseSwapPresentMode(
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::ChooseSwapExtent.
+ *
+ * @param capabilities TODO: Describe this parameter.
+ * @param window_width TODO: Describe this parameter.
+ * @param window_height TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 VkExtent2D VulkanRenderBackend::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities, int window_width,
                                                  int window_height) const
 {
@@ -716,6 +875,13 @@ VkExtent2D VulkanRenderBackend::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR 
     return actual_extent;
 }
 
+/**
+ * @brief TODO: Describe VulkanRenderBackend::RecordCommandBuffer.
+ *
+ * @param command_buffer TODO: Describe this parameter.
+ * @param image_index TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool VulkanRenderBackend::RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_t image_index)
 {
     VkCommandBufferBeginInfo begin_info{};

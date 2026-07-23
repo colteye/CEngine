@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import sys
@@ -13,8 +28,21 @@ from ceassetlib.game_schema import GameSchema, SchemaEntity
 
 
 class FakeObject:
+    """TODO: Describe `FakeObject`."""
+
     def __init__(self, name: str, obj_type: str, matrix=None, data=None,
                  materials=(), instance_collection=None, props=None) -> None:
+        """TODO: Describe `__init__`.
+
+        Args:
+            name: TODO: Describe this parameter.
+            obj_type: TODO: Describe this parameter.
+            matrix: TODO: Describe this parameter.
+            data: TODO: Describe this parameter.
+            materials: TODO: Describe this parameter.
+            instance_collection: TODO: Describe this parameter.
+            props: TODO: Describe this parameter.
+        """
         self.name = name
         self.type = obj_type
         self.matrix_world = matrix
@@ -24,11 +52,23 @@ class FakeObject:
         self.props = props or {}
 
     def get(self, key: str, default=None):
+        """TODO: Describe `get`.
+
+        Args:
+            key: TODO: Describe this parameter.
+            default: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         return self.props.get(key, default)
 
 
 class BlenderSceneTests(unittest.TestCase):
+    """TODO: Describe `BlenderSceneTests`."""
+
     def test_world_matrix_is_flattened_and_converted_to_engine_space(self) -> None:
+        """TODO: Describe `test_world_matrix_is_flattened_and_converted_to_engine_space`."""
         obj = FakeObject("Placed", "EMPTY", [
             [1.0, 0.0, 0.0, 2.0],
             [0.0, 1.0, 0.0, 3.0],
@@ -43,6 +83,7 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertAlmostEqual(transform.rotation[3], 1.0)
 
     def test_objects_become_fixed_entities_with_external_asset_references(self) -> None:
+        """TODO: Describe `test_objects_become_fixed_entities_with_external_asset_references`."""
         material = types.SimpleNamespace(name="Brick")
         objects = [
             FakeObject("Mesh", "MESH", materials=(material,)),
@@ -72,6 +113,7 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertTrue(light.values["casts_shadows"])
 
     def test_static_mesh_receives_external_lightmap_atlas_binding(self) -> None:
+        """TODO: Describe `test_static_mesh_receives_external_lightmap_atlas_binding`."""
         obj = FakeObject("Floor", "MESH")
         scene = scene_description(
             (obj,),
@@ -91,6 +133,7 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertEqual(prop.values["lightmap_rgbm_range"], 12.0)
 
     def test_scene_occluder_becomes_shadow_only_prop_without_lightmap(self) -> None:
+        """TODO: Describe `test_scene_occluder_becomes_shadow_only_prop_without_lightmap`."""
         obj = FakeObject("OCC_SunBlocker", "MESH", props={"ce_role": "occluder"})
         scene = scene_description(
             (obj,),
@@ -105,10 +148,12 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertIsNone(prop.values["lightmap"])
 
     def test_missing_generated_mesh_fails_with_object_name(self) -> None:
+        """TODO: Describe `test_missing_generated_mesh_fails_with_object_name`."""
         with self.assertRaisesRegex(ValueError, "Missing"):
             scene_description((FakeObject("Missing", "MESH"),), {}, {}, lambda path: path.as_posix())
 
     def test_explicit_gameplay_classnames_select_fixed_entity_types(self) -> None:
+        """TODO: Describe `test_explicit_gameplay_classnames_select_fixed_entity_types`."""
         objects = (
             FakeObject("Mover", "MESH", props={
                 "ce_classname": "prop",
@@ -129,6 +174,7 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertEqual(prop.values["collision"].path, "Mover.cphys")
 
     def test_constraints_resolve_physics_props_and_export_last(self) -> None:
+        """TODO: Describe `test_constraints_resolve_physics_props_and_export_last`."""
         objects = (
             FakeObject("Joint", "EMPTY", props={
                 "ce_classname": "physics_constraint",
@@ -168,6 +214,7 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertEqual(constraint.values["type"], 2)
 
     def test_constraint_rejects_non_physics_reference(self) -> None:
+        """TODO: Describe `test_constraint_rejects_non_physics_reference`."""
         objects = (
             FakeObject("Body", "MESH"),
             FakeObject("Joint", "EMPTY", props={
@@ -184,6 +231,7 @@ class BlenderSceneTests(unittest.TestCase):
                 lambda path: path.as_posix())
 
     def test_player_uses_native_blender_camera_settings(self) -> None:
+        """TODO: Describe `test_player_uses_native_blender_camera_settings`."""
         camera = types.SimpleNamespace(
             angle_y=1.2, clip_start=0.25, clip_end=750.0)
         obj = FakeObject(
@@ -199,6 +247,7 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertEqual(player.values["far_clip"], 750.0)
 
     def test_custom_entity_asset_fields_use_the_packaged_schema(self) -> None:
+        """TODO: Describe `test_custom_entity_asset_fields_use_the_packaged_schema`."""
         game = GameSchema(
             Path("game.json"),
             {"id": "test"},
@@ -232,6 +281,7 @@ class BlenderSceneTests(unittest.TestCase):
             pickup.values["model"].path, "compiled/Pickup.cmesh")
 
     def test_environment_entities_export_authored_settings(self) -> None:
+        """TODO: Describe `test_environment_entities_export_authored_settings`."""
         objects = (
             FakeObject("Sky", "EMPTY", props={
                 "ce_classname": "skybox", "ce_intensity": 1.5, "ce_rotation_radians": 0.25}),

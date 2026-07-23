@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/physics/jolt/jolt_physics_backend.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "physics/jolt/jolt_physics_backend.h"
 
 #include <Jolt/Jolt.h>
@@ -58,11 +73,23 @@ constexpr std::uint8_t Count = 32;
 constexpr JPH::ObjectLayer MovingBit = Count;
 constexpr JPH::ObjectLayer NumLayers = Count * 2;
 
+/**
+ * @brief TODO: Describe CollisionLayer.
+ *
+ * @param layer TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::uint8_t CollisionLayer(JPH::ObjectLayer layer)
 {
     return static_cast<std::uint8_t>(layer & (Count - 1));
 }
 
+/**
+ * @brief TODO: Describe IsMoving.
+ *
+ * @param layer TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool IsMoving(JPH::ObjectLayer layer)
 {
     return (layer & MovingBit) != 0;
@@ -71,41 +98,93 @@ bool IsMoving(JPH::ObjectLayer layer)
 
 namespace BroadPhaseLayers
 {
+/**
+ * @brief TODO: Describe NonMoving.
+ *
+ * @return TODO: Describe the return value.
+ */
 const JPH::BroadPhaseLayer NonMoving(0);
+/**
+ * @brief TODO: Describe Moving.
+ *
+ * @return TODO: Describe the return value.
+ */
 const JPH::BroadPhaseLayer Moving(1);
 constexpr JPH::uint NumLayers = 2;
 } // namespace BroadPhaseLayers
 
+/**
+ * @brief TODO: Describe ToJoltVec3.
+ *
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 JPH::Vec3 ToJoltVec3(const glm::vec3 &value)
 {
     return {value.x, value.y, value.z};
 }
 
+/**
+ * @brief TODO: Describe ToJoltRVec3.
+ *
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 JPH::RVec3 ToJoltRVec3(const glm::vec3 &value)
 {
     return {value.x, value.y, value.z};
 }
 
+/**
+ * @brief TODO: Describe ToJoltQuat.
+ *
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 JPH::Quat ToJoltQuat(const glm::quat &value)
 {
     return {value.x, value.y, value.z, value.w};
 }
 
+/**
+ * @brief TODO: Describe ToGlmRVec3.
+ *
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 glm::vec3 ToGlmRVec3(const JPH::RVec3 &value)
 {
     return {value.GetX(), value.GetY(), value.GetZ()};
 }
 
+/**
+ * @brief TODO: Describe ToGlmVec3.
+ *
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 glm::vec3 ToGlmVec3(const JPH::Vec3 &value)
 {
     return {value.GetX(), value.GetY(), value.GetZ()};
 }
 
+/**
+ * @brief TODO: Describe ToGlmQuat.
+ *
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 glm::quat ToGlmQuat(const JPH::Quat &value)
 {
     return {value.GetW(), value.GetX(), value.GetY(), value.GetZ()};
 }
 
+/**
+ * @brief TODO: Describe ToJoltMotionType.
+ *
+ * @param motion_type TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 JPH::EMotionType ToJoltMotionType(PhysicsMotionType motion_type)
 {
     switch (motion_type)
@@ -121,32 +200,70 @@ JPH::EMotionType ToJoltMotionType(PhysicsMotionType motion_type)
     return JPH::EMotionType::Static;
 }
 
+/**
+ * @brief TODO: Describe ToJoltLayer.
+ *
+ * @param motion_type TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 JPH::ObjectLayer ToJoltLayer(PhysicsMotionType motion_type)
 {
     return motion_type == PhysicsMotionType::Static ? 0 : Layers::MovingBit;
 }
 
+/**
+ * @brief TODO: Describe ToJoltLayer.
+ *
+ * @param motion_type TODO: Describe this parameter.
+ * @param collision_layer TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 JPH::ObjectLayer ToJoltLayer(PhysicsMotionType motion_type, std::uint8_t collision_layer)
 {
     return static_cast<JPH::ObjectLayer>(ToJoltLayer(motion_type) | collision_layer);
 }
 
+/**
+ * @brief TODO: Describe Finite.
+ *
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Finite(const glm::vec3 &value)
 {
     return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
 }
 
+/**
+ * @brief TODO: Describe Finite.
+ *
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Finite(const glm::quat &value)
 {
     return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z) && std::isfinite(value.w) &&
            glm::dot(value, value) > 1.0e-12f;
 }
 
+/**
+ * @brief TODO: Describe Positive.
+ *
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Positive(const glm::vec3 &value)
 {
     return Finite(value) && value.x > 0.0f && value.y > 0.0f && value.z > 0.0f;
 }
 
+/**
+ * @brief TODO: Describe ValidateShape.
+ *
+ * @param shape TODO: Describe this parameter.
+ * @param depth TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ValidateShape(const PhysicsShape &shape, std::uint32_t depth = 0)
 {
     if (depth > 8 || !Finite(shape.local_position) || !Finite(shape.local_rotation))
@@ -222,12 +339,24 @@ bool ValidateShape(const PhysicsShape &shape, std::uint32_t depth = 0)
     return false;
 }
 
+/**
+ * @brief TODO: Describe IsMovableShape.
+ *
+ * @param shape TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool IsMovableShape(const PhysicsShape &shape)
 {
     return shape.type != PhysicsShapeType::TriangleMesh && shape.type != PhysicsShapeType::HeightField &&
            shape.type != PhysicsShapeType::Plane;
 }
 
+/**
+ * @brief TODO: Describe ShapeResult.
+ *
+ * @param result TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 JPH::RefConst<JPH::Shape> ShapeResult(const JPH::ShapeSettings::ShapeResult &result)
 {
     if (!result.IsValid())
@@ -241,6 +370,13 @@ JPH::RefConst<JPH::Shape> ShapeResult(const JPH::ShapeSettings::ShapeResult &res
     return result.Get();
 }
 
+/**
+ * @brief TODO: Describe BuildShape.
+ *
+ * @param shape TODO: Describe this parameter.
+ * @param apply_local_transform TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 JPH::RefConst<JPH::Shape> BuildShape(const PhysicsShape &shape, bool apply_local_transform = true)
 {
     JPH::RefConst<JPH::Shape> result;
@@ -355,6 +491,13 @@ JPH::RefConst<JPH::Shape> BuildShape(const PhysicsShape &shape, bool apply_local
     return result;
 }
 
+/**
+ * @brief TODO: Describe BuildCharacterShape.
+ *
+ * @param radius TODO: Describe this parameter.
+ * @param height TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 JPH::RefConst<JPH::Shape> BuildCharacterShape(float radius, float height)
 {
     if (!std::isfinite(radius) || !std::isfinite(height) || radius <= 0.0f || height <= 2.0f * radius)
@@ -369,6 +512,9 @@ JPH::RefConst<JPH::Shape> BuildCharacterShape(float radius, float height)
             .Create());
 }
 
+/**
+ * @brief TODO: Describe RawContact.
+ */
 struct RawContact
 {
     PhysicsContactType type = PhysicsContactType::Begin;
@@ -379,9 +525,19 @@ struct RawContact
     bool sensor = false;
 };
 
+/**
+ * @brief TODO: Describe ContactCollector.
+ */
 class ContactCollector final : public JPH::ContactListener
 {
   public:
+    /**
+     * @brief TODO: Describe Reset.
+     *
+     * @param target TODO: Describe this parameter.
+     * @param capacity TODO: Describe this parameter.
+     * @param dropped TODO: Describe this parameter.
+     */
     void Reset(std::vector<RawContact> *target, std::size_t capacity, std::uint64_t *dropped)
     {
         target_ = target;
@@ -389,18 +545,39 @@ class ContactCollector final : public JPH::ContactListener
         dropped_ = dropped;
     }
 
+    /**
+     * @brief TODO: Describe OnContactAdded.
+     *
+     * @param first TODO: Describe this parameter.
+     * @param second TODO: Describe this parameter.
+     * @param manifold TODO: Describe this parameter.
+     * @param settings TODO: Describe this parameter.
+     */
     void OnContactAdded(const JPH::Body &first, const JPH::Body &second, const JPH::ContactManifold &manifold,
                         JPH::ContactSettings &settings) override
     {
         Add(PhysicsContactType::Begin, first.GetID(), second.GetID(), manifold, settings.mIsSensor);
     }
 
+    /**
+     * @brief TODO: Describe OnContactPersisted.
+     *
+     * @param first TODO: Describe this parameter.
+     * @param second TODO: Describe this parameter.
+     * @param manifold TODO: Describe this parameter.
+     * @param settings TODO: Describe this parameter.
+     */
     void OnContactPersisted(const JPH::Body &first, const JPH::Body &second, const JPH::ContactManifold &manifold,
                             JPH::ContactSettings &settings) override
     {
         Add(PhysicsContactType::Persist, first.GetID(), second.GetID(), manifold, settings.mIsSensor);
     }
 
+    /**
+     * @brief TODO: Describe OnContactRemoved.
+     *
+     * @param pair TODO: Describe this parameter.
+     */
     void OnContactRemoved(const JPH::SubShapeIDPair &pair) override
     {
         RawContact contact;
@@ -411,6 +588,15 @@ class ContactCollector final : public JPH::ContactListener
     }
 
   private:
+    /**
+     * @brief TODO: Describe Add.
+     *
+     * @param type TODO: Describe this parameter.
+     * @param first TODO: Describe this parameter.
+     * @param second TODO: Describe this parameter.
+     * @param manifold TODO: Describe this parameter.
+     * @param sensor TODO: Describe this parameter.
+     */
     void Add(PhysicsContactType type, JPH::BodyID first, JPH::BodyID second, const JPH::ContactManifold &manifold,
              bool sensor)
     {
@@ -427,6 +613,11 @@ class ContactCollector final : public JPH::ContactListener
         Push(contact);
     }
 
+    /**
+     * @brief TODO: Describe Push.
+     *
+     * @param contact TODO: Describe this parameter.
+     */
     void Push(const RawContact &contact)
     {
         if (target_ != nullptr && target_->size() < capacity_)
@@ -444,13 +635,27 @@ class ContactCollector final : public JPH::ContactListener
     std::uint64_t *dropped_ = nullptr;
 };
 
+/**
+ * @brief TODO: Describe QueryLayerFilter.
+ */
 class QueryLayerFilter final : public JPH::ObjectLayerFilter
 {
   public:
+    /**
+     * @brief TODO: Describe QueryLayerFilter.
+     *
+     * @param mask TODO: Describe this parameter.
+     */
     explicit QueryLayerFilter(std::uint32_t mask) : mask_(mask)
     {
     }
 
+    /**
+     * @brief TODO: Describe ShouldCollide.
+     *
+     * @param layer TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] bool ShouldCollide(JPH::ObjectLayer layer) const override
     {
         return (mask_ & (1u << Layers::CollisionLayer(layer))) != 0;
@@ -460,13 +665,27 @@ class QueryLayerFilter final : public JPH::ObjectLayerFilter
     std::uint32_t mask_;
 };
 
+/**
+ * @brief TODO: Describe QueryBodyFilter.
+ */
 class QueryBodyFilter final : public JPH::BodyFilter
 {
   public:
+    /**
+     * @brief TODO: Describe QueryBodyFilter.
+     *
+     * @param ignored TODO: Describe this parameter.
+     */
     explicit QueryBodyFilter(JPH::BodyID ignored) : ignored_(ignored)
     {
     }
 
+    /**
+     * @brief TODO: Describe ShouldCollide.
+     *
+     * @param body TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] bool ShouldCollide(const JPH::BodyID &body) const override
     {
         return body != ignored_;
@@ -477,14 +696,27 @@ class QueryBodyFilter final : public JPH::BodyFilter
 };
 } // namespace
 
+/**
+ * @brief TODO: Describe ObjectLayerPairFilterImpl.
+ */
 class ObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFilter
 {
   public:
+    /**
+     * @brief TODO: Describe ObjectLayerPairFilterImpl.
+     */
     ObjectLayerPairFilterImpl()
     {
         masks.fill(~0u);
     }
 
+    /**
+     * @brief TODO: Describe ShouldCollide.
+     *
+     * @param object1 TODO: Describe this parameter.
+     * @param object2 TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] bool ShouldCollide(JPH::ObjectLayer object1, JPH::ObjectLayer object2) const override
     {
         if (!Layers::IsMoving(object1) && !Layers::IsMoving(object2))
@@ -499,9 +731,15 @@ class ObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFilter
     std::array<std::uint32_t, Layers::Count> masks{};
 };
 
+/**
+ * @brief TODO: Describe BroadPhaseLayerInterfaceImpl.
+ */
 class BroadPhaseLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface
 {
   public:
+    /**
+     * @brief TODO: Describe BroadPhaseLayerInterfaceImpl.
+     */
     BroadPhaseLayerInterfaceImpl()
     {
         for (JPH::ObjectLayer layer = 0; layer < Layers::NumLayers; ++layer)
@@ -511,11 +749,22 @@ class BroadPhaseLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface
         }
     }
 
+    /**
+     * @brief TODO: Describe GetNumBroadPhaseLayers.
+     *
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] JPH::uint GetNumBroadPhaseLayers() const override
     {
         return BroadPhaseLayers::NumLayers;
     }
 
+    /**
+     * @brief TODO: Describe GetBroadPhaseLayer.
+     *
+     * @param layer TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer layer) const override
     {
         if (layer >= Layers::NumLayers)
@@ -527,6 +776,12 @@ class BroadPhaseLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface
     }
 
 #if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
+    /**
+     * @brief TODO: Describe GetBroadPhaseLayerName.
+     *
+     * @param layer TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] const char *GetBroadPhaseLayerName(JPH::BroadPhaseLayer layer) const override
     {
         if (layer == BroadPhaseLayers::NonMoving)
@@ -545,17 +800,33 @@ class BroadPhaseLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface
     JPH::BroadPhaseLayer object_to_broad_phase_[Layers::NumLayers]{};
 };
 
+/**
+ * @brief TODO: Describe ObjectVsBroadPhaseLayerFilterImpl.
+ */
 class ObjectVsBroadPhaseLayerFilterImpl final : public JPH::ObjectVsBroadPhaseLayerFilter
 {
   public:
+    /**
+     * @brief TODO: Describe ShouldCollide.
+     *
+     * @param layer1 TODO: Describe this parameter.
+     * @param layer2 TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] bool ShouldCollide(JPH::ObjectLayer layer1, JPH::BroadPhaseLayer layer2) const override
     {
         return Layers::IsMoving(layer1) || layer2 == BroadPhaseLayers::Moving;
     }
 };
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend.
+ */
 struct JoltPhysicsBackend::Impl
 {
+    /**
+     * @brief TODO: Describe BodySlot.
+     */
     struct BodySlot
     {
         JPH::BodyID body;
@@ -563,6 +834,9 @@ struct JoltPhysicsBackend::Impl
         PhysicsMotionType motion_type = PhysicsMotionType::Static;
     };
 
+    /**
+     * @brief TODO: Describe ConstraintSlot.
+     */
     struct ConstraintSlot
     {
         JPH::Ref<JPH::Constraint> constraint;
@@ -571,6 +845,9 @@ struct JoltPhysicsBackend::Impl
         std::uint32_t generation = 1;
     };
 
+    /**
+     * @brief TODO: Describe CharacterSlot.
+     */
     struct CharacterSlot
     {
         JPH::Ref<JPH::CharacterVirtual> character;
@@ -582,6 +859,12 @@ struct JoltPhysicsBackend::Impl
         std::uint32_t generation = 1;
     };
 
+    /**
+     * @brief TODO: Describe GetBodyID.
+     *
+     * @param handle TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] JPH::BodyID GetBodyID(PhysicsBodyHandle handle) const
     {
         const std::uint32_t index = handle.Index();
@@ -593,12 +876,24 @@ struct JoltPhysicsBackend::Impl
         return bodies[index].body;
     }
 
+    /**
+     * @brief TODO: Describe GetBodyHandle.
+     *
+     * @param body TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] PhysicsBodyHandle GetBodyHandle(JPH::BodyID body) const
     {
         const auto found = body_handles.find(body.GetIndexAndSequenceNumber());
         return found != body_handles.end() ? found->second : PhysicsBodyHandle{};
     }
 
+    /**
+     * @brief TODO: Describe GetConstraint.
+     *
+     * @param handle TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] JPH::Constraint *GetConstraint(PhysicsConstraintHandle handle) const
     {
         const std::uint32_t index = handle.Index();
@@ -607,6 +902,12 @@ struct JoltPhysicsBackend::Impl
                    : nullptr;
     }
 
+    /**
+     * @brief TODO: Describe GetCharacter.
+     *
+     * @param handle TODO: Describe this parameter.
+     * @return TODO: Describe the return value.
+     */
     [[nodiscard]] JPH::CharacterVirtual *GetCharacter(PhysicsCharacterHandle handle) const
     {
         const std::uint32_t index = handle.Index();
@@ -639,16 +940,36 @@ struct JoltPhysicsBackend::Impl
     bool owns_jolt_runtime = false;
 };
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::JoltPhysicsBackend.
+ */
 JoltPhysicsBackend::JoltPhysicsBackend() = default;
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::~JoltPhysicsBackend.
+ */
 JoltPhysicsBackend::~JoltPhysicsBackend()
 {
     Shutdown();
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::JoltPhysicsBackend.
+ */
 JoltPhysicsBackend::JoltPhysicsBackend(JoltPhysicsBackend &&) noexcept = default;
+/**
+ * @brief TODO: Describe operator=.
+ *
+ * @return TODO: Describe the return value.
+ */
 JoltPhysicsBackend &JoltPhysicsBackend::operator=(JoltPhysicsBackend &&) noexcept = default;
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::Initialize.
+ *
+ * @param desc TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::Initialize(const PhysicsSystemDesc &desc)
 {
     Shutdown();
@@ -683,6 +1004,9 @@ bool JoltPhysicsBackend::Initialize(const PhysicsSystemDesc &desc)
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::Shutdown.
+ */
 void JoltPhysicsBackend::Shutdown()
 {
     if (impl_ == nullptr)
@@ -745,6 +1069,11 @@ void JoltPhysicsBackend::Shutdown()
     impl_.reset();
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::Step.
+ *
+ * @param fixed_delta_time TODO: Describe this parameter.
+ */
 void JoltPhysicsBackend::Step(float fixed_delta_time)
 {
     if (impl_ == nullptr || !impl_->initialized || impl_->physics_system == nullptr ||
@@ -756,6 +1085,13 @@ void JoltPhysicsBackend::Step(float fixed_delta_time)
     impl_->physics_system->Update(fixed_delta_time, 1, impl_->temp_allocator.get(), impl_->job_system.get());
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::CreateBody.
+ *
+ * @param desc TODO: Describe this parameter.
+ * @param source_shape TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 PhysicsBodyHandle JoltPhysicsBackend::CreateBody(const PhysicsBodyDesc &desc, const PhysicsShape &source_shape)
 {
     if (impl_ == nullptr || !impl_->initialized || impl_->physics_system == nullptr)
@@ -838,6 +1174,11 @@ PhysicsBodyHandle JoltPhysicsBackend::CreateBody(const PhysicsBodyDesc &desc, co
     return handle;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::DestroyBody.
+ *
+ * @param body TODO: Describe this parameter.
+ */
 void JoltPhysicsBackend::DestroyBody(PhysicsBodyHandle body)
 {
     if (impl_ == nullptr || !impl_->initialized || impl_->physics_system == nullptr)
@@ -877,11 +1218,24 @@ void JoltPhysicsBackend::DestroyBody(PhysicsBodyHandle body)
     --impl_->body_count;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::IsValid.
+ *
+ * @param body TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::IsValid(PhysicsBodyHandle body) const
 {
     return impl_ != nullptr && impl_->initialized && !impl_->GetBodyID(body).IsInvalid();
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::GetBodyState.
+ *
+ * @param body TODO: Describe this parameter.
+ * @param state TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::GetBodyState(PhysicsBodyHandle body, PhysicsBodyState &state) const
 {
     state = {};
@@ -908,6 +1262,15 @@ bool JoltPhysicsBackend::GetBodyState(PhysicsBodyHandle body, PhysicsBodyState &
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::SetBodyTransform.
+ *
+ * @param body TODO: Describe this parameter.
+ * @param position TODO: Describe this parameter.
+ * @param rotation TODO: Describe this parameter.
+ * @param activate TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::SetBodyTransform(PhysicsBodyHandle body, const glm::vec3 &position, const glm::quat &rotation,
                                           bool activate)
 {
@@ -921,6 +1284,15 @@ bool JoltPhysicsBackend::SetBodyTransform(PhysicsBodyHandle body, const glm::vec
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::MoveKinematic.
+ *
+ * @param body TODO: Describe this parameter.
+ * @param position TODO: Describe this parameter.
+ * @param rotation TODO: Describe this parameter.
+ * @param fixed_delta_time TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::MoveKinematic(PhysicsBodyHandle body, const glm::vec3 &position, const glm::quat &rotation,
                                        float fixed_delta_time)
 {
@@ -934,6 +1306,14 @@ bool JoltPhysicsBackend::MoveKinematic(PhysicsBodyHandle body, const glm::vec3 &
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::SetVelocity.
+ *
+ * @param body TODO: Describe this parameter.
+ * @param linear TODO: Describe this parameter.
+ * @param angular TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::SetVelocity(PhysicsBodyHandle body, const glm::vec3 &linear, const glm::vec3 &angular)
 {
     if (!Finite(linear) || !Finite(angular) || !IsValid(body))
@@ -945,6 +1325,13 @@ bool JoltPhysicsBackend::SetVelocity(PhysicsBodyHandle body, const glm::vec3 &li
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::AddForce.
+ *
+ * @param body TODO: Describe this parameter.
+ * @param force TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::AddForce(PhysicsBodyHandle body, const glm::vec3 &force)
 {
     if (!Finite(force) || !IsValid(body))
@@ -955,6 +1342,14 @@ bool JoltPhysicsBackend::AddForce(PhysicsBodyHandle body, const glm::vec3 &force
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::AddForceAt.
+ *
+ * @param body TODO: Describe this parameter.
+ * @param force TODO: Describe this parameter.
+ * @param world_position TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::AddForceAt(PhysicsBodyHandle body, const glm::vec3 &force, const glm::vec3 &world_position)
 {
     if (!Finite(force) || !Finite(world_position) || !IsValid(body))
@@ -966,6 +1361,13 @@ bool JoltPhysicsBackend::AddForceAt(PhysicsBodyHandle body, const glm::vec3 &for
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::AddTorque.
+ *
+ * @param body TODO: Describe this parameter.
+ * @param torque TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::AddTorque(PhysicsBodyHandle body, const glm::vec3 &torque)
 {
     if (!Finite(torque) || !IsValid(body))
@@ -976,6 +1378,13 @@ bool JoltPhysicsBackend::AddTorque(PhysicsBodyHandle body, const glm::vec3 &torq
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::AddImpulse.
+ *
+ * @param body TODO: Describe this parameter.
+ * @param impulse TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::AddImpulse(PhysicsBodyHandle body, const glm::vec3 &impulse)
 {
     if (!Finite(impulse) || !IsValid(body))
@@ -986,6 +1395,14 @@ bool JoltPhysicsBackend::AddImpulse(PhysicsBodyHandle body, const glm::vec3 &imp
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::AddImpulseAt.
+ *
+ * @param body TODO: Describe this parameter.
+ * @param impulse TODO: Describe this parameter.
+ * @param world_position TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::AddImpulseAt(PhysicsBodyHandle body, const glm::vec3 &impulse, const glm::vec3 &world_position)
 {
     if (!Finite(impulse) || !Finite(world_position) || !IsValid(body))
@@ -997,6 +1414,13 @@ bool JoltPhysicsBackend::AddImpulseAt(PhysicsBodyHandle body, const glm::vec3 &i
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::SetGravityFactor.
+ *
+ * @param body TODO: Describe this parameter.
+ * @param factor TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::SetGravityFactor(PhysicsBodyHandle body, float factor)
 {
     if (!std::isfinite(factor) || !IsValid(body))
@@ -1007,6 +1431,13 @@ bool JoltPhysicsBackend::SetGravityFactor(PhysicsBodyHandle body, float factor)
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::SetSensor.
+ *
+ * @param body TODO: Describe this parameter.
+ * @param sensor TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::SetSensor(PhysicsBodyHandle body, bool sensor)
 {
     if (!IsValid(body))
@@ -1017,6 +1448,12 @@ bool JoltPhysicsBackend::SetSensor(PhysicsBodyHandle body, bool sensor)
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::Activate.
+ *
+ * @param body TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::Activate(PhysicsBodyHandle body)
 {
     if (!IsValid(body))
@@ -1027,6 +1464,14 @@ bool JoltPhysicsBackend::Activate(PhysicsBodyHandle body)
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::SetLayerCollision.
+ *
+ * @param first TODO: Describe this parameter.
+ * @param second TODO: Describe this parameter.
+ * @param enabled TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::SetLayerCollision(std::uint8_t first, std::uint8_t second, bool enabled)
 {
     if (impl_ == nullptr || !impl_->initialized || first >= Layers::Count || second >= Layers::Count)
@@ -1048,6 +1493,16 @@ bool JoltPhysicsBackend::SetLayerCollision(std::uint8_t first, std::uint8_t seco
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::RayCast.
+ *
+ * @param origin TODO: Describe this parameter.
+ * @param displacement TODO: Describe this parameter.
+ * @param hit TODO: Describe this parameter.
+ * @param layer_mask TODO: Describe this parameter.
+ * @param ignore TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::RayCast(const glm::vec3 &origin, const glm::vec3 &displacement, PhysicsQueryHit &hit,
                                  std::uint32_t layer_mask, PhysicsBodyHandle ignore) const
 {
@@ -1082,6 +1537,17 @@ bool JoltPhysicsBackend::RayCast(const glm::vec3 &origin, const glm::vec3 &displ
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::RayCastAll.
+ *
+ * @param origin TODO: Describe this parameter.
+ * @param displacement TODO: Describe this parameter.
+ * @param hits TODO: Describe this parameter.
+ * @param capacity TODO: Describe this parameter.
+ * @param layer_mask TODO: Describe this parameter.
+ * @param ignore TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::size_t JoltPhysicsBackend::RayCastAll(const glm::vec3 &origin, const glm::vec3 &displacement,
                                            PhysicsQueryHit *hits, std::size_t capacity, std::uint32_t layer_mask,
                                            PhysicsBodyHandle ignore) const
@@ -1117,6 +1583,18 @@ std::size_t JoltPhysicsBackend::RayCastAll(const glm::vec3 &origin, const glm::v
     return count;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::ShapeCast.
+ *
+ * @param source_shape TODO: Describe this parameter.
+ * @param position TODO: Describe this parameter.
+ * @param rotation TODO: Describe this parameter.
+ * @param displacement TODO: Describe this parameter.
+ * @param hit TODO: Describe this parameter.
+ * @param layer_mask TODO: Describe this parameter.
+ * @param ignore TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::ShapeCast(const PhysicsShape &source_shape, const glm::vec3 &position,
                                    const glm::quat &rotation, const glm::vec3 &displacement, PhysicsQueryHit &hit,
                                    std::uint32_t layer_mask, PhysicsBodyHandle ignore) const
@@ -1160,6 +1638,18 @@ bool JoltPhysicsBackend::ShapeCast(const PhysicsShape &source_shape, const glm::
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::Overlap.
+ *
+ * @param source_shape TODO: Describe this parameter.
+ * @param position TODO: Describe this parameter.
+ * @param rotation TODO: Describe this parameter.
+ * @param bodies TODO: Describe this parameter.
+ * @param capacity TODO: Describe this parameter.
+ * @param layer_mask TODO: Describe this parameter.
+ * @param ignore TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::size_t JoltPhysicsBackend::Overlap(const PhysicsShape &source_shape, const glm::vec3 &position,
                                         const glm::quat &rotation, PhysicsBodyHandle *bodies, std::size_t capacity,
                                         std::uint32_t layer_mask, PhysicsBodyHandle ignore) const
@@ -1202,6 +1692,13 @@ std::size_t JoltPhysicsBackend::Overlap(const PhysicsShape &source_shape, const 
     return count;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::DrainContactEvents.
+ *
+ * @param events TODO: Describe this parameter.
+ * @param capacity TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 std::size_t JoltPhysicsBackend::DrainContactEvents(PhysicsContactEvent *events, std::size_t capacity)
 {
     if (events == nullptr || capacity == 0 || impl_ == nullptr)
@@ -1238,16 +1735,32 @@ std::size_t JoltPhysicsBackend::DrainContactEvents(PhysicsContactEvent *events, 
     return count;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::PendingContactEventCount.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::size_t JoltPhysicsBackend::PendingContactEventCount() const
 {
     return impl_ != nullptr ? impl_->contact_events.size() : 0;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::DroppedContactEventCount.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::uint64_t JoltPhysicsBackend::DroppedContactEventCount() const
 {
     return impl_ != nullptr ? impl_->dropped_contact_events : 0;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::CreateConstraint.
+ *
+ * @param desc TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 PhysicsConstraintHandle JoltPhysicsBackend::CreateConstraint(const PhysicsConstraintDesc &desc)
 {
     if (impl_ == nullptr || !impl_->initialized || !IsValid(desc.first) || !IsValid(desc.second) ||
@@ -1412,6 +1925,11 @@ PhysicsConstraintHandle JoltPhysicsBackend::CreateConstraint(const PhysicsConstr
     return handle;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::DestroyConstraint.
+ *
+ * @param constraint TODO: Describe this parameter.
+ */
 void JoltPhysicsBackend::DestroyConstraint(PhysicsConstraintHandle constraint)
 {
     if (impl_ == nullptr || !impl_->initialized)
@@ -1438,6 +1956,13 @@ void JoltPhysicsBackend::DestroyConstraint(PhysicsConstraintHandle constraint)
     --impl_->constraint_count;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::SetConstraintEnabled.
+ *
+ * @param constraint TODO: Describe this parameter.
+ * @param enabled TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::SetConstraintEnabled(PhysicsConstraintHandle constraint, bool enabled)
 {
     JPH::Constraint *value = impl_ != nullptr ? impl_->GetConstraint(constraint) : nullptr;
@@ -1449,6 +1974,17 @@ bool JoltPhysicsBackend::SetConstraintEnabled(PhysicsConstraintHandle constraint
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::SetConstraintMotor.
+ *
+ * @param constraint TODO: Describe this parameter.
+ * @param mode TODO: Describe this parameter.
+ * @param target TODO: Describe this parameter.
+ * @param force_limit TODO: Describe this parameter.
+ * @param frequency TODO: Describe this parameter.
+ * @param damping TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::SetConstraintMotor(PhysicsConstraintHandle constraint, PhysicsMotorMode mode, float target,
                                             float force_limit, float frequency, float damping)
 {
@@ -1499,16 +2035,33 @@ bool JoltPhysicsBackend::SetConstraintMotor(PhysicsConstraintHandle constraint, 
     }
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::IsValid.
+ *
+ * @param constraint TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::IsValid(PhysicsConstraintHandle constraint) const
 {
     return impl_ != nullptr && impl_->GetConstraint(constraint) != nullptr;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::ConstraintCount.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::size_t JoltPhysicsBackend::ConstraintCount() const
 {
     return impl_ != nullptr ? impl_->constraint_count : 0;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::CreateCharacter.
+ *
+ * @param desc TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 PhysicsCharacterHandle JoltPhysicsBackend::CreateCharacter(const PhysicsCharacterDesc &desc)
 {
     if (impl_ == nullptr || !impl_->initialized || !Finite(desc.position) || !std::isfinite(desc.mass) ||
@@ -1566,6 +2119,11 @@ PhysicsCharacterHandle JoltPhysicsBackend::CreateCharacter(const PhysicsCharacte
     return handle;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::DestroyCharacter.
+ *
+ * @param character TODO: Describe this parameter.
+ */
 void JoltPhysicsBackend::DestroyCharacter(PhysicsCharacterHandle character)
 {
     if (impl_ == nullptr || !impl_->initialized || impl_->GetCharacter(character) == nullptr)
@@ -1584,11 +2142,24 @@ void JoltPhysicsBackend::DestroyCharacter(PhysicsCharacterHandle character)
     --impl_->character_count;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::IsValid.
+ *
+ * @param character TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::IsValid(PhysicsCharacterHandle character) const
 {
     return impl_ != nullptr && impl_->GetCharacter(character) != nullptr;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::SetCharacterVelocity.
+ *
+ * @param character TODO: Describe this parameter.
+ * @param velocity TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::SetCharacterVelocity(PhysicsCharacterHandle character, const glm::vec3 &velocity)
 {
     JPH::CharacterVirtual *value = impl_ != nullptr ? impl_->GetCharacter(character) : nullptr;
@@ -1600,6 +2171,13 @@ bool JoltPhysicsBackend::SetCharacterVelocity(PhysicsCharacterHandle character, 
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::UpdateCharacter.
+ *
+ * @param character TODO: Describe this parameter.
+ * @param fixed_delta_time TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::UpdateCharacter(PhysicsCharacterHandle character, float fixed_delta_time)
 {
     JPH::CharacterVirtual *value = impl_ != nullptr ? impl_->GetCharacter(character) : nullptr;
@@ -1620,6 +2198,13 @@ bool JoltPhysicsBackend::UpdateCharacter(PhysicsCharacterHandle character, float
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::SetCharacterHeight.
+ *
+ * @param character TODO: Describe this parameter.
+ * @param height TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::SetCharacterHeight(PhysicsCharacterHandle character, float height)
 {
     JPH::CharacterVirtual *value = impl_ != nullptr ? impl_->GetCharacter(character) : nullptr;
@@ -1643,6 +2228,13 @@ bool JoltPhysicsBackend::SetCharacterHeight(PhysicsCharacterHandle character, fl
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::GetCharacterState.
+ *
+ * @param character TODO: Describe this parameter.
+ * @param state TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool JoltPhysicsBackend::GetCharacterState(PhysicsCharacterHandle character, PhysicsCharacterState &state) const
 {
     state = {};
@@ -1661,11 +2253,21 @@ bool JoltPhysicsBackend::GetCharacterState(PhysicsCharacterHandle character, Phy
     return true;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::CharacterCount.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::size_t JoltPhysicsBackend::CharacterCount() const
 {
     return impl_ != nullptr ? impl_->character_count : 0;
 }
 
+/**
+ * @brief TODO: Describe JoltPhysicsBackend::BodyCount.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::size_t JoltPhysicsBackend::BodyCount() const
 {
     return impl_ != nullptr ? impl_->body_count : 0;

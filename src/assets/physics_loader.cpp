@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/assets/physics_loader.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/physics_loader.h"
 
 #include "assets/asset_error.h"
@@ -26,6 +41,9 @@ constexpr std::uint32_t MaxIndices = 12u * 1024u * 1024u;
 constexpr std::uint32_t MaxHeights = 4u * 1024u * 1024u;
 
 #pragma pack(push, 1)
+/**
+ * @brief TODO: Describe DiskPhysicsHeader.
+ */
 struct DiskPhysicsHeader
 {
     std::array<char, 4> magic = PhysicsMagic;
@@ -43,6 +61,9 @@ struct DiskPhysicsHeader
     std::uint64_t height_offset = 0;
 };
 
+/**
+ * @brief TODO: Describe DiskPhysicsShape.
+ */
 struct DiskPhysicsShape
 {
     std::uint32_t type = 0;
@@ -69,6 +90,15 @@ struct DiskPhysicsShape
 static_assert(sizeof(DiskPhysicsHeader) == 64);
 static_assert(sizeof(DiskPhysicsShape) == 116);
 
+/**
+ * @brief TODO: Describe RangeFits.
+ *
+ * @param offset TODO: Describe this parameter.
+ * @param count TODO: Describe this parameter.
+ * @param stride TODO: Describe this parameter.
+ * @param size TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool RangeFits(std::uint64_t offset, std::uint64_t count, std::uint64_t stride, std::size_t size)
 {
     if (count != 0 && stride > std::numeric_limits<std::uint64_t>::max() / count)
@@ -79,6 +109,13 @@ bool RangeFits(std::uint64_t offset, std::uint64_t count, std::uint64_t stride, 
     return offset <= size && bytes <= static_cast<std::uint64_t>(size) - offset;
 }
 
+/**
+ * @brief TODO: Describe ReadHeader.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadHeader(ByteView bytes, DiskPhysicsHeader &value)
 {
     if (bytes.size < sizeof(value))
@@ -96,6 +133,14 @@ bool ReadHeader(ByteView bytes, DiskPhysicsHeader &value)
            ReadU64LE(bytes, offset, value.index_offset) && ReadU64LE(bytes, offset, value.height_offset);
 }
 
+/**
+ * @brief TODO: Describe ReadShape.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadShape(ByteView bytes, std::size_t offset, DiskPhysicsShape &value)
 {
     if (!ReadU32LE(bytes, offset, value.type) || !ReadU32LE(bytes, offset, value.parent) ||
@@ -149,16 +194,37 @@ bool ReadShape(ByteView bytes, std::size_t offset, DiskPhysicsShape &value)
     return true;
 }
 
+/**
+ * @brief TODO: Describe SpanFits.
+ *
+ * @param first TODO: Describe this parameter.
+ * @param count TODO: Describe this parameter.
+ * @param total TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool SpanFits(std::uint32_t first, std::uint32_t count, std::uint32_t total)
 {
     return first <= total && count <= total - first;
 }
 
+/**
+ * @brief TODO: Describe Finite.
+ *
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool Finite(const glm::vec3 &value)
 {
     return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
 }
 
+/**
+ * @brief TODO: Describe DecodeShapeType.
+ *
+ * @param value TODO: Describe this parameter.
+ * @param type TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool DecodeShapeType(std::uint32_t value, PhysicsShapeType &type)
 {
     if (value > static_cast<std::uint32_t>(PhysicsShapeType::Plane))
@@ -169,6 +235,13 @@ bool DecodeShapeType(std::uint32_t value, PhysicsShapeType &type)
     return true;
 }
 
+/**
+ * @brief TODO: Describe ValidShape.
+ *
+ * @param shape TODO: Describe this parameter.
+ * @param depth TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ValidShape(const PhysicsShape &shape, std::uint32_t depth = 0)
 {
     if (depth > 8 || !Finite(shape.local_position) || !std::isfinite(shape.local_rotation.x) ||
@@ -218,6 +291,13 @@ bool ValidShape(const PhysicsShape &shape, std::uint32_t depth = 0)
 
 } // namespace
 
+/**
+ * @brief TODO: Describe LoadPhysicsAsset.
+ *
+ * @param path TODO: Describe this parameter.
+ * @param shape TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool LoadPhysicsAsset(const std::filesystem::path &path, PhysicsShape &shape)
 {
     shape = {};

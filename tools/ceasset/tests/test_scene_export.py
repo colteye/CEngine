@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import sys
@@ -27,19 +42,48 @@ from ceassetlib.scene_format import (
 
 
 def guid(value: int) -> bytes:
+    """TODO: Describe `guid`.
+
+    Args:
+        value: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return bytes([value]) + bytes(15)
 
 
 class SceneExportTests(unittest.TestCase):
+    """TODO: Describe `SceneExportTests`."""
+
     game = load_bundled_game()
 
     def player(self):
+        """TODO: Describe `player`.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         return make_schema_entity(self.game, "player", transform=Transform())
 
     def entity(self, classname: str, **values):
+        """TODO: Describe `entity`.
+
+        Args:
+            classname: TODO: Describe this parameter.
+            **values: TODO: Describe this parameter.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         return make_schema_entity(self.game, classname, **values)
 
     def make_scene(self) -> SceneDescription:
+        """TODO: Describe `make_scene`.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         mesh = AssetReference(AssetType.MESH, "assets/compiled/props/crate.cmesh", guid(1))
         material = AssetReference(AssetType.MATERIAL, "assets/compiled/props/crate.cmat", guid(2))
         lightmap = AssetReference(AssetType.TEXTURE, "assets/compiled/maps/test/lightmap_0.dds", guid(3))
@@ -68,6 +112,7 @@ class SceneExportTests(unittest.TestCase):
         )
 
     def test_writer_is_deterministic_and_type_grouped(self) -> None:
+        """TODO: Describe `test_writer_is_deterministic_and_type_grouped`."""
         scene = self.make_scene()
         first = build_scene_payload(scene)
         second = build_scene_payload(scene)
@@ -93,6 +138,7 @@ class SceneExportTests(unittest.TestCase):
         self.assertEqual(sum(block[4] for block in blocks), entity_count)
 
     def test_invalid_descriptions_fail_before_writing(self) -> None:
+        """TODO: Describe `test_invalid_descriptions_fail_before_writing`."""
         with self.assertRaisesRegex(ValueError, "project-relative"):
             build_scene_payload(SceneDescription((EntityDescription(
                 self.entity(

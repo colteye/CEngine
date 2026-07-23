@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/material.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #ifndef MATERIAL_H
 #define MATERIAL_H
 
@@ -10,6 +25,9 @@
 namespace CEngine::Renderer
 {
 
+/**
+ * @brief TODO: Describe MaterialShaderType.
+ */
 enum class MaterialShaderType : unsigned int
 {
     Unknown = 0,
@@ -17,6 +35,9 @@ enum class MaterialShaderType : unsigned int
     Unlit = 2,
 };
 
+/**
+ * @brief TODO: Describe MaterialRenderMode.
+ */
 enum class MaterialRenderMode
 {
     OpaqueDeferred,
@@ -26,11 +47,20 @@ enum class MaterialRenderMode
     Unlit
 };
 
+/**
+ * @brief TODO: Describe RequiresAlphaTest.
+ *
+ * @param mode TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 constexpr bool RequiresAlphaTest(MaterialRenderMode mode)
 {
     return mode == MaterialRenderMode::AlphaClip || mode == MaterialRenderMode::AlphaHashDither;
 }
 
+/**
+ * @brief TODO: Describe Material.
+ */
 struct Material
 {
     std::string material_name;

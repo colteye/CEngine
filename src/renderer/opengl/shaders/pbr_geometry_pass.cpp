@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/opengl/shaders/pbr_geometry_pass.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "pbr_geometry_pass.h"
 
 #include "renderer/render_system.h"
@@ -7,17 +22,28 @@
 namespace CEngine::Renderer::OpenGL
 {
 
+/**
+ * @brief TODO: Describe PBRGeometryPass::PBRGeometryPass.
+ */
 PBRGeometryPass::PBRGeometryPass()
 {
     shader_program_.Load("shaders/opengl/pbr_geometry_pass.vert", "shaders/opengl/pbr_geometry_pass.frag");
     InitializeParameters();
 }
 
+/**
+ * @brief TODO: Describe PBRGeometryPass::Use.
+ */
 void PBRGeometryPass::Use() const
 {
     shader_program_.Use();
 }
 
+/**
+ * @brief TODO: Describe PBRGeometryPass::UpdateFrame.
+ *
+ * @param rendering TODO: Describe this parameter.
+ */
 void PBRGeometryPass::UpdateFrame(const RenderSystem &rendering) const
 {
     const CameraFrameData &camera_frame_data = rendering.GetCameraFrameData();
@@ -25,6 +51,15 @@ void PBRGeometryPass::UpdateFrame(const RenderSystem &rendering) const
     glUniformMatrix4fv(projection_id_, 1, GL_FALSE, glm::value_ptr(camera_frame_data.proj));
 }
 
+/**
+ * @brief TODO: Describe PBRGeometryPass::UpdateObject.
+ *
+ * @param model TODO: Describe this parameter.
+ * @param material TODO: Describe this parameter.
+ * @param lightmap_scale TODO: Describe this parameter.
+ * @param lightmap_offset TODO: Describe this parameter.
+ * @param lightmap_rgbm_range TODO: Describe this parameter.
+ */
 void PBRGeometryPass::UpdateObject(const glm::mat4 &model, const Material &material, const glm::vec2 &lightmap_scale,
                                    const glm::vec2 &lightmap_offset, float lightmap_rgbm_range)
 {
@@ -55,6 +90,14 @@ void PBRGeometryPass::UpdateObject(const glm::mat4 &model, const Material &mater
     glUniform1i(lightmap_id_, 3);
 }
 
+/**
+ * @brief TODO: Describe PBRGeometryPass::SetTextures.
+ *
+ * @param albedo TODO: Describe this parameter.
+ * @param normal TODO: Describe this parameter.
+ * @param metallic_roughness_ao TODO: Describe this parameter.
+ * @param lightmap TODO: Describe this parameter.
+ */
 void PBRGeometryPass::SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao, GLuint lightmap)
 {
     albedo_tex_ = albedo;
@@ -63,6 +106,9 @@ void PBRGeometryPass::SetTextures(GLuint albedo, GLuint normal, GLuint metallic_
     lightmap_tex_ = lightmap;
 }
 
+/**
+ * @brief TODO: Describe PBRGeometryPass::InitializeParameters.
+ */
 void PBRGeometryPass::InitializeParameters()
 {
     const GLuint shader_id = shader_program_.GetId();

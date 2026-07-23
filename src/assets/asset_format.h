@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/assets/asset_format.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #ifndef CENGINE_ASSET_FORMAT_H
 #define CENGINE_ASSET_FORMAT_H
 
@@ -14,6 +29,9 @@ constexpr std::array<char, 4> AssetMagic = {'C', 'E', 'A', 'F'};
 constexpr std::uint16_t AssetFormatVersion = 1;
 constexpr std::size_t PlatformTargetSize = 16;
 
+/**
+ * @brief TODO: Describe AssetType.
+ */
 enum class AssetType : std::uint32_t
 {
     Unknown = 0,
@@ -34,6 +52,9 @@ enum class AssetType : std::uint32_t
 };
 
 #pragma pack(push, 1)
+/**
+ * @brief TODO: Describe DiskAssetHeader.
+ */
 struct DiskAssetHeader
 {
     std::array<char, 4> magic = AssetMagic;
@@ -52,6 +73,9 @@ struct DiskAssetHeader
 
 static_assert(sizeof(DiskAssetHeader) == 76, "DiskAssetHeader must stay packed and stable.");
 
+/**
+ * @brief TODO: Describe ByteView.
+ */
 struct ByteView
 {
     const std::uint8_t *data = nullptr;

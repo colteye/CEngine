@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/opengl/render_backend.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "renderer/opengl/render_backend.h"
 
 #include "renderer/mesh.h"
@@ -17,6 +32,16 @@ namespace CEngine::Renderer::OpenGL
 
 namespace
 {
+/**
+ * @brief TODO: Describe ConfigureFramebufferTexture.
+ *
+ * @param texture TODO: Describe this parameter.
+ * @param internal_format TODO: Describe this parameter.
+ * @param format TODO: Describe this parameter.
+ * @param type TODO: Describe this parameter.
+ * @param width TODO: Describe this parameter.
+ * @param height TODO: Describe this parameter.
+ */
 void ConfigureFramebufferTexture(GLuint texture, GLenum internal_format, GLenum format, GLenum type, int width,
                                  int height)
 {
@@ -28,6 +53,13 @@ void ConfigureFramebufferTexture(GLuint texture, GLenum internal_format, GLenum 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
+/**
+ * @brief TODO: Describe BoundsCenter.
+ *
+ * @param bounds TODO: Describe this parameter.
+ * @param transform TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 glm::vec3 BoundsCenter(const Bounds &bounds, const glm::mat4 &transform)
 {
     if (!bounds.valid)
@@ -38,6 +70,9 @@ glm::vec3 BoundsCenter(const Bounds &bounds, const glm::mat4 &transform)
 }
 } // namespace
 
+/**
+ * @brief TODO: Describe EnvironmentResources::Destroy.
+ */
 void EnvironmentResources::Destroy()
 {
     panorama_to_cube.reset();
@@ -71,6 +106,9 @@ void EnvironmentResources::Destroy()
     skybox_environment_map = -1;
 }
 
+/**
+ * @brief TODO: Describe MaterialResources::Destroy.
+ */
 void MaterialResources::Destroy()
 {
     if (owns_albedo_tex && albedo_tex != 0)
@@ -93,11 +131,22 @@ void MaterialResources::Destroy()
     owns_metallic_roughness_ao_tex = false;
 }
 
+/**
+ * @brief TODO: Describe MeshResources::MeshResources.
+ *
+ * @param other TODO: Describe this parameter.
+ */
 MeshResources::MeshResources(MeshResources &&other) noexcept
 {
     *this = std::move(other);
 }
 
+/**
+ * @brief TODO: Describe operator=.
+ *
+ * @param other TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 MeshResources &MeshResources::operator=(MeshResources &&other) noexcept
 {
     if (this == &other)
@@ -122,11 +171,17 @@ MeshResources &MeshResources::operator=(MeshResources &&other) noexcept
     return *this;
 }
 
+/**
+ * @brief TODO: Describe MeshResources::~MeshResources.
+ */
 MeshResources::~MeshResources()
 {
     Destroy();
 }
 
+/**
+ * @brief TODO: Describe FrameResources::Destroy.
+ */
 void FrameResources::Destroy()
 {
     if (g_albedo != 0)
@@ -191,6 +246,11 @@ void FrameResources::Destroy()
     }
 }
 
+/**
+ * @brief TODO: Describe RenderQueues::ClearAndReserve.
+ *
+ * @param draw_item_count TODO: Describe this parameter.
+ */
 void RenderQueues::ClearAndReserve(size_t draw_item_count)
 {
     opaque_deferred.clear();
@@ -207,6 +267,9 @@ void RenderQueues::ClearAndReserve(size_t draw_item_count)
     }
 }
 
+/**
+ * @brief TODO: Describe MeshResources::Destroy.
+ */
 void MeshResources::Destroy()
 {
     if (vertex_buffer != 0)
@@ -229,6 +292,14 @@ void MeshResources::Destroy()
     references = 0;
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::Initialize.
+ *
+ * @param in_rendering TODO: Describe this parameter.
+ * @param in_window_width TODO: Describe this parameter.
+ * @param in_window_height TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool RenderBackend::Initialize(RenderSystem &in_rendering, GLFWwindow * /*window*/, int in_window_width,
                                int in_window_height)
 {
@@ -278,6 +349,9 @@ bool RenderBackend::Initialize(RenderSystem &in_rendering, GLFWwindow * /*window
     return true;
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::Shutdown.
+ */
 void RenderBackend::Shutdown()
 {
     environment_resources_.Destroy();
@@ -329,6 +403,13 @@ void RenderBackend::Shutdown()
     rendering_ = nullptr;
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::Resize.
+ *
+ * @param in_window_width TODO: Describe this parameter.
+ * @param in_window_height TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool RenderBackend::Resize(int in_window_width, int in_window_height)
 {
     if (in_window_width <= 0 || in_window_height <= 0)
@@ -357,6 +438,14 @@ bool RenderBackend::Resize(int in_window_width, int in_window_height)
     return true;
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::RegisterMeshInstance.
+ *
+ * @param slot TODO: Describe this parameter.
+ * @param mesh_instance TODO: Describe this parameter.
+ * @param world_bounds TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool RenderBackend::RegisterMeshInstance(std::uint32_t slot, const MeshInstance &mesh_instance,
                                          const Bounds &world_bounds)
 {
@@ -423,6 +512,14 @@ bool RenderBackend::RegisterMeshInstance(std::uint32_t slot, const MeshInstance 
     return true;
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::UpdateMeshInstance.
+ *
+ * @param slot TODO: Describe this parameter.
+ * @param transform TODO: Describe this parameter.
+ * @param world_bounds TODO: Describe this parameter.
+ * @param flags TODO: Describe this parameter.
+ */
 void RenderBackend::UpdateMeshInstance(std::uint32_t slot, const glm::mat4 &transform, const Bounds &world_bounds,
                                        std::uint32_t flags)
 {
@@ -436,6 +533,11 @@ void RenderBackend::UpdateMeshInstance(std::uint32_t slot, const glm::mat4 &tran
     draw_items_[slot].flags = flags;
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::RemoveMeshInstance.
+ *
+ * @param slot TODO: Describe this parameter.
+ */
 void RenderBackend::RemoveMeshInstance(std::uint32_t slot)
 {
     if (slot >= draw_items_.size())
@@ -466,6 +568,12 @@ void RenderBackend::RemoveMeshInstance(std::uint32_t slot)
     draw_items_[slot] = {};
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::UploadMesh.
+ *
+ * @param mesh TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 MeshResources RenderBackend::UploadMesh(const Mesh &mesh)
 {
     MeshResources buffers;
@@ -514,6 +622,12 @@ MeshResources RenderBackend::UploadMesh(const Mesh &mesh)
     return buffers;
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::RegisterMaterial.
+ *
+ * @param material TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool RenderBackend::RegisterMaterial(const Material *material)
 {
     assert(material != nullptr);
@@ -543,6 +657,11 @@ bool RenderBackend::RegisterMaterial(const Material *material)
     return true;
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::RemoveMaterial.
+ *
+ * @param material TODO: Describe this parameter.
+ */
 void RenderBackend::RemoveMaterial(const Material *material)
 {
     const auto found = material_resources_.find(material);
@@ -559,6 +678,12 @@ void RenderBackend::RemoveMaterial(const Material *material)
     material_resources_.erase(found);
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::RegisterLightmap.
+ *
+ * @param lightmap TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool RenderBackend::RegisterLightmap(const Texture *lightmap)
 {
     assert(lightmap != nullptr);
@@ -578,6 +703,11 @@ bool RenderBackend::RegisterLightmap(const Texture *lightmap)
     return true;
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::RemoveLightmap.
+ *
+ * @param lightmap TODO: Describe this parameter.
+ */
 void RenderBackend::RemoveLightmap(const Texture *lightmap)
 {
     const auto found = lightmap_resources_.find(lightmap);
@@ -596,6 +726,12 @@ void RenderBackend::RemoveLightmap(const Texture *lightmap)
     lightmap_resources_.erase(found);
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::GetShader.
+ *
+ * @param shader_type TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 PBRStandard *RenderBackend::GetShader(MaterialShaderType shader_type)
 {
     switch (shader_type)
@@ -614,6 +750,13 @@ PBRStandard *RenderBackend::GetShader(MaterialShaderType shader_type)
     return nullptr;
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::CreateFrameResources.
+ *
+ * @param width TODO: Describe this parameter.
+ * @param height TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool RenderBackend::CreateFrameResources(int width, int height)
 {
     FrameResources &resources = frame_resources_;
@@ -700,11 +843,17 @@ bool RenderBackend::CreateFrameResources(int width, int height)
     return true;
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::DestroyFrameResources.
+ */
 void RenderBackend::DestroyFrameResources()
 {
     frame_resources_.Destroy();
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::BuildRenderQueues.
+ */
 void RenderBackend::BuildRenderQueues()
 {
     render_queues_.ClearAndReserve(draw_items_.size());
@@ -760,6 +909,9 @@ void RenderBackend::BuildRenderQueues()
               });
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::RenderGeometryPass.
+ */
 void RenderBackend::RenderGeometryPass()
 {
     if (shader_passes_.pbr_geometry == nullptr)
@@ -800,6 +952,9 @@ void RenderBackend::RenderGeometryPass()
     glBindVertexArray(0);
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::RenderDeferredLightingPass.
+ */
 void RenderBackend::RenderDeferredLightingPass()
 {
     if (shader_passes_.deferred_lighting == nullptr)
@@ -824,6 +979,9 @@ void RenderBackend::RenderDeferredLightingPass()
     RenderScreenSpaceQuad();
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::RenderAmbientOcclusionPass.
+ */
 void RenderBackend::RenderAmbientOcclusionPass()
 {
     assert(shader_passes_.ssao != nullptr);
@@ -844,6 +1002,11 @@ void RenderBackend::RenderAmbientOcclusionPass()
     RenderScreenSpaceQuad();
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::BuildEnvironmentResources.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool RenderBackend::BuildEnvironmentResources()
 {
     const ImageBasedLighting &lighting = rendering_->GetImageBasedLighting();
@@ -996,6 +1159,9 @@ bool RenderBackend::BuildEnvironmentResources()
     return glGetError() == GL_NO_ERROR;
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::SyncEnvironmentResources.
+ */
 void RenderBackend::SyncEnvironmentResources()
 {
     if (!rendering_->ConsumeImageBasedLightingResourcesDirty())
@@ -1010,6 +1176,9 @@ void RenderBackend::SyncEnvironmentResources()
     }
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::DrawEnvironmentCube.
+ */
 void RenderBackend::DrawEnvironmentCube() const
 {
     glBindVertexArray(environment_resources_.cube_vao);
@@ -1017,6 +1186,9 @@ void RenderBackend::DrawEnvironmentCube() const
     glBindVertexArray(0);
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::RenderSkybox.
+ */
 void RenderBackend::RenderSkybox()
 {
     const ImageBasedLighting &lighting = rendering_->GetImageBasedLighting();
@@ -1045,6 +1217,12 @@ void RenderBackend::RenderSkybox()
     glDepthFunc(GL_LESS);
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::RenderForwardQueue.
+ *
+ * @param queue TODO: Describe this parameter.
+ * @param transparent TODO: Describe this parameter.
+ */
 void RenderBackend::RenderForwardQueue(const std::vector<uint32_t> &queue, bool transparent)
 {
     if (queue.empty())
@@ -1104,6 +1282,9 @@ void RenderBackend::RenderForwardQueue(const std::vector<uint32_t> &queue, bool 
     glBindVertexArray(0);
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::PresentSceneColor.
+ */
 void RenderBackend::PresentSceneColor()
 {
     if (shader_passes_.fullscreen_blit == nullptr)
@@ -1122,11 +1303,22 @@ void RenderBackend::PresentSceneColor()
     RenderScreenSpaceQuad();
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::Draw.
+ *
+ * @param item TODO: Describe this parameter.
+ */
 void RenderBackend::Draw(const DrawItem &item)
 {
     glDrawElements(GL_TRIANGLES, item.count, GL_UNSIGNED_INT, nullptr);
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::ClassifyRenderMode.
+ *
+ * @param mode TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 RenderQueue RenderBackend::ClassifyRenderMode(MaterialRenderMode mode)
 {
     switch (mode)
@@ -1144,11 +1336,20 @@ RenderQueue RenderBackend::ClassifyRenderMode(MaterialRenderMode mode)
     return RenderQueue::None;
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::DrawsShadowCaster.
+ *
+ * @param item TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool RenderBackend::DrawsShadowCaster(const DrawItem &item)
 {
     return item.material->casts_shadows && (item.flags & MeshInstanceFlagCastsShadow) != 0;
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::Render.
+ */
 void RenderBackend::Render()
 {
     SyncEnvironmentResources();
@@ -1165,6 +1366,9 @@ void RenderBackend::Render()
     glEnable(GL_DEPTH_TEST);
 }
 
+/**
+ * @brief TODO: Describe RenderBackend::RenderScreenSpaceQuad.
+ */
 void RenderBackend::RenderScreenSpaceQuad()
 {
     if (quad_VAO_ == 0)

@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import time
@@ -51,6 +66,8 @@ PACKED_IMAGE_EXTENSIONS = {
 
 @dataclass(frozen=True)
 class ExportResult:
+    """TODO: Describe `ExportResult`."""
+
     collections: int
     textures: int
     materials: int
@@ -63,19 +80,42 @@ class ExportResult:
 
 @dataclass(frozen=True)
 class TextureExport:
+    """TODO: Describe `TextureExport`."""
+
     source: Path
     output: Path
 
 
 def log(message: str) -> None:
+    """TODO: Describe `log`.
+
+    Args:
+        message: TODO: Describe this parameter.
+    """
     print(f"[CEngine Asset Exporter] {message}", flush=True)
 
 
 def elapsed(start: float) -> str:
+    """TODO: Describe `elapsed`.
+
+    Args:
+        start: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return f"{time.perf_counter() - start:.2f}s"
 
 
 def source_fingerprint(path: Path) -> int:
+    """TODO: Describe `source_fingerprint`.
+
+    Args:
+        path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     try:
         stat = path.stat()
         text = f"{generic_path(path.resolve())}|{stat.st_size}|{stat.st_mtime_ns}"
@@ -85,12 +125,22 @@ def source_fingerprint(path: Path) -> int:
 
 
 def require_bpy():
+    """TODO: Describe `require_bpy`.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if bpy is None:
         raise RuntimeError("CEngine Asset Exporter must run inside Blender")
     return bpy
 
 
 def blend_source_path() -> Path:
+    """TODO: Describe `blend_source_path`.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     blender = require_bpy()
     filepath = str(getattr(blender.data, "filepath", "") or "")
     if not filepath:
@@ -103,6 +153,11 @@ def blend_source_path() -> Path:
 
 
 def maybe_blend_source_path() -> Path | None:
+    """TODO: Describe `maybe_blend_source_path`.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     blender = require_bpy()
     filepath = str(getattr(blender.data, "filepath", "") or "")
     if not filepath:
@@ -113,12 +168,28 @@ def maybe_blend_source_path() -> Path | None:
 
 
 def default_output_root_for_source(source: Path | None) -> Path | None:
+    """TODO: Describe `default_output_root_for_source`.
+
+    Args:
+        source: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if source is None:
         return None
     return make_project_paths(project_root_for(source)).compiled_dir
 
 
 def project_root_for(source: Path) -> Path:
+    """TODO: Describe `project_root_for`.
+
+    Args:
+        source: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if source.parent.name == "source" and source.parent.parent.name == "assets":
         return source.parent.parent.parent
     for parent in source.parents:
@@ -128,6 +199,14 @@ def project_root_for(source: Path) -> Path:
 
 
 def project_root_for_output_root(output_root: Path) -> Path | None:
+    """TODO: Describe `project_root_for_output_root`.
+
+    Args:
+        output_root: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     root = output_root.resolve()
     if root.name == "compiled" and root.parent.name == "assets":
         return root.parent.parent
@@ -135,6 +214,14 @@ def project_root_for_output_root(output_root: Path) -> Path | None:
 
 
 def image_source_path(image) -> Path | None:
+    """TODO: Describe `image_source_path`.
+
+    Args:
+        image: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     filepath = str(getattr(image, "filepath", "") or "")
     if not filepath:
         return None
@@ -150,6 +237,14 @@ def image_source_path(image) -> Path | None:
 
 
 def packed_image_extension(image: object) -> str:
+    """TODO: Describe `packed_image_extension`.
+
+    Args:
+        image: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     filepath = str(getattr(image, "filepath", "") or "")
     suffix = Path(filepath).suffix.lower()
     if suffix in SOURCE_TEXTURE_EXTENSIONS:
@@ -168,6 +263,18 @@ def image_source_path_for_export(
     packed_sources: dict[int, Path],
     logger: Callable[[str], None] | None = None,
 ) -> Path | None:
+    """TODO: Describe `image_source_path_for_export`.
+
+    Args:
+        image: TODO: Describe this parameter.
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        packed_sources: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     source = image_source_path(image)
     if source is not None:
         return source
@@ -195,24 +302,69 @@ def image_source_path_for_export(
 
 
 def clean_asset_filename(name: str) -> str:
+    """TODO: Describe `clean_asset_filename`.
+
+    Args:
+        name: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     cleaned = "".join(character if character.isalnum() or character in "._-" else "_" for character in name)
     cleaned = cleaned.strip("._-")
     return cleaned or "asset"
 
 
 def texture_output_path(blend_source: Path, output_root: Path, image_source: Path) -> Path:
+    """TODO: Describe `texture_output_path`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        image_source: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return output_dir_for_source(blend_source, output_root) / "textures" / image_source.with_suffix(".dds").name
 
 
 def asset_path_for_project(project_root: Path, output: Path) -> str:
+    """TODO: Describe `asset_path_for_project`.
+
+    Args:
+        project_root: TODO: Describe this parameter.
+        output: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return generic_path(stored_path(project_root, output))
 
 
 def asset_path_relative_to(root: Path, output: Path) -> str:
+    """TODO: Describe `asset_path_relative_to`.
+
+    Args:
+        root: TODO: Describe this parameter.
+        output: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return generic_path(stored_path(root, output))
 
 
 def material_images(objects: list[object], logger: Callable[[str], None] | None = None) -> list[object]:
+    """TODO: Describe `material_images`.
+
+    Args:
+        objects: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     start = time.perf_counter()
     images: list[object] = []
     seen: set[int] = set()
@@ -246,6 +398,19 @@ def export_textures(
     logger: Callable[[str], None] | None = None,
     image_source_resolver: Callable[[object], Path | None] | None = None,
 ) -> list[TextureExport]:
+    """TODO: Describe `export_textures`.
+
+    Args:
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        dds_format: TODO: Describe this parameter.
+        images: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+        image_source_resolver: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     blender = require_bpy()
     start = time.perf_counter()
     outputs: list[TextureExport] = []
@@ -286,6 +451,18 @@ def export_skybox_panoramas(
     objects: list[object],
     logger: Callable[[str], None] | None = None,
 ) -> tuple[dict[str, Path], list[TextureExport]]:
+    """TODO: Describe `export_skybox_panoramas`.
+
+    Args:
+        blender: TODO: Describe this parameter.
+        blend_source: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+        objects: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     by_entity: dict[str, Path] = {}
     outputs: list[TextureExport] = []
     by_source: dict[Path, Path] = {}
@@ -316,10 +493,29 @@ def export_skybox_panoramas(
 
 
 def bool_attr(value: object, name: str) -> bool:
+    """TODO: Describe `bool_attr`.
+
+    Args:
+        value: TODO: Describe this parameter.
+        name: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return bool(getattr(value, name, False))
 
 
 def call_bool_method(value: object, name: str, default: bool = False) -> bool:
+    """TODO: Describe `call_bool_method`.
+
+    Args:
+        value: TODO: Describe this parameter.
+        name: TODO: Describe this parameter.
+        default: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     method = getattr(value, name, None)
     if method is None:
         return default
@@ -332,6 +528,14 @@ def call_bool_method(value: object, name: str, default: bool = False) -> bool:
 
 
 def collection_is_exportable(collection: object) -> bool:
+    """TODO: Describe `collection_is_exportable`.
+
+    Args:
+        collection: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return not (
         bool_attr(collection, "hide_render")
         or bool_attr(collection, "hide_viewport")
@@ -340,6 +544,14 @@ def collection_is_exportable(collection: object) -> bool:
 
 
 def object_is_exportable(obj: object) -> bool:
+    """TODO: Describe `object_is_exportable`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return not (
         bool_attr(obj, "hide_render")
         or bool_attr(obj, "hide_viewport")
@@ -348,6 +560,14 @@ def object_is_exportable(obj: object) -> bool:
 
 
 def object_instance_collection(obj: object) -> object | None:
+    """TODO: Describe `object_instance_collection`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if str(getattr(obj, "instance_type", "") or "") == "COLLECTION":
         collection = getattr(obj, "instance_collection", None)
         if collection is not None:
@@ -362,6 +582,15 @@ def collect_object_tree(
     seen_collections: set[int],
     logger: Callable[[str], None] | None,
 ) -> None:
+    """TODO: Describe `collect_object_tree`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+        objects: TODO: Describe this parameter.
+        seen_objects: TODO: Describe this parameter.
+        seen_collections: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+    """
     key = id(obj)
     if key not in seen_objects:
         seen_objects.add(key)
@@ -389,6 +618,15 @@ def collect_collection_tree(
     seen_collections: set[int],
     logger: Callable[[str], None] | None,
 ) -> None:
+    """TODO: Describe `collect_collection_tree`.
+
+    Args:
+        collection: TODO: Describe this parameter.
+        objects: TODO: Describe this parameter.
+        seen_objects: TODO: Describe this parameter.
+        seen_collections: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+    """
     key = id(collection)
     if key in seen_collections:
         return
@@ -421,12 +659,31 @@ def collection_export_objects(
     seen_collections: set[int] | None = None,
     logger: Callable[[str], None] | None = None,
 ) -> list[object]:
+    """TODO: Describe `collection_export_objects`.
+
+    Args:
+        collection: TODO: Describe this parameter.
+        seen_collections: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     objects: list[object] = []
     collect_collection_tree(collection, objects, set(), seen_collections or set(), logger)
     return objects
 
 
 def exported_collection_objects(collections, logger: Callable[[str], None] | None = None) -> list[object]:
+    """TODO: Describe `exported_collection_objects`.
+
+    Args:
+        collections: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     start = time.perf_counter()
     objects: list[object] = []
     seen: set[int] = set()
@@ -471,6 +728,14 @@ def exported_collection_objects(collections, logger: Callable[[str], None] | Non
 
 
 def selected_export_collection(include_plain: bool = False) -> object | None:
+    """TODO: Describe `selected_export_collection`.
+
+    Args:
+        include_plain: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     blender = require_bpy()
     collection = getattr(getattr(blender, "context", None), "collection", None)
     default_type = AssetType.PREFAB if include_plain else AssetType.UNKNOWN
@@ -480,6 +745,11 @@ def selected_export_collection(include_plain: bool = False) -> object | None:
 
 
 def animation_fps() -> float:
+    """TODO: Describe `animation_fps`.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     blender = require_bpy()
     scene = getattr(blender.context, "scene", None)
     render = getattr(scene, "render", None)
@@ -489,6 +759,14 @@ def animation_fps() -> float:
 
 
 def object_material_names(obj: object) -> list[str]:
+    """TODO: Describe `object_material_names`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return effective_material_names(obj)
 
 
@@ -500,6 +778,19 @@ def object_component_assets(
     animation_outputs: dict[str, list[Path]],
     asset_path: Callable[[Path], str],
 ) -> dict[str, object]:
+    """TODO: Describe `object_component_assets`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+        mesh_outputs: TODO: Describe this parameter.
+        material_outputs: TODO: Describe this parameter.
+        skeleton_outputs: TODO: Describe this parameter.
+        animation_outputs: TODO: Describe this parameter.
+        asset_path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     assets: dict[str, object] = {}
     meshes = [output for output, _material in mesh_outputs.get(obj.name, [])]
     if meshes:
@@ -530,6 +821,15 @@ def register_outputs(
     logger: Callable[[str], None] | None = None,
     source_hash: int | None = None,
 ) -> None:
+    """TODO: Describe `register_outputs`.
+
+    Args:
+        project_root: TODO: Describe this parameter.
+        source: TODO: Describe this parameter.
+        outputs: TODO: Describe this parameter.
+        logger: TODO: Describe this parameter.
+        source_hash: TODO: Describe this parameter.
+    """
     if not outputs:
         return
     start = time.perf_counter()
@@ -559,6 +859,15 @@ def register_outputs(
 
 
 def export_selected_collection_assets(output_root: Path, source: Path | None = None) -> ExportResult:
+    """TODO: Describe `export_selected_collection_assets`.
+
+    Args:
+        output_root: TODO: Describe this parameter.
+        source: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     export_start = time.perf_counter()
     log("Collection-only export started")
     collection = selected_export_collection(include_plain=True)
@@ -595,6 +904,15 @@ def export_selected_collection_assets(output_root: Path, source: Path | None = N
 
 
 def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5") -> ExportResult:
+    """TODO: Describe `export_current_file`.
+
+    Args:
+        output_root: TODO: Describe this parameter.
+        dds_format: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     export_start = time.perf_counter()
     log("Export started")
     blender = require_bpy()
@@ -807,6 +1125,16 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
 
 
 def run_export(output_root: Path | None, dds_format: str = "DXT5", collection_only: bool = False) -> ExportResult:
+    """TODO: Describe `run_export`.
+
+    Args:
+        output_root: TODO: Describe this parameter.
+        dds_format: TODO: Describe this parameter.
+        collection_only: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if not collection_only:
         return export_current_file(output_root, dds_format)
 
@@ -820,6 +1148,15 @@ def run_export(output_root: Path | None, dds_format: str = "DXT5", collection_on
 
 
 def export_summary(result: ExportResult, output_root: Path | None) -> str:
+    """TODO: Describe `export_summary`.
+
+    Args:
+        result: TODO: Describe this parameter.
+        output_root: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     destination = f" to {output_root}" if output_root is not None else ""
     return (
         f"Exported {result.scenes} .cscene, {result.collections} .casset, {result.meshes} .cmesh, "

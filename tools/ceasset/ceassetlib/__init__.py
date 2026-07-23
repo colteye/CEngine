@@ -1,1 +1,13 @@
-"""Small modules behind the CEngine asset converter."""
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""Small modules behind the CEngine asset converter.
+
+Author:
+    Erik Coltey"""

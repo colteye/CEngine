@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 from enum import IntEnum
@@ -10,6 +25,8 @@ SOURCE_TEXTURE_EXTENSIONS = {".jpeg", ".jpg", ".png", ".tga"}
 
 
 class AssetType(IntEnum):
+    """TODO: Describe `AssetType`."""
+
     UNKNOWN = 0
     TEXTURE = 1
     MATERIAL = 2
@@ -63,16 +80,40 @@ RUNTIME_EXTENSIONS = {
 
 
 def asset_type_for_extension(extension: str) -> AssetType:
+    """TODO: Describe `asset_type_for_extension`.
+
+    Args:
+        extension: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return RUNTIME_EXTENSIONS.get(extension.lower(), AssetType.UNKNOWN)
 
 
 def source_asset_type_for_extension(extension: str) -> AssetType:
+    """TODO: Describe `source_asset_type_for_extension`.
+
+    Args:
+        extension: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     if extension.lower() in SOURCE_TEXTURE_EXTENSIONS:
         return AssetType.TEXTURE
     return asset_type_for_extension(extension)
 
 
 def asset_type_for_name(name: str) -> AssetType:
+    """TODO: Describe `asset_type_for_name`.
+
+    Args:
+        name: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     lowered = name.lower()
     for asset_type, asset_name in ASSET_TYPE_NAMES.items():
         if lowered == asset_name:

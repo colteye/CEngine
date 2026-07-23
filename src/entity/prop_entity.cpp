@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/entity/prop_entity.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "entity/prop_entity.h"
 
 #include "assets/asset_store.h"
@@ -15,6 +30,11 @@
 namespace CEngine::Entities
 {
 
+/**
+ * @brief TODO: Describe PropEntity::Classname.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::string_view PropEntity::Classname() const
 {
     return "prop";
@@ -22,6 +42,12 @@ std::string_view PropEntity::Classname() const
 
 namespace
 {
+/**
+ * @brief TODO: Describe RuntimeMotion.
+ *
+ * @param motion TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 PhysicsMotionType RuntimeMotion(Generated::EngineEntities::PhysicsMotion motion)
 {
     switch (motion)
@@ -38,12 +64,23 @@ PhysicsMotionType RuntimeMotion(Generated::EngineEntities::PhysicsMotion motion)
     return PhysicsMotionType::Static;
 }
 
+/**
+ * @brief TODO: Describe Vector.
+ *
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 glm::vec3 Vector(const Generated::EngineEntities::Vec3 &value)
 {
     return {value.x, value.y, value.z};
 }
 } // namespace
 
+/**
+ * @brief TODO: Describe PropEntity::Initialize.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void PropEntity::Initialize(Context &context)
 {
     try
@@ -157,6 +194,11 @@ void PropEntity::Initialize(Context &context)
     }
 }
 
+/**
+ * @brief TODO: Describe PropEntity::BuildMeshInstanceFlags.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::uint32_t PropEntity::BuildMeshInstanceFlags() const
 {
     std::uint32_t flags = Renderer::MeshInstanceFlagCastsShadow;
@@ -171,6 +213,14 @@ std::uint32_t PropEntity::BuildMeshInstanceFlags() const
     return flags;
 }
 
+/**
+ * @brief TODO: Describe PropEntity::RegisterMeshInstance.
+ *
+ * @param context TODO: Describe this parameter.
+ * @param mesh TODO: Describe this parameter.
+ * @param material TODO: Describe this parameter.
+ * @param lightmap_texture TODO: Describe this parameter.
+ */
 void PropEntity::RegisterMeshInstance(Context &context, std::shared_ptr<const Renderer::Mesh> mesh,
                                       std::shared_ptr<const Renderer::Material> material,
                                       std::shared_ptr<const Renderer::Texture> lightmap_texture)
@@ -198,6 +248,12 @@ void PropEntity::RegisterMeshInstance(Context &context, std::shared_ptr<const Re
     }
 }
 
+/**
+ * @brief TODO: Describe PropEntity::Update.
+ *
+ * @param context TODO: Describe this parameter.
+ * @param delta_seconds TODO: Describe this parameter.
+ */
 void PropEntity::Update(Context &context, float delta_seconds)
 {
     if (context.physics == nullptr || !physics_body_ || motion != Generated::EngineEntities::PhysicsMotion::Kinematic ||
@@ -208,6 +264,11 @@ void PropEntity::Update(Context &context, float delta_seconds)
     context.physics->MoveKinematic(physics_body_, GetTransform().position, GetTransform().rotation, delta_seconds);
 }
 
+/**
+ * @brief TODO: Describe PropEntity::LateUpdate.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void PropEntity::LateUpdate(Context &context, float /*unused*/)
 {
     if (context.physics != nullptr && motion == Generated::EngineEntities::PhysicsMotion::Dynamic && physics_body_)
@@ -231,6 +292,11 @@ void PropEntity::LateUpdate(Context &context, float /*unused*/)
                                           BuildMeshInstanceFlags());
 }
 
+/**
+ * @brief TODO: Describe PropEntity::Shutdown.
+ *
+ * @param context TODO: Describe this parameter.
+ */
 void PropEntity::Shutdown(Context &context)
 {
     if (context.physics != nullptr && physics_body_)

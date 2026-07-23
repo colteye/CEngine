@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/render_system.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "renderer/render_system.h"
 
 #ifdef CENGINE_ENABLE_OPENGL
@@ -13,6 +28,13 @@
 
 namespace
 {
+/**
+ * @brief TODO: Describe SameLight.
+ *
+ * @param left TODO: Describe this parameter.
+ * @param right TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool SameLight(const CEngine::Renderer::Light &left, const CEngine::Renderer::Light &right)
 {
     return left.type == right.type && left.position == right.position && left.direction == right.direction &&
@@ -29,11 +51,22 @@ namespace CEngine::Renderer
 
 static_assert(sizeof(GpuLight) == sizeof(glm::vec4) * 4, "GpuLight must stay tightly packed as four vec4 lanes.");
 
+/**
+ * @brief TODO: Describe RenderSystem::~RenderSystem.
+ */
 RenderSystem::~RenderSystem()
 {
     Shutdown();
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::Initialize.
+ *
+ * @param window TODO: Describe this parameter.
+ * @param window_width TODO: Describe this parameter.
+ * @param window_height TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool RenderSystem::Initialize(GLFWwindow *window, int window_width, int window_height)
 {
     Shutdown();
@@ -54,6 +87,9 @@ bool RenderSystem::Initialize(GLFWwindow *window, int window_width, int window_h
     return true;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::Shutdown.
+ */
 void RenderSystem::Shutdown()
 {
     if (backend_ != nullptr)
@@ -87,11 +123,21 @@ void RenderSystem::Shutdown()
     lights_dirty_ = true;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::Resize.
+ *
+ * @param window_width TODO: Describe this parameter.
+ * @param window_height TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool RenderSystem::Resize(int window_width, int window_height)
 {
     return backend_ != nullptr && backend_->Resize(window_width, window_height);
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::Render.
+ */
 void RenderSystem::Render()
 {
     if (backend_ != nullptr)
@@ -100,6 +146,12 @@ void RenderSystem::Render()
     }
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::RegisterMeshInstance.
+ *
+ * @param mesh_instance TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 MeshInstanceHandle RenderSystem::RegisterMeshInstance(const MeshInstance &mesh_instance)
 {
     if (mesh_instance.mesh == nullptr || mesh_instance.mesh->Empty() || mesh_instance.material == nullptr)
@@ -149,6 +201,11 @@ MeshInstanceHandle RenderSystem::RegisterMeshInstance(const MeshInstance &mesh_i
     return handle;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::RemoveMeshInstance.
+ *
+ * @param handle TODO: Describe this parameter.
+ */
 void RenderSystem::RemoveMeshInstance(MeshInstanceHandle handle)
 {
     if (ResolveMeshInstance(handle) == nullptr)
@@ -172,6 +229,13 @@ void RenderSystem::RemoveMeshInstance(MeshInstanceHandle handle)
     ++mesh_instance_revision_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::UpdateMeshInstance.
+ *
+ * @param handle TODO: Describe this parameter.
+ * @param transform TODO: Describe this parameter.
+ * @param flags TODO: Describe this parameter.
+ */
 void RenderSystem::UpdateMeshInstance(MeshInstanceHandle handle, const glm::mat4 &transform, std::uint32_t flags)
 {
     if (ResolveMeshInstance(handle) == nullptr)
@@ -195,6 +259,12 @@ void RenderSystem::UpdateMeshInstance(MeshInstanceHandle handle, const glm::mat4
     ++mesh_instance_revision_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::RegisterLight.
+ *
+ * @param light TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 LightHandle RenderSystem::RegisterLight(const Light &light)
 {
     std::uint32_t index = 0;
@@ -220,6 +290,11 @@ LightHandle RenderSystem::RegisterLight(const Light &light)
     return {index, generation};
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::RemoveLight.
+ *
+ * @param id TODO: Describe this parameter.
+ */
 void RenderSystem::RemoveLight(LightHandle id)
 {
     if (ResolveLight(id) == nullptr)
@@ -240,6 +315,12 @@ void RenderSystem::RemoveLight(LightHandle id)
     ++light_state_revision_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::UpdateLight.
+ *
+ * @param id TODO: Describe this parameter.
+ * @param light TODO: Describe this parameter.
+ */
 void RenderSystem::UpdateLight(LightHandle id, const Light &light)
 {
     if (ResolveLight(id) == nullptr)
@@ -257,21 +338,42 @@ void RenderSystem::UpdateLight(LightHandle id, const Light &light)
     ++light_state_revision_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::GetMeshInstances.
+ *
+ * @return TODO: Describe the return value.
+ */
 const std::vector<MeshInstance> &RenderSystem::GetMeshInstances() const
 {
     return mesh_instances_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::GetMeshInstanceRevision.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::uint64_t RenderSystem::GetMeshInstanceRevision() const
 {
     return mesh_instance_revision_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::GetDirectLights.
+ *
+ * @return TODO: Describe the return value.
+ */
 const std::vector<Light> &RenderSystem::GetDirectLights() const
 {
     return direct_lights_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::ResolveMeshInstance.
+ *
+ * @param handle TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 const MeshInstance *RenderSystem::ResolveMeshInstance(MeshInstanceHandle handle) const
 {
     const std::uint32_t index = handle.Index();
@@ -280,6 +382,12 @@ const MeshInstance *RenderSystem::ResolveMeshInstance(MeshInstanceHandle handle)
                : nullptr;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::ResolveLight.
+ *
+ * @param handle TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 const Light *RenderSystem::ResolveLight(LightHandle handle) const
 {
     const std::uint32_t index = handle.Index();
@@ -288,6 +396,11 @@ const Light *RenderSystem::ResolveLight(LightHandle handle) const
                : nullptr;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::GetGpuLights.
+ *
+ * @return TODO: Describe the return value.
+ */
 const std::vector<GpuLight> &RenderSystem::GetGpuLights()
 {
     if (lights_dirty_)
@@ -297,16 +410,31 @@ const std::vector<GpuLight> &RenderSystem::GetGpuLights()
     return gpu_lights_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::GetLightRevision.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::uint64_t RenderSystem::GetLightRevision() const
 {
     return light_revision_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::GetLightStateRevision.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::uint64_t RenderSystem::GetLightStateRevision() const
 {
     return light_state_revision_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::SetLightShadowHandles.
+ *
+ * @param handles TODO: Describe this parameter.
+ */
 void RenderSystem::SetLightShadowHandles(const std::vector<LightShadowBinding> &handles)
 {
     if (light_shadow_handles_ == handles)
@@ -324,17 +452,32 @@ void RenderSystem::SetLightShadowHandles(const std::vector<LightShadowBinding> &
     ++light_revision_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::GetCameraFrameData.
+ *
+ * @return TODO: Describe the return value.
+ */
 const CameraFrameData &RenderSystem::GetCameraFrameData() const
 {
     return camera_frame_data_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::UpdateCamera.
+ *
+ * @param camera TODO: Describe this parameter.
+ */
 void RenderSystem::UpdateCamera(const Camera &camera)
 {
     active_camera_ = camera;
     camera_frame_data_ = active_camera_.BuildFrameData(camera_aspect_ratio_);
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::SetCameraAspectRatio.
+ *
+ * @param aspect_ratio TODO: Describe this parameter.
+ */
 void RenderSystem::SetCameraAspectRatio(float aspect_ratio)
 {
     if (!std::isfinite(aspect_ratio) || aspect_ratio <= 0.0f)
@@ -345,21 +488,41 @@ void RenderSystem::SetCameraAspectRatio(float aspect_ratio)
     camera_frame_data_ = active_camera_.BuildFrameData(camera_aspect_ratio_);
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::ActiveCamera.
+ *
+ * @return TODO: Describe the return value.
+ */
 const Camera &RenderSystem::ActiveCamera() const
 {
     return active_camera_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::SetAmbientLighting.
+ *
+ * @param ambient TODO: Describe this parameter.
+ */
 void RenderSystem::SetAmbientLighting(const AmbientLighting &ambient)
 {
     ambient_lighting_ = ambient;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::GetAmbientLighting.
+ *
+ * @return TODO: Describe the return value.
+ */
 const AmbientLighting &RenderSystem::GetAmbientLighting() const
 {
     return ambient_lighting_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::SetImageBasedLighting.
+ *
+ * @param lighting TODO: Describe this parameter.
+ */
 void RenderSystem::SetImageBasedLighting(const ImageBasedLighting &lighting)
 {
     const bool resources_changed =
@@ -368,41 +531,81 @@ void RenderSystem::SetImageBasedLighting(const ImageBasedLighting &lighting)
     image_based_lighting_resources_dirty_ = image_based_lighting_resources_dirty_ || resources_changed;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::GetImageBasedLighting.
+ *
+ * @return TODO: Describe the return value.
+ */
 const ImageBasedLighting &RenderSystem::GetImageBasedLighting() const
 {
     return image_based_lighting_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::SetExponentialHeightFog.
+ *
+ * @param fog TODO: Describe this parameter.
+ */
 void RenderSystem::SetExponentialHeightFog(const ExponentialHeightFog &fog)
 {
     exponential_height_fog_ = fog;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::GetExponentialHeightFog.
+ *
+ * @return TODO: Describe the return value.
+ */
 const ExponentialHeightFog &RenderSystem::GetExponentialHeightFog() const
 {
     return exponential_height_fog_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::SetPostProcessSettings.
+ *
+ * @param settings TODO: Describe this parameter.
+ */
 void RenderSystem::SetPostProcessSettings(const PostProcessSettings &settings)
 {
     post_process_settings_ = settings;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::GetPostProcessSettings.
+ *
+ * @return TODO: Describe the return value.
+ */
 const PostProcessSettings &RenderSystem::GetPostProcessSettings() const
 {
     return post_process_settings_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::SetSSAOSettings.
+ *
+ * @param settings TODO: Describe this parameter.
+ */
 void RenderSystem::SetSSAOSettings(const SSAOSettings &settings)
 {
     ssao_settings_ = settings;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::GetSSAOSettings.
+ *
+ * @return TODO: Describe the return value.
+ */
 const SSAOSettings &RenderSystem::GetSSAOSettings() const
 {
     return ssao_settings_;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::ConsumeImageBasedLightingResourcesDirty.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool RenderSystem::ConsumeImageBasedLightingResourcesDirty()
 {
     const bool result = image_based_lighting_resources_dirty_;
@@ -410,6 +613,9 @@ bool RenderSystem::ConsumeImageBasedLightingResourcesDirty()
     return result;
 }
 
+/**
+ * @brief TODO: Describe RenderSystem::RebuildGpuLights.
+ */
 void RenderSystem::RebuildGpuLights()
 {
     gpu_lights_.clear();

@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/assets/asset_io.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/asset_io.h"
 
 #include "assets/asset_error.h"
@@ -9,6 +24,12 @@
 
 namespace CEngine::Assets
 {
+/**
+ * @brief TODO: Describe AssetFile::Load.
+ *
+ * @param path TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool AssetFile::Load(const std::filesystem::path &path)
 {
     bytes_.clear();
@@ -21,6 +42,11 @@ bool AssetFile::Load(const std::filesystem::path &path)
     return Validate();
 }
 
+/**
+ * @brief TODO: Describe AssetFile::PlatformTarget.
+ *
+ * @return TODO: Describe the return value.
+ */
 std::string_view AssetFile::PlatformTarget() const
 {
     const char *begin = header_.platform_target.data();
@@ -28,6 +54,11 @@ std::string_view AssetFile::PlatformTarget() const
     return {begin, static_cast<std::size_t>(end - begin)};
 }
 
+/**
+ * @brief TODO: Describe AssetFile::Payload.
+ *
+ * @return TODO: Describe the return value.
+ */
 ByteView AssetFile::Payload() const
 {
     if (header_.payload_offset > bytes_.size() ||
@@ -38,6 +69,11 @@ ByteView AssetFile::Payload() const
     return {bytes_.data() + header_.payload_offset, static_cast<std::size_t>(header_.payload_size)};
 }
 
+/**
+ * @brief TODO: Describe AssetFile::Validate.
+ *
+ * @return TODO: Describe the return value.
+ */
 bool AssetFile::Validate()
 {
     if (bytes_.size() < sizeof(DiskAssetHeader))
@@ -92,6 +128,13 @@ bool AssetFile::Validate()
     return true;
 }
 
+/**
+ * @brief TODO: Describe LoadFileBytes.
+ *
+ * @param path TODO: Describe this parameter.
+ * @param out_bytes TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool LoadFileBytes(const std::filesystem::path &path, std::vector<std::uint8_t> &out_bytes)
 {
     std::ifstream file(path, std::ios::binary | std::ios::ate);

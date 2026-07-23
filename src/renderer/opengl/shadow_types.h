@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/opengl/shadow_types.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #ifndef CENGINE_RENDERER_OPENGL_SHADOW_TYPES_H
 #define CENGINE_RENDERER_OPENGL_SHADOW_TYPES_H
 
@@ -24,6 +39,9 @@ constexpr int KTypeDirectional = 2;
 constexpr int KTypePoint = 3;
 } // namespace ShadowLimits
 
+/**
+ * @brief TODO: Describe ShadowGpuData.
+ */
 struct ShadowGpuData
 {
     std::array<glm::mat4, ShadowLimits::KMaxSpotShadows> spot_matrices{};

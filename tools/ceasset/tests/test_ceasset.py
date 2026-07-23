@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 import importlib.util
@@ -20,12 +35,25 @@ SPEC.loader.exec_module(ceasset)
 
 
 def quiet_call(function, *args, **kwargs):
+    """TODO: Describe `quiet_call`.
+
+    Args:
+        function: TODO: Describe this parameter.
+        *args: TODO: Describe this parameter.
+        **kwargs: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
         return function(*args, **kwargs)
 
 
 class CeassetTests(unittest.TestCase):
+    """TODO: Describe `CeassetTests`."""
+
     def test_import_roundtrips_binary_registry(self) -> None:
+        """TODO: Describe `test_import_roundtrips_binary_registry`."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "assets" / "source" / "textures" / "albedo.dds"
@@ -42,6 +70,7 @@ class CeassetTests(unittest.TestCase):
             self.assertEqual(records[0].output, Path("assets/compiled/textures/albedo.dds"))
 
     def test_convert_copies_passthrough_target_asset_and_skips_incremental_build(self) -> None:
+        """TODO: Describe `test_convert_copies_passthrough_target_asset_and_skips_incremental_build`."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "assets" / "source" / "audio" / "voice.opus"
@@ -58,6 +87,7 @@ class CeassetTests(unittest.TestCase):
             self.assertEqual(len(cache), 1)
 
     def test_png_converts_to_dds_with_pillow(self) -> None:
+        """TODO: Describe `test_png_converts_to_dds_with_pillow`."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "assets" / "source" / "textures" / "albedo.png"
@@ -65,13 +95,37 @@ class CeassetTests(unittest.TestCase):
             source.write_bytes(b"png payload")
 
             class FakeImage:
+                """TODO: Describe `FakeImage`."""
+
                 def __enter__(self):
+                    """TODO: Describe `__enter__`.
+
+                    Returns:
+                        TODO: Describe the produced value.
+                    """
                     return self
 
                 def __exit__(self, _exc_type, _exc, _traceback):
+                    """TODO: Describe `__exit__`.
+
+                    Args:
+                        _exc_type: TODO: Describe this parameter.
+                        _exc: TODO: Describe this parameter.
+                        _traceback: TODO: Describe this parameter.
+
+                    Returns:
+                        TODO: Describe the produced value.
+                    """
                     return False
 
                 def save(self, output: Path, format: str, pixel_format: str) -> None:
+                    """TODO: Describe `save`.
+
+                    Args:
+                        output: TODO: Describe this parameter.
+                        format: TODO: Describe this parameter.
+                        pixel_format: TODO: Describe this parameter.
+                    """
                     output.write_bytes(b"DDS " + format.encode("ascii") + b":" + pixel_format.encode("ascii"))
 
             image_module = types.ModuleType("PIL.Image")
@@ -91,6 +145,7 @@ class CeassetTests(unittest.TestCase):
             self.assertEqual(records[0].output, Path("assets/compiled/textures/albedo.dds"))
 
     def test_png_is_rejected_until_a_real_conversion_path_exists(self) -> None:
+        """TODO: Describe `test_png_is_rejected_until_a_real_conversion_path_exists`."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "assets" / "source" / "textures" / "albedo.png"
@@ -102,6 +157,7 @@ class CeassetTests(unittest.TestCase):
             self.assertFalse(paths.registry_path.exists())
 
     def test_blend_is_not_a_ceasset_cli_source_path(self) -> None:
+        """TODO: Describe `test_blend_is_not_a_ceasset_cli_source_path`."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "assets" / "source" / "hero.blend"

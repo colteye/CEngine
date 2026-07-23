@@ -1,3 +1,18 @@
+#   _____ ______             _
+#  / ____|  ____|           (_)
+# | |    | |__   _ __   __ _ _ _ __   ___
+# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |____| |____| | | | (_| | | | | |  __/
+#  \_____|______|_| |_|\__, |_|_| |_|\___|
+#                       __/ |
+#                      |___/
+
+"""TODO: Briefly describe this module.
+
+Author:
+    Erik Coltey
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -19,22 +34,53 @@ COLLIDER_PROPERTY = "ce_collider"
 
 @dataclass(frozen=True)
 class EntityIssue:
+    """TODO: Describe `EntityIssue`."""
+
     object_name: str
     message: str
 
     def __str__(self) -> str:
+        """TODO: Describe `__str__`.
+
+        Returns:
+            TODO: Describe the produced value.
+        """
         return f"{self.object_name}: {self.message}"
 
 
 def display_name(identifier: str) -> str:
+    """TODO: Describe `display_name`.
+
+    Args:
+        identifier: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return identifier.replace("_", " ").strip().title()
 
 
 def property_name(field: dict[str, object]) -> str:
+    """TODO: Describe `property_name`.
+
+    Args:
+        field: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return str(field.get("blender_property", f"ce_{field['name']}"))
 
 
 def entity_classname(obj: object) -> str:
+    """TODO: Describe `entity_classname`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     getter = getattr(obj, "get", None)
     explicit = str(getter(CLASSNAME_PROPERTY, "") if callable(getter) else "")
     if explicit:
@@ -46,6 +92,14 @@ def entity_classname(obj: object) -> str:
 
 
 def native_object_type(classname: str) -> str:
+    """TODO: Describe `native_object_type`.
+
+    Args:
+        classname: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return {
         "prop": "MESH",
         "light": "LIGHT",
@@ -54,6 +108,15 @@ def native_object_type(classname: str) -> str:
 
 
 def entity_schema(game_schema: GameSchema, obj: object) -> dict[str, object] | None:
+    """TODO: Describe `entity_schema`.
+
+    Args:
+        game_schema: TODO: Describe this parameter.
+        obj: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     classname = entity_classname(obj)
     return game_schema.entity(classname) if classname else None
 
@@ -61,6 +124,14 @@ def entity_schema(game_schema: GameSchema, obj: object) -> dict[str, object] | N
 def iter_property_fields(
     schema: dict[str, object],
 ) -> Iterator[tuple[dict[str, object], dict[str, object] | None]]:
+    """TODO: Describe `iter_property_fields`.
+
+    Args:
+        schema: TODO: Describe this parameter.
+
+    Yields:
+        TODO: Describe the produced value.
+    """
     for field in schema["fields"]:
         if field["type"] == "transform":
             continue
@@ -72,6 +143,15 @@ def iter_property_fields(
 
 
 def _id_property_value(field: dict[str, object], default: object) -> object:
+    """TODO: Describe `_id_property_value`.
+
+    Args:
+        field: TODO: Describe this parameter.
+        default: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     field_type = field["type"]
     if field_type == "enum":
         values = field.get("values", {})
@@ -91,6 +171,13 @@ def initialize_entity_properties(
     *,
     overwrite_classname: bool = True,
 ) -> None:
+    """TODO: Describe `initialize_entity_properties`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+        schema: TODO: Describe this parameter.
+        overwrite_classname: TODO: Describe this parameter.
+    """
     if overwrite_classname:
         obj[CLASSNAME_PROPERTY] = str(schema["classname"])
     if schema["classname"] == "prop" and COLLIDER_PROPERTY not in obj:
@@ -133,6 +220,14 @@ def initialize_entity_properties(
 
 
 def enum_items(field: dict[str, object]) -> tuple[tuple[str, str, str], ...]:
+    """TODO: Describe `enum_items`.
+
+    Args:
+        field: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return tuple(
         (str(name), display_name(str(name)), f"{display_name(str(name))} mode")
         for name in field.get("values", {})
@@ -142,6 +237,15 @@ def enum_items(field: dict[str, object]) -> tuple[tuple[str, str, str], ...]:
 def field_by_property(
     schema: dict[str, object], key: str
 ) -> tuple[dict[str, object], dict[str, object] | None] | None:
+    """TODO: Describe `field_by_property`.
+
+    Args:
+        schema: TODO: Describe this parameter.
+        key: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     return next(
         (
             (field, member)
@@ -156,6 +260,15 @@ def validate_entities(
     objects: Iterable[object],
     game_schema: GameSchema,
 ) -> tuple[EntityIssue, ...]:
+    """TODO: Describe `validate_entities`.
+
+    Args:
+        objects: TODO: Describe this parameter.
+        game_schema: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     objects = tuple(objects)
     issues: list[EntityIssue] = []
     enabled_skyboxes = 0
@@ -294,6 +407,16 @@ def validate_entities(
 
 
 def _get_property(obj: object, key: str, default: object) -> object:
+    """TODO: Describe `_get_property`.
+
+    Args:
+        obj: TODO: Describe this parameter.
+        key: TODO: Describe this parameter.
+        default: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     getter = getattr(obj, "get", None)
     return getter(key, default) if callable(getter) else default
 
@@ -303,6 +426,13 @@ def store_lightmap_bindings(
     placements: dict[str, LightmapPlacement],
     store_path: Callable[[Path], str],
 ) -> None:
+    """TODO: Describe `store_lightmap_bindings`.
+
+    Args:
+        objects: TODO: Describe this parameter.
+        placements: TODO: Describe this parameter.
+        store_path: TODO: Describe this parameter.
+    """
     by_name = {
         str(getattr(obj, "name", "")): obj
         for obj in objects
@@ -319,6 +449,14 @@ def store_lightmap_bindings(
 
 
 def clear_lightmap_bindings(objects: Iterable[object]) -> int:
+    """TODO: Describe `clear_lightmap_bindings`.
+
+    Args:
+        objects: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     cleared = 0
     for obj in objects:
         changed = False
@@ -342,6 +480,15 @@ def load_lightmap_bindings(
     objects: Iterable[object],
     resolve_path: Callable[[str], Path],
 ) -> tuple[dict[str, LightmapPlacement], list[Path]]:
+    """TODO: Describe `load_lightmap_bindings`.
+
+    Args:
+        objects: TODO: Describe this parameter.
+        resolve_path: TODO: Describe this parameter.
+
+    Returns:
+        TODO: Describe the produced value.
+    """
     object_list = tuple(objects)
     placements: dict[str, LightmapPlacement] = {}
     outputs: set[Path] = set()

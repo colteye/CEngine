@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/opengl/render_data.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #ifndef CENGINE_RENDERER_OPENGL_RENDER_DATA_H
 #define CENGINE_RENDERER_OPENGL_RENDER_DATA_H
 
@@ -15,6 +30,9 @@
 namespace CEngine::Renderer::OpenGL
 {
 
+/**
+ * @brief TODO: Describe DrawItem.
+ */
 struct DrawItem
 {
     const Mesh *mesh = nullptr;
@@ -34,6 +52,9 @@ struct DrawItem
     float lightmap_rgbm_range = 8.0f;
 };
 
+/**
+ * @brief TODO: Describe RenderQueue.
+ */
 enum class RenderQueue
 {
     DeferredOpaque,
@@ -42,6 +63,9 @@ enum class RenderQueue
     None
 };
 
+/**
+ * @brief TODO: Describe RenderQueues.
+ */
 struct RenderQueues
 {
     std::vector<uint32_t> opaque_deferred;
@@ -49,6 +73,11 @@ struct RenderQueues
     std::vector<uint32_t> transparent;
     std::vector<uint32_t> shadow_casters;
 
+    /**
+     * @brief TODO: Describe ClearAndReserve.
+     *
+     * @param draw_item_count TODO: Describe this parameter.
+     */
     void ClearAndReserve(size_t draw_item_count);
 };
 

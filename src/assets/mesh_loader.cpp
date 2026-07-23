@@ -1,3 +1,18 @@
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/assets/mesh_loader.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
+
 #include "assets/mesh_loader.h"
 
 #include "assets/asset_error.h"
@@ -27,6 +42,9 @@ constexpr std::array<char, 4> MeshMetadataMagic = {'C', 'E', 'M', 'H'};
 constexpr std::uint16_t MeshMetadataVersion = 2;
 
 #pragma pack(push, 1)
+/**
+ * @brief TODO: Describe DiskMeshMetadata.
+ */
 struct DiskMeshMetadata
 {
     std::array<char, 4> magic = MeshMetadataMagic;
@@ -49,6 +67,13 @@ struct DiskMeshMetadata
 
 static_assert(sizeof(DiskMeshMetadata) == 72, "DiskMeshMetadata must stay packed and stable.");
 
+/**
+ * @brief TODO: Describe ReadMetadata.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param value TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadMetadata(ByteView bytes, DiskMeshMetadata &value)
 {
     if (bytes.size < sizeof(value))
@@ -84,6 +109,13 @@ bool ReadMetadata(ByteView bytes, DiskMeshMetadata &value)
            ReadU32LE(bytes, offset, value.reserved2);
 }
 
+/**
+ * @brief TODO: Describe ReadVec3.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 glm::vec3 ReadVec3(ByteView bytes, std::size_t offset)
 {
     glm::vec3 value;
@@ -93,6 +125,13 @@ glm::vec3 ReadVec3(ByteView bytes, std::size_t offset)
     return value;
 }
 
+/**
+ * @brief TODO: Describe ReadVec2.
+ *
+ * @param bytes TODO: Describe this parameter.
+ * @param offset TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 glm::vec2 ReadVec2(ByteView bytes, std::size_t offset)
 {
     glm::vec2 value;
@@ -101,6 +140,14 @@ glm::vec2 ReadVec2(ByteView bytes, std::size_t offset)
     return value;
 }
 
+/**
+ * @brief TODO: Describe CheckedMul.
+ *
+ * @param left TODO: Describe this parameter.
+ * @param right TODO: Describe this parameter.
+ * @param result TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool CheckedMul(std::uint32_t left, std::uint32_t right, std::size_t &result)
 {
     const std::uint64_t wide = static_cast<std::uint64_t>(left) * static_cast<std::uint64_t>(right);
@@ -112,6 +159,13 @@ bool CheckedMul(std::uint32_t left, std::uint32_t right, std::size_t &result)
     return true;
 }
 
+/**
+ * @brief TODO: Describe TangentForNormal.
+ *
+ * @param raw_tangent TODO: Describe this parameter.
+ * @param normal TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 glm::vec3 TangentForNormal(const glm::vec3 &raw_tangent, const glm::vec3 &normal)
 {
     constexpr float Epsilon = 1.0e-12f;
@@ -130,6 +184,15 @@ glm::vec3 TangentForNormal(const glm::vec3 &raw_tangent, const glm::vec3 &normal
     return tangent / std::sqrt(tangent_length_squared);
 }
 
+/**
+ * @brief TODO: Describe ReadMeshPayloads.
+ *
+ * @param asset TODO: Describe this parameter.
+ * @param metadata TODO: Describe this parameter.
+ * @param vertex_bytes TODO: Describe this parameter.
+ * @param index_bytes TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool ReadMeshPayloads(const AssetFile &asset, DiskMeshMetadata &metadata, ByteView &vertex_bytes, ByteView &index_bytes)
 {
     const ByteView payload = asset.Payload();
@@ -172,6 +235,13 @@ bool ReadMeshPayloads(const AssetFile &asset, DiskMeshMetadata &metadata, ByteVi
 
 } // namespace
 
+/**
+ * @brief TODO: Describe LoadMeshAsset.
+ *
+ * @param path TODO: Describe this parameter.
+ * @param mesh TODO: Describe this parameter.
+ * @return TODO: Describe the return value.
+ */
 bool LoadMeshAsset(const std::filesystem::path &path, Renderer::Mesh &mesh)
 {
     AssetFile asset;
