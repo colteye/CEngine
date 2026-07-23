@@ -88,7 +88,7 @@ struct CAssetComponent {
 
 class CAsset {
 public:
-    bool Load(const std::filesystem::path& path, std::string* error = nullptr);
+    bool Load(const std::filesystem::path& path);
 
     CAssetCompositionType CompositionType() const
     {
@@ -104,7 +104,7 @@ public:
     bool Component(const CAssetObject& object, std::uint32_t local_index, CAssetComponent& component) const;
 
 private:
-    bool Parse(std::string* error);
+    bool Parse();
     bool StringViewAt(std::uint32_t offset, std::uint32_t size, std::string_view& view) const;
 
     AssetFile file;

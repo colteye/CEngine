@@ -14,8 +14,11 @@ public:
 	PointShadowDepth();
 
 	void Use() const;
-	void Update(const glm::mat4& model, const glm::mat4& view, const glm::mat4& projection,
-		const glm::vec3& light_position, float far_plane, const Material& material, GLuint albedo_texture);
+	void UpdateFrame(const glm::mat4& view,
+		const glm::mat4& projection, const glm::vec3& light_position,
+		float far_plane);
+	void UpdateObject(const glm::mat4& model,
+		const Material& material, GLuint albedo_texture);
 
 private:
 	void InitializeParameters();

@@ -27,7 +27,9 @@ The desired user-facing pipeline is direct:
 Do not emit intermediate/debug assets as part of normal conversion. If a source
 format needs more implementation work, add a tested Python conversion path for
 that format before accepting it. Debugging should happen through tests,
-validation, and explicit assertions rather than hidden generated files.
+validation, and explicit assertions rather than hidden intermediate assets.
+Build-generated schema headers and the flattened game file are explicit CMake
+outputs described in [Game files and generated schemas](game_schema.md).
 
 External OSS tools are acceptable conversion backends. They should be invoked
 explicitly by Python with argument lists, not through shell scripts or hidden
@@ -111,11 +113,11 @@ contain object name, role id, Blender object type id, parent name, first
 component row, component count, and a row-major `world_from_local` matrix.
 Component rows store component kind ids and paths relative to the `.casset`
 bundle, such as `meshes/SM_Body.cmesh`. Heavy mesh, material, skeleton,
-animation, and texture data stays in those component target assets. A scene
-loader resolves a `prefab_instance` once into ordinary entity records; the
-runtime does not retain a mutable prefab hierarchy.
+animation, and texture data stays in those component target assets. Scene files
+reference their final runtime entities directly rather than retaining mutable
+prefab-instance entities.
 
-The current `.cmat` v3 payload is binary material data. It stores a fixed header,
+The current `.cmat` v4 payload is binary material data. It stores a fixed header,
 texture binding rows, and a UTF-8 string table. The header carries base-color,
 metalness, roughness, and ambient-occlusion constants. The shader is an explicit
 id mapped to `MaterialShaderType`; the format is not hardcoded to PBR. Texture
@@ -135,6 +137,11 @@ emission, alpha, and arbitrary node
 graphs are outside this basic shader contract and are not serialized. Runtime
 fallbacks are neutral white and flat normal, never a generic checkerboard. The
 runtime intentionally rejects older `.cmat` payload versions.
+
+The asset layer validates and reads DDS files into backend-neutral
+`Renderer::Texture` values containing a format and mip byte arrays. Materials
+contain those loaded texture values; lightmaps and sky panoramas use the same
+type. The OpenGL backend uploads this data and performs no game-asset file I/O.
 
 Blender light energy is serialized directly. The PBR shader consumes that value
 as scene-linear intensity; there is no legacy renderer-side brightness
@@ -202,21 +209,14 @@ per-class auxiliary arrays, connections, and a UTF-8 string table. Strings are
 offset/size byte ranges without a terminator. Every entity declaration belongs
 to exactly one class block.
 
-The current class records are `empty`, `prop`, `camera`, `light`,
-`prefab_instance`, `trigger`, `info_player_start`, `skybox`, and
-`exponential_height_fog`. `prop` is one class for
+Class record layouts come from the game schema packaged for the executable.
+The current viewer records are `prop`, `player`, `light`, `skybox`,
+`exponential_height_fog`, and `post_process`. `prop` is one class for
 both static and dynamic objects. Its fixed record stores transform, mesh and
 material references, optional lightmap binding, flags, collision half-extents,
 and mass. Prop flag bit `1` is visible, bit `2` enables collision, and bit `4`
 makes the prop dynamic; an unset dynamic bit means static. Only static props may
 carry baked lightmaps.
-
-A `prefab_instance` record owns a range into its class auxiliary lightmap table.
-Each row identifies a deterministically sorted `.casset` object index and stores
-the scene lightmap texture reference, UV scale/offset, and RGBM range. The scene
-loader copies that binding to every material-split `prop` realized from the
-object. Lighting is therefore placement-owned; reusable `.casset` files retain
-UV1 but never contain a scene bake.
 
 Blender/Cycles bakes two albedo-independent diffuse passes into the lightmap:
 indirect illumination from `baked` and `mixed` lights, plus direct illumination
@@ -232,6 +232,11 @@ UUIDs/GUIDs are raw 16-byte values. Deterministic writers sort normalized asset
 references and class blocks, sort connections by their stable fields, use
 deterministic entity order supplied by the normalized scene, and zero alignment
 padding.
+
+The common asset header, `.cscene` tables, class indices, auxiliary asset
+indices, and generated entity records are decoded explicitly as little-endian
+values. Runtime readers do not cast these serialized byte ranges to host
+structures.
 
 The final word of a `light` record is a flag mask: bit `1` enables the light and
 bit `2` makes realtime and mixed lights cast shadows. The Blender exporter maps

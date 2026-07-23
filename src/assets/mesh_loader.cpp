@@ -1,6 +1,8 @@
 #include "assets/mesh_loader.h"
 
+#include "assets/asset_error.h"
 #include "assets/asset_io.h"
+#include "assets/binary.h"
 
 #include <array>
 #include <cmath>
@@ -44,36 +46,46 @@ struct DiskMeshMetadata {
 
 static_assert(sizeof(DiskMeshMetadata) == 72, "DiskMeshMetadata must stay packed and stable.");
 
-void SetError(std::string* error, const std::string& message)
+bool ReadMetadata(ByteView bytes, DiskMeshMetadata& value)
 {
-    if (error != nullptr)
-    {
-        *error = message;
-    }
+    if (bytes.size < sizeof(value)) return false;
+    std::size_t offset = 0;
+    std::memcpy(value.magic.data(), bytes.data, value.magic.size());
+    offset += value.magic.size();
+    if (!ReadU16LE(bytes, offset, value.version) ||
+        !ReadU16LE(bytes, offset, value.header_size) ||
+        !ReadU32LE(bytes, offset, value.flags) ||
+        !ReadU32LE(bytes, offset, value.vertex_count) ||
+        !ReadU32LE(bytes, offset, value.index_count) ||
+        !ReadU32LE(bytes, offset, value.vertex_stride) ||
+        !ReadU32LE(bytes, offset, value.index_size))
+        return false;
+    for (float& component : value.bounds_min)
+        if (!ReadF32LE(bytes, offset, component)) return false;
+    for (float& component : value.bounds_max)
+        if (!ReadF32LE(bytes, offset, component)) return false;
+    return ReadU32LE(bytes, offset, value.material_slot_count) &&
+        ReadU32LE(bytes, offset, value.geometry_offset) &&
+        ReadU32LE(bytes, offset, value.reserved0) &&
+        ReadU32LE(bytes, offset, value.reserved1) &&
+        ReadU32LE(bytes, offset, value.reserved2);
 }
 
-std::uint32_t ReadU32(const std::uint8_t* data)
+glm::vec3 ReadVec3(ByteView bytes, std::size_t offset)
 {
-    std::uint32_t value = 0;
-    std::memcpy(&value, data, sizeof(value));
+    glm::vec3 value;
+    ReadF32LE(bytes, offset, value.x);
+    ReadF32LE(bytes, offset, value.y);
+    ReadF32LE(bytes, offset, value.z);
     return value;
 }
 
-float ReadF32(const std::uint8_t* data)
+glm::vec2 ReadVec2(ByteView bytes, std::size_t offset)
 {
-    float value = 0.0f;
-    std::memcpy(&value, data, sizeof(value));
+    glm::vec2 value;
+    ReadF32LE(bytes, offset, value.x);
+    ReadF32LE(bytes, offset, value.y);
     return value;
-}
-
-glm::vec3 ReadVec3(const std::uint8_t* data)
-{
-    return glm::vec3(ReadF32(data), ReadF32(data + 4), ReadF32(data + 8));
-}
-
-glm::vec2 ReadVec2(const std::uint8_t* data)
-{
-    return glm::vec2(ReadF32(data), ReadF32(data + 4));
 }
 
 bool CheckedMul(std::uint32_t left, std::uint32_t right, std::size_t& result)
@@ -108,27 +120,25 @@ glm::vec3 TangentForNormal(const glm::vec3& raw_tangent, const glm::vec3& normal
 }
 
 bool ReadMeshPayloads(const AssetFile& asset, DiskMeshMetadata& metadata,
-    ByteView& vertex_bytes, ByteView& index_bytes, std::string* error)
+    ByteView& vertex_bytes, ByteView& index_bytes)
 {
     const ByteView payload = asset.Payload();
     if (payload.size < sizeof(DiskMeshMetadata))
     {
-        SetError(error, "mesh payload is invalid");
-        return false;
+        return AssetError("mesh payload is invalid");
     }
 
-    std::memcpy(&metadata, payload.data, sizeof(metadata));
+    if (!ReadMetadata(payload, metadata))
+        return AssetError("mesh payload is invalid");
     if (metadata.magic != MeshMetadataMagic ||
         metadata.version != MeshMetadataVersion ||
         metadata.header_size != sizeof(DiskMeshMetadata))
     {
-        SetError(error, "mesh metadata header is not supported");
-        return false;
+        return AssetError("mesh metadata header is not supported");
     }
     if (metadata.geometry_offset > payload.size)
     {
-        SetError(error, "mesh geometry offset is outside the payload");
-        return false;
+        return AssetError("mesh geometry offset is outside the payload");
     }
 
     std::size_t vertex_size = 0;
@@ -136,15 +146,14 @@ bool ReadMeshPayloads(const AssetFile& asset, DiskMeshMetadata& metadata,
     if (!CheckedMul(metadata.vertex_count, metadata.vertex_stride, vertex_size) ||
         !CheckedMul(metadata.index_count, metadata.index_size, index_size))
     {
-        SetError(error, "mesh buffer sizes overflow");
-        return false;
+        return AssetError("mesh buffer sizes overflow");
     }
     const std::size_t geometry_size = payload.size - metadata.geometry_offset;
     if (vertex_size > geometry_size ||
         index_size > geometry_size - vertex_size)
     {
-        SetError(error, "mesh payload is smaller than metadata declares");
-        return false;
+        return AssetError(
+            "mesh payload is smaller than metadata declares");
     }
 
     vertex_bytes = {payload.data + metadata.geometry_offset, vertex_size};
@@ -156,11 +165,10 @@ bool ReadMeshPayloads(const AssetFile& asset, DiskMeshMetadata& metadata,
 
 bool LoadMeshAsset(const std::filesystem::path& path,
     const std::vector<Renderer::Material*>& material_slots,
-    Renderer::Mesh& mesh,
-    std::string* error)
+    Renderer::Mesh& mesh)
 {
     AssetFile asset;
-    if (!asset.Load(path, error))
+    if (!asset.Load(path))
     {
         return false;
     }
@@ -168,28 +176,27 @@ bool LoadMeshAsset(const std::filesystem::path& path,
     DiskMeshMetadata metadata;
     ByteView vertex_bytes;
     ByteView index_bytes;
-    if (!ReadMeshPayloads(asset, metadata, vertex_bytes, index_bytes, error))
+    if (!ReadMeshPayloads(asset, metadata, vertex_bytes, index_bytes))
     {
         return false;
     }
 
     if (metadata.material_slot_count != 1)
     {
-        SetError(error, "mesh loader expects exactly one material slot in this phase");
-        return false;
+        return AssetError(
+            "mesh loader expects exactly one material slot in this phase");
     }
     const std::uint32_t expected_vertex_stride =
         (metadata.flags & MeshFlagSkinned) != 0 ? SkinnedVertexStride : StaticVertexStride;
     if (metadata.vertex_stride != expected_vertex_stride || metadata.index_size != sizeof(std::uint32_t))
     {
-        SetError(error, "mesh loader does not support this vertex/index layout");
-        return false;
+        return AssetError(
+            "mesh loader does not support this vertex/index layout");
     }
 
     if (material_slots.size() != metadata.material_slot_count || material_slots[0] == nullptr)
     {
-        SetError(error, "mesh material slot 0 is not bound");
-        return false;
+        return AssetError("mesh material slot 0 is not bound");
     }
 
     Renderer::MeshData mesh_data;
@@ -211,18 +218,24 @@ bool LoadMeshAsset(const std::filesystem::path& path,
 
     for (std::uint32_t index = 0; index < metadata.index_count; ++index)
     {
-        const std::uint32_t vertex_index = ReadU32(index_bytes.data + index * sizeof(std::uint32_t));
+        std::size_t index_offset =
+            static_cast<std::size_t>(index) * sizeof(std::uint32_t);
+        std::uint32_t vertex_index = 0;
+        if (!ReadU32LE(index_bytes, index_offset, vertex_index))
+            return AssetError("mesh index buffer is truncated");
         if (vertex_index >= metadata.vertex_count)
         {
-            SetError(error, "mesh index references a vertex outside the vertex buffer");
-            return false;
+            return AssetError(
+                "mesh index references a vertex outside the vertex buffer");
         }
 
-        const std::uint8_t* vertex = vertex_bytes.data + vertex_index * metadata.vertex_stride;
-        mesh_data.vertices.push_back(ReadVec3(vertex));
-        mesh_data.normals.push_back(ReadVec3(vertex + 12));
-        mesh_data.uvs.push_back(ReadVec2(vertex + 24));
-        mesh_data.lightmap_uvs.push_back(ReadVec2(vertex + 32));
+        const std::size_t vertex =
+            static_cast<std::size_t>(vertex_index) * metadata.vertex_stride;
+        mesh_data.vertices.push_back(ReadVec3(vertex_bytes, vertex));
+        mesh_data.normals.push_back(ReadVec3(vertex_bytes, vertex + 12u));
+        mesh_data.uvs.push_back(ReadVec2(vertex_bytes, vertex + 24u));
+        mesh_data.lightmap_uvs.push_back(
+            ReadVec2(vertex_bytes, vertex + 32u));
         mesh_data.tangents.push_back(glm::vec3(0.0f));
     }
 

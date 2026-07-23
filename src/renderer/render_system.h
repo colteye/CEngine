@@ -1,13 +1,14 @@
 #ifndef RENDER_SYSTEM_H
 #define RENDER_SYSTEM_H
 
+#include "renderer/camera.h"
 #include "renderer/light.h"
 #include "renderer/render_backend.h"
 #include "renderer/renderable.h"
+#include "renderer/texture.h"
 
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
 #include <memory>
 #include <vector>
 
@@ -18,7 +19,6 @@ namespace CEngine::Renderer {
 struct RenderFrameConstants
 {
 	glm::vec3 camera_position = glm::vec3(0.0f);
-	glm::mat4 model = glm::mat4(1.0f);
 	glm::mat4 view = glm::mat4(1.0f);
 	glm::mat4 proj = glm::mat4(1.0f);
 	float near_clip = 0.1f;
@@ -35,7 +35,7 @@ struct AmbientLighting
 
 struct ImageBasedLighting
 {
-    std::filesystem::path panorama_path;
+    const Texture* panorama = nullptr;
     // The panorama is both visible background and lighting source; they need
     // independent exposure controls for practical scene art direction.
     float sky_intensity = 1.0f;
@@ -56,8 +56,8 @@ struct ExponentialHeightFog
     bool enabled = false;
 };
 
-// Presentation-only image treatment. This belongs to the game/view setup, not
-// to scene entities, so one game can choose its look without authored data.
+// Presentation-only image treatment. A scene can publish these values through
+// its post_process entity, and a game may still override them at runtime.
 struct PostProcessSettings
 {
 	bool bloom_enabled = true;
@@ -89,73 +89,78 @@ struct SSAOSettings
 class RenderSystem
 {
 public:
-	static bool Initialize(GLFWwindow* window, int window_width, int window_height);
-	static void Shutdown();
-	static bool Resize(int window_width, int window_height);
+	static constexpr std::size_t MaxGpuLights = 64;
+
+	~RenderSystem();
+	bool Initialize(GLFWwindow* window, int window_width, int window_height);
+	void Shutdown();
+	bool Resize(int window_width, int window_height);
 	
-	static void Render();
-	static void RenderDepthOnly(const glm::mat4& view, const glm::mat4& projection,
-		uint32_t native_depth_texture, int texture_width, int texture_height);
+	void Render();
 
-	static void RegisterMesh(const Mesh* mesh);
-	static RenderableHandle RegisterRenderable(const Renderable& renderable);
-	static void RemoveRenderable(RenderableHandle handle);
-	static void UpdateRenderableTransform(RenderableHandle handle, const glm::mat4& transform);
-	static bool RegisterMaterial(Material* material);
-	static void RemoveMaterial(Material* material);
-	static bool RegisterLightmap(const Lightmap* lightmap);
-	static void RemoveLightmap(const Lightmap* lightmap);
+	RenderableHandle RegisterRenderable(const Renderable& renderable);
+	void RemoveRenderable(RenderableHandle handle);
+	void UpdateRenderable(RenderableHandle handle, const glm::mat4& transform,
+		std::uint32_t flags);
+	bool RegisterMaterial(Material* material);
+	void RemoveMaterial(Material* material);
+	bool RegisterLightmap(const Texture* lightmap);
+	void RemoveLightmap(const Texture* lightmap);
 
-	static LightHandle RegisterLight(const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow);
-	static void UpdateLight(LightHandle id, const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow);
-	static LightHandle RegisterLight(const LightRecord& light);
-	static void RemoveLight(LightHandle id);
-	static void UpdateLight(LightHandle id, const LightRecord& light);
+	LightHandle RegisterLight(const Light& light);
+	void RemoveLight(LightHandle id);
+	void UpdateLight(LightHandle id, const Light& light);
 
-	static const std::vector<Renderable>& GetRenderables();
-	static const std::vector<LightRecord>& GetDirectLights();
-	static const Renderable* ResolveRenderable(RenderableHandle handle);
-	static const LightRecord* ResolveLight(LightHandle handle);
-	static const std::vector<GpuLight>& GetGpuLights();
-	static uint64_t GetLightRevision();
-	static size_t GetMaxGpuLights();
-	static void SetLightShadowHandles(const std::vector<LightShadowGpuHandle>& handles);
-	static void SetFrameConstants(const RenderFrameConstants& constants);
-	static const RenderFrameConstants& GetFrameConstants();
-	static void SetAmbientLighting(const AmbientLighting& ambient);
-	static const AmbientLighting& GetAmbientLighting();
-	static void SetImageBasedLighting(const ImageBasedLighting& lighting);
-	static const ImageBasedLighting& GetImageBasedLighting();
-	static void SetExponentialHeightFog(const ExponentialHeightFog& fog);
-	static const ExponentialHeightFog& GetExponentialHeightFog();
-	static void SetPostProcessSettings(const PostProcessSettings& settings);
-	static const PostProcessSettings& GetPostProcessSettings();
-	static void SetSSAOSettings(const SSAOSettings& settings);
-	static const SSAOSettings& GetSSAOSettings();
-	static bool ConsumeImageBasedLightingResourcesDirty();
+	const std::vector<Renderable>& GetRenderables() const;
+	std::uint64_t GetRenderableRevision() const;
+	const std::vector<Light>& GetDirectLights() const;
+	const Renderable* ResolveRenderable(RenderableHandle handle) const;
+	const Light* ResolveLight(LightHandle handle) const;
+	const std::vector<GpuLight>& GetGpuLights();
+	std::uint64_t GetLightRevision() const;
+	std::uint64_t GetLightStateRevision() const;
+	void SetLightShadowHandles(const std::vector<LightShadowGpuHandle>& handles);
+	const RenderFrameConstants& GetFrameConstants() const;
+	void UpdateCamera(const Camera& camera);
+	void SetCameraAspectRatio(float aspect_ratio);
+	const Camera& ActiveCamera() const;
+	void SetAmbientLighting(const AmbientLighting& ambient);
+	const AmbientLighting& GetAmbientLighting() const;
+	void SetImageBasedLighting(const ImageBasedLighting& lighting);
+	const ImageBasedLighting& GetImageBasedLighting() const;
+	void SetExponentialHeightFog(const ExponentialHeightFog& fog);
+	const ExponentialHeightFog& GetExponentialHeightFog() const;
+	void SetPostProcessSettings(const PostProcessSettings& settings);
+	const PostProcessSettings& GetPostProcessSettings() const;
+	void SetSSAOSettings(const SSAOSettings& settings);
+	const SSAOSettings& GetSSAOSettings() const;
+	bool ConsumeImageBasedLightingResourcesDirty();
 
 private:
-	static void RebuildGpuLights();
+	void RebuildGpuLights();
 
-	static std::unique_ptr<IRenderBackend> backend;
-
-	static std::vector<Renderable> renderables;
-	static std::vector<std::uint32_t> renderable_generations;
-	static std::vector<std::uint32_t> free_renderables;
-	static std::vector<LightRecord> direct_lights;
-	static std::vector<std::uint32_t> light_generations;
-	static std::vector<std::uint32_t> free_lights;
-	static std::vector<GpuLight> gpu_lights;
-	static std::vector<LightShadowGpuHandle> light_shadow_handles;
-	static RenderFrameConstants frame_constants;
-    static AmbientLighting ambient_lighting;
-    static ImageBasedLighting image_based_lighting;
-    static ExponentialHeightFog exponential_height_fog;
-	static PostProcessSettings post_process_settings;
-	static SSAOSettings ssao_settings;
-    static bool image_based_lighting_resources_dirty;
-	static uint64_t light_revision;
-	static bool lights_dirty;
+	std::unique_ptr<IRenderBackend> backend;
+	std::vector<Renderable> renderables;
+	std::vector<std::uint32_t> renderable_generations;
+	std::vector<std::uint32_t> free_renderables;
+	std::uint64_t renderable_revision = 1;
+	std::vector<Light> direct_lights;
+	std::vector<std::uint32_t> light_generations;
+	std::vector<std::uint32_t> free_lights;
+	std::vector<GpuLight> gpu_lights;
+	std::vector<LightShadowGpuHandle> light_shadow_handles;
+	RenderFrameConstants frame_constants;
+	Camera active_camera;
+	float camera_aspect_ratio = 4.0f / 3.0f;
+    AmbientLighting ambient_lighting;
+    ImageBasedLighting image_based_lighting;
+    ExponentialHeightFog exponential_height_fog;
+	PostProcessSettings post_process_settings;
+	SSAOSettings ssao_settings;
+	bool image_based_lighting_resources_dirty = true;
+	uint64_t light_revision = 1;
+	std::uint64_t light_state_revision = 1;
+	bool lights_dirty = true;
 };
 
 } // namespace CEngine::Renderer

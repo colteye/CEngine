@@ -27,6 +27,38 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+set(CENGINE_GENERATED_ROOT "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(CENGINE_SCHEMA_TOOL "${CMAKE_CURRENT_SOURCE_DIR}/tools/schema/generate.py")
+set(CENGINE_ENGINE_GAME_MANIFEST
+    "${CMAKE_CURRENT_SOURCE_DIR}/schemas/engine.game.json")
+set(CENGINE_ENGINE_GENERATED_DIR "${CENGINE_GENERATED_ROOT}/engine")
+set(CENGINE_ENGINE_GENERATED_HEADER
+    "${CENGINE_ENGINE_GENERATED_DIR}/engine_entities.generated.h")
+set(CENGINE_ENGINE_SCHEMA_BUNDLE
+    "${CENGINE_ENGINE_GENERATED_DIR}/game.json")
+
+add_custom_command(
+    OUTPUT
+        "${CENGINE_ENGINE_GENERATED_HEADER}"
+        "${CENGINE_ENGINE_SCHEMA_BUNDLE}"
+    COMMAND "${Python3_EXECUTABLE}" "${CENGINE_SCHEMA_TOOL}"
+        --manifest "${CENGINE_ENGINE_GAME_MANIFEST}"
+        --cpp-header "${CENGINE_ENGINE_GENERATED_HEADER}"
+        --namespace "CEngine::Generated::EngineEntities"
+        --bundle "${CENGINE_ENGINE_SCHEMA_BUNDLE}"
+    DEPENDS
+        "${CENGINE_SCHEMA_TOOL}"
+        "${CENGINE_ENGINE_GAME_MANIFEST}"
+    VERBATIM
+)
+add_custom_target(CEngineEngineSchemas
+    DEPENDS
+        "${CENGINE_ENGINE_GENERATED_HEADER}"
+        "${CENGINE_ENGINE_SCHEMA_BUNDLE}"
+)
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 function(ce_setup_opengl out_target)
@@ -156,10 +188,12 @@ if(CENGINE_ENABLE_OPENGL)
         src/renderer/opengl/glsl/depth_only.vert
         src/renderer/opengl/glsl/depth_only.frag
         src/renderer/opengl/glsl/fullscreen_blit.frag
+        src/renderer/opengl/glsl/pbr_lighting.glsl
         src/renderer/opengl/glsl/pbr_geometry_pass.vert
         src/renderer/opengl/glsl/pbr_geometry_pass.frag
         src/renderer/opengl/glsl/point_shadow_depth.vert
         src/renderer/opengl/glsl/point_shadow_depth.frag
+        src/renderer/opengl/glsl/shadow_sampling.glsl
         src/renderer/opengl/glsl/pbr_standard.vert
         src/renderer/opengl/glsl/pbr_standard.frag
         src/renderer/opengl/glsl/ssao.vert
@@ -170,6 +204,7 @@ endif()
 
 set(CENGINE_ASSET_SOURCES
     src/assets/asset_database.cpp
+    src/assets/asset_database_load.cpp
     src/assets/asset_format.cpp
     src/assets/asset_io.cpp
     src/assets/casset_loader.cpp
@@ -177,27 +212,29 @@ set(CENGINE_ASSET_SOURCES
     src/assets/material_loader.cpp
     src/assets/mesh_loader.cpp
     src/assets/skeleton_loader.cpp
+    src/assets/texture_loader.cpp
 )
 
 add_library(CEngineAssets STATIC ${CENGINE_ASSET_SOURCES})
 
 add_library(CEngineScene STATIC
-    src/entity/player_entity.cpp
-    src/entity/empty_entity.cpp
-    src/entity/exponential_height_fog_entity.cpp
+    "${CENGINE_ENGINE_GENERATED_HEADER}"
+    src/assets/scene_loader.cpp
+    src/entity/fog_entity.cpp
     src/entity/entity.cpp
     src/entity/entity_factory.cpp
     src/entity/light_entity.cpp
-    src/entity/player_start.cpp
-    src/entity/prefab_entity.cpp
+    src/entity/post_process_entity.cpp
     src/entity/prop_entity.cpp
     src/entity/skybox_entity.cpp
-    src/entity/trigger_entity.cpp
     src/scene/scene.cpp
-    src/scene/scene_loader.cpp
 )
+add_dependencies(CEngineScene CEngineEngineSchemas)
 target_link_libraries(CEngineScene PUBLIC CEngineAssets)
-target_include_directories(CEngineScene PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_include_directories(CEngineScene PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    "${CENGINE_GENERATED_ROOT}"
+)
 target_include_directories(CEngineScene SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glm")
 if(MSVC)
     target_compile_options(CEngineScene PRIVATE /W4 /permissive- /Zc:__cplusplus)
@@ -222,7 +259,6 @@ else()
 endif()
 
 if(CENGINE_BUILD_TESTS)
-    find_package(Python3 COMPONENTS Interpreter REQUIRED)
     add_executable(CEngineSceneTests tests/scene/entity_tests.cpp)
     target_link_libraries(CEngineSceneTests PRIVATE CEngineScene)
     if(MSVC)
@@ -232,7 +268,6 @@ if(CENGINE_BUILD_TESTS)
     endif()
     add_test(NAME scene_entities COMMAND CEngineSceneTests)
     add_executable(CEngineAssetTests
-        src/renderer/material.cpp
         src/renderer/mesh.cpp
         src/renderer/renderable.cpp
         tests/assets/asset_runtime_tests.cpp
@@ -279,17 +314,13 @@ if(CENGINE_BUILD_TESTS)
 endif()
 
 set(CENGINE_CORE_SOURCES
-    third_party/nv_dds/src/nv_dds.cpp
-    src/camera.cpp
-    src/controls.cpp
-    src/renderer/light.cpp
-    src/renderer/material.cpp
+    src/renderer/camera.cpp
+    src/input/glfw/glfw_input_backend.cpp
+    src/input/input_system.cpp
     src/renderer/mesh.cpp
     src/physics/physics_system.cpp
     src/renderer/renderable.cpp
     src/renderer/render_system.cpp
-    src/scene/scene_render_state.cpp
-    src/scene/scene_physics_state.cpp
 )
 
 if(CENGINE_ENABLE_JOLT_PHYSICS)
@@ -328,7 +359,6 @@ add_library(CEngineCore STATIC ${CENGINE_CORE_SOURCES})
 target_include_directories(CEngineCore
     SYSTEM PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glm"
-        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nv_dds/include"
 )
 
 if(CENGINE_ENABLE_OPENGL)
@@ -345,8 +375,8 @@ target_include_directories(CEngineCore
 
 target_link_libraries(CEngineCore PUBLIC ${CEngine_GLFW_TARGET})
 target_link_libraries(CEngineCore PUBLIC CEngineAssets)
-target_link_libraries(CEngineCore PUBLIC CEngineScene)
 target_link_libraries(CEngineCore PRIVATE ${CMAKE_DL_LIBS})
+target_link_libraries(CEngineScene PUBLIC CEngineCore)
 
 if(CENGINE_ENABLE_JOLT_PHYSICS)
     target_link_libraries(CEngineCore PUBLIC Jolt)
@@ -366,34 +396,32 @@ target_compile_definitions(CEngineCore
         GLFW_INCLUDE_NONE
 )
 
-if(CENGINE_BUILD_TESTS)
-    add_executable(CEngineSceneRenderTests tests/scene/scene_render_state_tests.cpp)
-    target_link_libraries(CEngineSceneRenderTests PRIVATE CEngineCore)
-    add_test(NAME scene_render_state COMMAND CEngineSceneRenderTests)
-endif()
-
 if(CENGINE_ENABLE_OPENGL)
     target_compile_definitions(CEngineCore PUBLIC CENGINE_ENABLE_OPENGL GL_SILENCE_DEPRECATION)
 endif()
 
 if(MSVC)
-    set(CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/nv_dds/src/nv_dds.cpp)
+    set(CENGINE_SILENCED_THIRD_PARTY_SOURCES)
     if(CENGINE_ENABLE_OPENGL)
         list(APPEND CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/glad/src/glad.c)
     endif()
     if(CENGINE_ENABLE_JOLT_PHYSICS)
         set_source_files_properties(src/physics/jolt/jolt_physics_backend.cpp PROPERTIES COMPILE_OPTIONS /wd4003)
     endif()
-    set_source_files_properties(${CENGINE_SILENCED_THIRD_PARTY_SOURCES} PROPERTIES COMPILE_OPTIONS /W0)
+    if(CENGINE_SILENCED_THIRD_PARTY_SOURCES)
+        set_source_files_properties(${CENGINE_SILENCED_THIRD_PARTY_SOURCES} PROPERTIES COMPILE_OPTIONS /W0)
+    endif()
 else()
-    set(CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/nv_dds/src/nv_dds.cpp)
+    set(CENGINE_SILENCED_THIRD_PARTY_SOURCES)
     if(CENGINE_ENABLE_OPENGL)
         list(APPEND CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/glad/src/glad.c)
     endif()
     if(CENGINE_ENABLE_JOLT_PHYSICS)
         set_source_files_properties(src/physics/jolt/jolt_physics_backend.cpp PROPERTIES COMPILE_OPTIONS -Wno-pedantic)
     endif()
-    set_source_files_properties(${CENGINE_SILENCED_THIRD_PARTY_SOURCES} PROPERTIES COMPILE_OPTIONS -w)
+    if(CENGINE_SILENCED_THIRD_PARTY_SOURCES)
+        set_source_files_properties(${CENGINE_SILENCED_THIRD_PARTY_SOURCES} PROPERTIES COMPILE_OPTIONS -w)
+    endif()
 endif()
 
 if(MSVC)
@@ -402,58 +430,8 @@ else()
     target_compile_options(CEngineCore PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-if(CENGINE_BUILD_VIEWER)
-    if(CENGINE_ENABLE_OPENGL)
-        add_library(CEngineViewerImGui STATIC
-            third_party/imgui/imgui.cpp
-            third_party/imgui/imgui_draw.cpp
-            third_party/imgui/imgui_tables.cpp
-            third_party/imgui/imgui_widgets.cpp
-            third_party/imgui/backends/imgui_impl_glfw.cpp
-            third_party/imgui/backends/imgui_impl_opengl3.cpp
-        )
-        target_include_directories(CEngineViewerImGui PUBLIC
-            "${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui"
-            "${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui/backends"
-        )
-        target_link_libraries(CEngineViewerImGui PUBLIC ${CEngine_GLFW_TARGET})
-        target_compile_definitions(CEngineViewerImGui PRIVATE IMGUI_IMPL_OPENGL_LOADER_GLAD)
-        target_include_directories(CEngineViewerImGui SYSTEM PRIVATE
-            "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glad/include"
-        )
-    endif()
-
-    add_executable(CEngine
-        samples/viewer/main.cpp
-    )
-
-    target_link_libraries(CEngine PRIVATE CEngineCore)
-    if(CENGINE_ENABLE_OPENGL)
-        ce_setup_opengl(CEngine_OPENGL_TARGET)
-        target_link_libraries(CEngine PRIVATE ${CEngine_OPENGL_TARGET} CEngineViewerImGui)
-    endif()
-
-    set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT CEngine)
-    set_target_properties(CEngine PROPERTIES
-        VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    )
-
-    if(MSVC)
-        target_compile_options(CEngine PRIVATE /W4 /permissive- /Zc:__cplusplus)
-    else()
-        target_compile_options(CEngine PRIVATE -Wall -Wextra -Wpedantic)
-    endif()
-
-    if(CENGINE_ENABLE_OPENGL)
-        add_custom_command(TARGET CEngine POST_BUILD
-            COMMAND "${CMAKE_COMMAND}" -E make_directory
-                    "$<TARGET_FILE_DIR:CEngine>/shaders/opengl"
-            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-                    ${CENGINE_OPENGL_SHADER_SOURCES}
-                    "$<TARGET_FILE_DIR:CEngine>/shaders/opengl"
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-        )
-    endif()
+if(CENGINE_BUILD_VIEWER OR CENGINE_BUILD_TESTS)
+    add_subdirectory(samples/viewer)
 endif()
 
 include(Tooling)

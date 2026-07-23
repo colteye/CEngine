@@ -9,9 +9,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from ceassetlib.blender_scene import LightmapPlacement, object_transform, scene_description
+from ceassetlib.game_schema import GameSchema, SchemaEntity
 from ceassetlib.scene_export import (
-    PlayerEntity, EmptyEntity, ExponentialHeightFogEntity, LightEntity, PlayerStart,
-    PrefabEntity, Prop, SkyboxEntity, TriggerEntity,
+    LightEntity, Prop,
+    SkyboxEntity,
 )
 
 
@@ -47,12 +48,10 @@ class BlenderSceneTests(unittest.TestCase):
 
     def test_objects_become_fixed_entities_with_external_asset_references(self) -> None:
         material = types.SimpleNamespace(name="Brick")
-        prefab_collection = types.SimpleNamespace(name="PREFAB_Door")
         objects = [
             FakeObject("Mesh", "MESH", materials=(material,)),
             FakeObject("Player", "EMPTY", props={"ce_classname": "player"}),
             FakeObject("Light", "LIGHT", data=types.SimpleNamespace(type="SUN", color=(1, .5, .25))),
-            FakeObject("Door", "EMPTY", instance_collection=prefab_collection),
             FakeObject("Marker", "EMPTY"),
             FakeObject("Rig", "ARMATURE"),
         ]
@@ -61,19 +60,16 @@ class BlenderSceneTests(unittest.TestCase):
             objects,
             {"Mesh": [(Path("compiled/Mesh.cmesh"), "Brick")]},
             {"Brick": Path("compiled/Brick.cmat")},
-            {"PREFAB_Door": Path("compiled/Door.casset")},
             lambda path: path.as_posix(),
         )
 
         self.assertEqual([type(entity.data) for entity in scene.entities], [
-            PrefabEntity, LightEntity, EmptyEntity, Prop, PlayerEntity,
+            LightEntity, Prop, SchemaEntity,
         ])
-        prop = scene.entities[3].data
+        prop = scene.entities[1].data
         self.assertEqual(prop.mesh.path, "compiled/Mesh.cmesh")
         self.assertEqual(prop.materials[0].path, "compiled/Brick.cmat")
-        prefab = scene.entities[0].data
-        self.assertEqual(prefab.prefab.path, "compiled/Door.casset")
-        light = scene.entities[1].data
+        light = scene.entities[0].data
         self.assertTrue(light.casts_shadows)
 
     def test_static_mesh_receives_external_lightmap_atlas_binding(self) -> None:
@@ -82,7 +78,6 @@ class BlenderSceneTests(unittest.TestCase):
             (obj,),
             {"Floor": [(Path("compiled/Floor.cmesh"), "FloorMaterial")]},
             {"FloorMaterial": Path("compiled/Floor.cmat")},
-            {},
             lambda path: path.as_posix(),
             lightmaps={"Floor": LightmapPlacement(
                 Path("compiled/lightmap_0.dds"), (0.5, 0.5), (0.5, 0.0), 12.0)},
@@ -101,7 +96,6 @@ class BlenderSceneTests(unittest.TestCase):
             (obj,),
             {"OCC_SunBlocker": [(Path("compiled/OCC_SunBlocker.cmesh"), "BlockerMaterial")]},
             {"BlockerMaterial": Path("compiled/BlockerMaterial.cmat")},
-            {},
             lambda path: path.as_posix(),
         )
 
@@ -110,51 +104,73 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertTrue(prop.shadow_only)
         self.assertIsNone(prop.lightmap)
 
-    def test_prefab_instance_receives_scene_owned_object_lightmaps(self) -> None:
-        collection = types.SimpleNamespace(name="PREFAB_Hall")
-        obj = FakeObject("Hall", "EMPTY", instance_collection=collection)
-        placement = LightmapPlacement(
-            Path("compiled/hall_lightmap.dds"), (0.25, 0.5), (0.5, 0.25), 16.0)
-
-        scene = scene_description(
-            (obj,), {}, {}, {"PREFAB_Hall": Path("compiled/Hall.casset")},
-            lambda path: path.as_posix(),
-            prefab_lightmaps={"Hall": ((3, placement),)},
-        )
-
-        prefab = scene.entities[0].data
-        self.assertIsInstance(prefab, PrefabEntity)
-        self.assertEqual(prefab.lightmaps[0].object_index, 3)
-        self.assertEqual(prefab.lightmaps[0].lightmap.path, "compiled/hall_lightmap.dds")
-        self.assertEqual(prefab.lightmaps[0].scale, (0.25, 0.5))
-
     def test_missing_generated_mesh_fails_with_object_name(self) -> None:
         with self.assertRaisesRegex(ValueError, "Missing"):
-            scene_description((FakeObject("Missing", "MESH"),), {}, {}, {}, lambda path: path.as_posix())
+            scene_description((FakeObject("Missing", "MESH"),), {}, {}, lambda path: path.as_posix())
 
     def test_explicit_gameplay_classnames_select_fixed_entity_types(self) -> None:
         objects = (
             FakeObject("Mover", "MESH", props={
                 "ce_classname": "prop", "ce_dynamic": True, "ce_collision": True}),
-            FakeObject("Spawn", "EMPTY", props={"ce_classname": "info_player_start", "ce_team": 2}),
-            FakeObject("Volume", "EMPTY", props={
-                "ce_classname": "trigger", "ce_half_extents": (2, 3, 4), "ce_trigger_once": True}),
         )
 
         scene = scene_description(
             objects,
             {"Mover": [(Path("Mover.cmesh"), "MoverMaterial")]},
             {"MoverMaterial": Path("Mover.cmat")},
-            {},
             lambda path: path.as_posix())
 
         self.assertIsInstance(scene.entities[0].data, Prop)
         self.assertTrue(scene.entities[0].data.dynamic)
         self.assertTrue(scene.entities[0].data.collision_enabled)
-        self.assertIsInstance(scene.entities[1].data, PlayerStart)
-        self.assertEqual(scene.entities[1].data.team, 2)
-        self.assertIsInstance(scene.entities[2].data, TriggerEntity)
-        self.assertEqual(scene.entities[2].data.half_extents, (2.0, 3.0, 4.0))
+
+    def test_player_uses_native_blender_camera_settings(self) -> None:
+        camera = types.SimpleNamespace(
+            angle_y=1.2, clip_start=0.25, clip_end=750.0)
+        obj = FakeObject(
+            "Player", "CAMERA", data=camera,
+            props={"ce_classname": "player", "ce_view_mode": "FirstPerson"})
+
+        scene = scene_description((obj,), {}, {}, lambda path: path.as_posix())
+
+        player = scene.entities[0].data
+        self.assertIsInstance(player, SchemaEntity)
+        self.assertEqual(player.values["vertical_fov_radians"], 1.2)
+        self.assertEqual(player.values["near_clip"], 0.25)
+        self.assertEqual(player.values["far_clip"], 750.0)
+
+    def test_custom_entity_asset_fields_use_the_packaged_schema(self) -> None:
+        game = GameSchema(
+            Path("game.json"),
+            {"id": "test"},
+            {},
+            ({"name": "mesh", "extension": ".cmesh"},),
+            ({
+                "classname": "pickup",
+                "version": 1,
+                "fields": (
+                    {"name": "transform", "type": "transform"},
+                    {"name": "model", "type": "asset", "asset_type": "mesh"},
+                ),
+            },),
+        )
+        obj = FakeObject(
+            "Pickup", "EMPTY",
+            props={
+                "ce_classname": "pickup",
+                "ce_model": "//compiled/Pickup.cmesh",
+            })
+
+        scene = scene_description(
+            (obj,), {}, {}, lambda path: path.as_posix(),
+            game_schema=game,
+            resolve_asset_path=lambda value: Path(
+                value.removeprefix("//")))
+
+        pickup = scene.entities[0].data
+        self.assertIsInstance(pickup, SchemaEntity)
+        self.assertEqual(
+            pickup.values["model"].path, "compiled/Pickup.cmesh")
 
     def test_environment_entities_export_authored_settings(self) -> None:
         objects = (
@@ -165,13 +181,20 @@ class BlenderSceneTests(unittest.TestCase):
                 "ce_height_falloff": 0.3, "ce_start_distance": 2.0,
                 "ce_max_opacity": 0.8, "ce_cutoff_distance": 500.0,
                 "ce_inscattering_color": (0.4, 0.5, 0.6)}),
+            FakeObject("Post", "EMPTY", props={
+                "ce_classname": "post_process", "ce_exposure": 1.25,
+                "ce_bloom_threshold": 1.75, "ce_ssao_radius": 0.8}),
         )
-        scene = scene_description(objects, {}, {}, {}, lambda path: path.as_posix(),
+        scene = scene_description(objects, {}, {}, lambda path: path.as_posix(),
             skybox_outputs={"Sky": Path("environments/test.dds")})
         fog = scene.entities[0].data
-        sky = scene.entities[1].data
-        self.assertIsInstance(fog, ExponentialHeightFogEntity)
-        self.assertEqual(fog.density, 0.04)
+        post_process = scene.entities[1].data
+        sky = scene.entities[2].data
+        self.assertIsInstance(fog, SchemaEntity)
+        self.assertEqual(fog.values["density"], 0.04)
+        self.assertIsInstance(post_process, SchemaEntity)
+        self.assertEqual(post_process.values["exposure"], 1.25)
+        self.assertEqual(post_process.values["ssao_radius"], 0.8)
         self.assertIsInstance(sky, SkyboxEntity)
         self.assertEqual(sky.panorama.path, "environments/test.dds")
         self.assertEqual(sky.intensity, 1.5)

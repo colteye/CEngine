@@ -2,7 +2,7 @@
 #define RENDERABLE_H
 
 #include "renderer/mesh.h"
-#include "renderer/lightmap.h"
+#include "renderer/texture.h"
 
 #include <array>
 #include <cstdint>
@@ -40,21 +40,23 @@ enum RenderableFlags : uint32_t
 	RenderableFlagDynamic = 1u << 1u,
 	RenderableFlagCastsShadow = 1u << 2u,
 	RenderableFlagReceivesShadow = 1u << 3u,
-	RenderableFlagShadowOnly = 1u << 4u
+	RenderableFlagShadowOnly = 1u << 4u,
+	RenderableFlagVisible = 1u << 5u
 };
 
 struct Renderable
 {
 	const Mesh* mesh = nullptr;
 	Material* material = nullptr;
-	const Lightmap* lightmap = nullptr;
+	const Texture* lightmap = nullptr;
 	glm::vec2 lightmap_scale = glm::vec2(1.0f);
 	glm::vec2 lightmap_offset = glm::vec2(0.0f);
 	float lightmap_rgbm_range = 8.0f;
 	glm::mat4 transform = glm::mat4(1.0f);
 	Bounds local_bounds;
 	Bounds world_bounds;
-	uint32_t flags = RenderableFlagStatic | RenderableFlagCastsShadow | RenderableFlagReceivesShadow;
+	uint32_t flags = RenderableFlagStatic | RenderableFlagCastsShadow |
+		RenderableFlagReceivesShadow | RenderableFlagVisible;
 };
 
 struct Frustum

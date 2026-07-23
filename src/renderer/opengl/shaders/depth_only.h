@@ -14,7 +14,9 @@ public:
 	DepthOnly();
 
 	void Use() const;
-	void Update(const glm::mat4& model, const glm::mat4& view, const glm::mat4& projection,
+	void UpdateFrame(
+		const glm::mat4& view, const glm::mat4& projection);
+	void UpdateObject(const glm::mat4& model,
 		const Material& material, GLuint albedo_texture);
 
 private:

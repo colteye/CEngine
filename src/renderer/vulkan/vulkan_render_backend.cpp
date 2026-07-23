@@ -29,7 +29,8 @@ bool VkSucceeded(VkResult result, const char* message)
 }
 } // namespace
 
-bool VulkanRenderBackend::Initialize(GLFWwindow* window, int window_width, int window_height)
+bool VulkanRenderBackend::Initialize(
+	RenderSystem&, GLFWwindow* window, int window_width, int window_height)
 {
 	if (window == nullptr)
 	{
@@ -238,29 +239,19 @@ void VulkanRenderBackend::RemoveMaterial(Material* /*material*/)
 {
 }
 
-bool VulkanRenderBackend::RegisterLightmap(const Lightmap* /*lightmap*/)
+bool VulkanRenderBackend::RegisterLightmap(const Texture* /*lightmap*/)
 {
 	return true;
 }
 
-void VulkanRenderBackend::RemoveLightmap(const Lightmap* /*lightmap*/)
+void VulkanRenderBackend::RemoveLightmap(const Texture* /*lightmap*/)
 {
 }
 
-void VulkanRenderBackend::UpdateRenderableTransform(std::uint32_t /*slot*/, const glm::mat4& /*transform*/,
-	const Bounds& /*world_bounds*/)
+void VulkanRenderBackend::UpdateRenderable(std::uint32_t /*slot*/,
+	const glm::mat4& /*transform*/, const Bounds& /*world_bounds*/,
+	std::uint32_t /*flags*/)
 {
-}
-
-void VulkanRenderBackend::RenderDepthOnly(const glm::mat4& /*view*/, const glm::mat4& /*projection*/,
-	uint32_t /*native_depth_texture*/, int /*texture_width*/, int /*texture_height*/)
-{
-	static bool warned = false;
-	if (!warned)
-	{
-		std::cout << "Vulkan backend is active; depth-only rendering is not implemented yet.\n";
-		warned = true;
-	}
 }
 
 bool VulkanRenderBackend::RegisterMaterial(Material* /*material*/)

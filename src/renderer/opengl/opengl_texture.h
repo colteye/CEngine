@@ -1,7 +1,8 @@
 #ifndef OPENGL_TEXTURE_H
 #define OPENGL_TEXTURE_H
 
-#include <string>
+#include "renderer/texture.h"
+
 #include <glad/glad.h>
 
 namespace CEngine::Renderer {
@@ -9,7 +10,7 @@ namespace CEngine::Renderer {
 class OpenGLTexture
 {
 public:
-	static GLuint LoadDDS(const std::string& imagepath, bool flip_image = true);
+	static GLuint Load(const Texture& texture);
 	static GLuint CreateSolid(GLubyte red, GLubyte green, GLubyte blue, GLubyte alpha = 255);
 };
 

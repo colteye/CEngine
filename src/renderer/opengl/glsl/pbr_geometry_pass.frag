@@ -58,8 +58,7 @@ void main()
 	g_material = vec4(mra.r, mra.b, flags, has_lightmap ? 1.0 : 0.0);
 	if (has_lightmap) {
 		vec2 atlas_uv = lightmap_uv * lightmap_scale_offset.xy + lightmap_scale_offset.zw;
-		vec4 rgbm = texture(lightmap, atlas_uv);
-		g_baked_light = rgbm.rgb * (rgbm.a * lightmap_rgbm_range);
+		g_baked_light = texture(lightmap, atlas_uv).rgb;
 	} else {
 		g_baked_light = vec3(0.0);
 	}

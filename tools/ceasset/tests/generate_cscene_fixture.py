@@ -8,11 +8,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from ceassetlib.assetfile import make_asset_desc, write_binary_asset
-from ceassetlib.collection_export import CollectionExportSpec, collection_payload
 from ceassetlib.formats import AssetType
+from ceassetlib.game_schema import load_bundled_game, make_schema_entity
 from ceassetlib.scene_export import (
-    AssetReference, EmptyEntity, EntityConnection, EntityDescription,
-    PrefabEntity, PrefabLightmap, Prop, SceneDescription, Transform, write_scene,
+    AssetReference, EntityConnection, EntityDescription, LightEntity, Prop,
+    SceneDescription, Transform, write_scene,
 )
 
 
@@ -24,38 +24,11 @@ def main() -> int:
     write_binary_asset(args.output.parent / "python_fixture.cmesh", mesh_desc)
     material_desc = make_asset_desc(AssetType.MATERIAL, "tests/python_fixture.cmat", 0, b"fixture")
     write_binary_asset(args.output.parent / "python_fixture.cmat", material_desc)
-    lightmap_desc = make_asset_desc(AssetType.TEXTURE, "tests/python_fixture_lightmap.dds", 0, b"fixture")
-    write_binary_asset(args.output.parent / "python_fixture_lightmap.dds", lightmap_desc)
-
-    class FixtureObject:
-        name = "PrefabMesh"
-        type = "MESH"
-        parent = None
-        matrix_world = None
-
-        @staticmethod
-        def get(_key: str, default: object = None) -> object:
-            return default
-
-    prefab_payload = collection_payload(
-        Path("python_fixture.blend"),
-        CollectionExportSpec(AssetType.PREFAB, "python_fixture", "python_fixture"),
-        [FixtureObject()],
-        lambda _obj: {"mesh": "python_fixture.cmesh", "material": "python_fixture.cmat"},
-        args.output.parent,
-    )
-    prefab_desc = make_asset_desc(AssetType.ASSET, "tests/python_fixture.casset", 0, prefab_payload)
-    write_binary_asset(args.output.parent / "python_fixture.casset", prefab_desc)
     entity = EntityDescription(
-        data=PrefabEntity(AssetReference(
-            AssetType.ASSET, "python_fixture.casset", prefab_desc.guid),
-            Transform(position=(1.0, 2.0, 3.0)),
-            (PrefabLightmap(0, AssetReference(
-                AssetType.TEXTURE, "python_fixture_lightmap.dds", lightmap_desc.guid),
-                (0.5, 0.5), (0.25, 0.25), 12.0),)),
+        data=LightEntity(Transform(position=(1.0, 2.0, 3.0))),
         name="PythonFixture",
     )
-    target = EntityDescription(data=EmptyEntity(), name="Target")
+    target = EntityDescription(data=LightEntity(), name="Target")
     prop = EntityDescription(data=Prop(
         AssetReference(AssetType.MESH, "python_fixture.cmesh", mesh_desc.guid),
         Transform(position=(4.0, 5.0, 6.0)),
@@ -64,8 +37,14 @@ def main() -> int:
         collision_half_extents=(1.0, 2.0, 3.0),
         mass=8.0,
     ), name="MovingProp")
+    post_process = EntityDescription(data=make_schema_entity(
+        load_bundled_game(), "post_process",
+        bloom_threshold=1.75,
+        exposure=1.25,
+        ssao_radius=0.8,
+    ), name="SceneLook")
     write_scene(args.output, SceneDescription(
-        (entity, target, prop),
+        (entity, target, prop, post_process),
         connections=(EntityConnection(0, "OnReady", 1, "Enable"),)),
         "tests/python_fixture.cscene")
     return 0

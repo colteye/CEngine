@@ -6,12 +6,13 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from .collection_export import blender_to_engine_matrix_rows, object_role
-from .formats import AssetType
+from .formats import AssetType, asset_type_for_name
+from .game_schema import GameSchema, SchemaEntity, load_bundled_game
 from .ids import guid_from_stable_name
 from .scene_export import (
-    AssetReference, PlayerEntity, EmptyEntity, EntityDescription, ExponentialHeightFogEntity,
-    LightEntity, PlayerStart, PrefabEntity, PrefabLightmap, Prop, SceneDescription,
-    SceneSettings, SkyboxEntity, Transform, TriggerEntity,
+    AssetReference, EntityDescription,
+    LightEntity, Prop, SceneDescription,
+    SceneSettings, SkyboxEntity, Transform,
 )
 
 
@@ -51,6 +52,111 @@ def blender_scene_settings(blender: object) -> SceneSettings:
 def _property(obj: object, name: str, default: object = None) -> object:
     getter = getattr(obj, "get", None)
     return getter(name, default) if callable(getter) else default
+
+
+def _property_name(field: dict[str, object]) -> str:
+    return str(field.get("blender_property", f"ce_{field['name']}"))
+
+
+def _native_schema_value(
+    obj: object,
+    classname: str,
+    field: dict[str, object],
+    default: object,
+) -> object:
+    name = str(field["name"])
+    data = getattr(obj, "data", None)
+    if classname == "player" and getattr(obj, "type", "") == "CAMERA":
+        if name == "vertical_fov_radians":
+            return getattr(data, "angle_y", default)
+        if name == "near_clip":
+            return getattr(data, "clip_start", default)
+        if name == "far_clip":
+            return getattr(data, "clip_end", default)
+    return _property(obj, _property_name(field), default)
+
+
+def _enum_value(field: dict[str, object], value: object) -> int:
+    values = field.get("values", {})
+    if isinstance(value, str):
+        normalized = value.replace("_", "").lower()
+        for name, numeric in values.items():
+            if str(name).replace("_", "").lower() == normalized:
+                return int(numeric)
+        raise ValueError(f"{value!r} is not a valid {field['name']} value")
+    numeric = int(value)
+    if numeric not in values.values():
+        raise ValueError(f"{numeric} is not a valid {field['name']} value")
+    return numeric
+
+
+def schema_entity(
+    obj: object,
+    schema: dict[str, object],
+    transform: Transform,
+    asset_path: Callable[[Path], str] | None = None,
+    resolve_asset_path: Callable[[str], Path] | None = None,
+) -> SchemaEntity:
+    values: dict[str, object] = {}
+    for field in schema["fields"]:
+        field_type = field["type"]
+        name = str(field["name"])
+        if field_type == "transform":
+            values[name] = transform
+            continue
+        if field_type == "flags":
+            for member in field["members"]:
+                values[str(member["name"])] = bool(_property(
+                    obj,
+                    str(member.get(
+                        "blender_property", f"ce_{member['name']}")),
+                    member.get("default", False),
+                ))
+            continue
+        default = field.get("default")
+        value = _native_schema_value(
+            obj, str(schema["classname"]), field, default)
+        if field_type == "enum":
+            value = _enum_value(field, value)
+        elif field_type in ("f32",):
+            value = float(value)
+        elif field_type in ("u32",):
+            value = int(value)
+        elif field_type == "bool":
+            value = bool(value)
+        elif field_type in ("vec2", "vec3"):
+            value = tuple(float(component) for component in value)
+            expected = 2 if field_type == "vec2" else 3
+            if len(value) != expected:
+                raise ValueError(
+                    f"{schema['classname']}.{name} must contain {expected} values")
+        elif field_type in ("asset", "asset_list"):
+            if asset_path is None or resolve_asset_path is None:
+                raise ValueError(
+                    f"generic Blender entity assets require a path resolver: "
+                    f"{schema['classname']}.{name}")
+            asset_type = asset_type_for_name(str(field.get("asset_type", "")))
+            if asset_type == AssetType.UNKNOWN:
+                raise ValueError(
+                    f"{schema['classname']}.{name} uses an unknown asset type")
+            authored_paths = (
+                tuple(part.strip() for part in str(value or "").replace(
+                    ";", "\n").splitlines() if part.strip())
+                if field_type == "asset_list"
+                else (() if not value else (str(value),))
+            )
+            references = tuple(
+                _reference(
+                    asset_type,
+                    resolve_asset_path(authored),
+                    asset_path,
+                )
+                for authored in authored_paths
+            )
+            value = references if field_type == "asset_list" else (
+                references[0] if references else None)
+        values[name] = value
+    return SchemaEntity(schema, values)
 
 
 def _quaternion(matrix: list[list[float]]) -> tuple[float, float, float, float]:
@@ -108,13 +214,14 @@ def scene_description(
     objects: Iterable[object],
     mesh_outputs: dict[str, list[tuple[Path, str]]],
     material_outputs: dict[str, Path],
-    prefab_outputs: dict[str, Path],
     asset_path: Callable[[Path], str],
     lightmaps: dict[str, LightmapPlacement] | None = None,
-    prefab_lightmaps: dict[str, tuple[tuple[int, LightmapPlacement], ...]] | None = None,
     skybox_outputs: dict[str, Path] | None = None,
+    game_schema: GameSchema | None = None,
+    resolve_asset_path: Callable[[str], Path] | None = None,
 ) -> SceneDescription:
     entities: list[EntityDescription] = []
+    schemas = game_schema or load_bundled_game()
     for obj in sorted(objects, key=lambda value: str(getattr(value, "name", ""))):
         name = str(getattr(obj, "name", ""))
         obj_type = str(getattr(obj, "type", ""))
@@ -143,8 +250,10 @@ def scene_description(
                     lightmap_scale=placement.scale if placement else (1.0, 1.0),
                     lightmap_offset=placement.offset if placement else (0.0, 0.0),
                     lightmap_rgbm_range=placement.rgbm_range if placement else 8.0,
+                    visible=not bool(getattr(obj, "hide_render", False)),
                     dynamic=dynamic,
-                    shadow_only=object_role(obj) == "occluder",
+                    shadow_only=bool(_property(
+                        obj, "ce_shadow_only", object_role(obj) == "occluder")),
                     collision_enabled=bool(_property(obj, "ce_collision",
                         _property(obj, "ce_physics", False))),
                     collision_half_extents=tuple(float(value) for value in _property(
@@ -155,6 +264,9 @@ def scene_description(
                 entities.append(EntityDescription(data, entity_name))
             continue
         elif obj_type == "LIGHT":
+            if classname not in ("", "light"):
+                raise ValueError(
+                    f"unsupported Blender light entity classname: {classname}")
             light = getattr(obj, "data", None)
             light_type = {"POINT": 0, "SUN": 1, "SPOT": 2, "AREA": 3}.get(
                 str(getattr(light, "type", "POINT")), 0)
@@ -168,41 +280,15 @@ def scene_description(
                 float(getattr(light, "cutoff_distance", 10.0)),
                 spot_size * max(0.0, 1.0 - spot_blend), spot_size,
                 (float(getattr(light, "size", 1.0)), float(getattr(light, "size_y", 1.0))),
-                enabled=True, casts_shadows=bool(getattr(light, "use_shadow", True)))
+                enabled=not bool(getattr(obj, "hide_render", False)),
+                casts_shadows=bool(getattr(light, "use_shadow", True)))
         elif obj_type == "EMPTY" and getattr(obj, "instance_collection", None) is not None:
-            collection = obj.instance_collection
-            output = prefab_outputs.get(str(getattr(collection, "name", "")))
-            if output is None:
-                raise ValueError(f"collection instance has no generated .casset: {name}")
-            placements = prefab_lightmaps.get(name, ()) if prefab_lightmaps is not None else ()
-            data = PrefabEntity(
-                _reference(AssetType.ASSET, output, asset_path), transform,
-                tuple(PrefabLightmap(
-                    object_index,
-                    _reference(AssetType.TEXTURE, placement.texture, asset_path),
-                    placement.scale, placement.offset, placement.rgbm_range)
-                    for object_index, placement in placements),
-            )
-        elif obj_type == "EMPTY":
+            # Blender's dependency graph exposes the expanded objects as normal
+            # mesh entries. The collection marker itself is not an entity.
+            continue
+        elif obj_type in ("EMPTY", "CAMERA"):
             if classname in ("", "empty"):
-                data = EmptyEntity(transform)
-            elif classname == "trigger":
-                half_extents = tuple(float(value) for value in _property(
-                    obj, "ce_half_extents", (0.5, 0.5, 0.5)))
-                if len(half_extents) != 3:
-                    raise ValueError(f"trigger half extents must have three values: {name}")
-                data = TriggerEntity(transform, half_extents,
-                    trigger_once=bool(_property(obj, "ce_trigger_once", False)))
-            elif classname == "info_player_start":
-                data = PlayerStart(transform, int(_property(obj, "ce_team", 0)))
-            elif classname == "player":
-                data = PlayerEntity(transform,
-                    1 if str(_property(obj, "ce_view_mode", "first_person")) == "third_person" else 0,
-                    float(_property(obj, "ce_vertical_fov_radians", 1.0471976)),
-                    float(_property(obj, "ce_third_person_distance", 4.0)),
-                    float(_property(obj, "ce_near_clip", 0.1)),
-                    float(_property(obj, "ce_far_clip", 1000.0)),
-                    bool(_property(obj, "ce_enabled", True)))
+                continue
             elif classname == "skybox":
                 output = (skybox_outputs or {}).get(name)
                 if output is None:
@@ -212,21 +298,12 @@ def scene_description(
                     float(_property(obj, "ce_intensity", 1.0)),
                     float(_property(obj, "ce_rotation_radians", 0.0)),
                     bool(_property(obj, "ce_enabled", True)))
-            elif classname == "exponential_height_fog":
-                color = tuple(float(value) for value in _property(
-                    obj, "ce_inscattering_color", (0.5, 0.6, 0.7)))
-                if len(color) != 3:
-                    raise ValueError(f"fog inscattering color must have three values: {name}")
-                data = ExponentialHeightFogEntity(
-                    transform, color,
-                    float(_property(obj, "ce_fog_density", 0.02)),
-                    float(_property(obj, "ce_height_falloff", 0.2)),
-                    float(_property(obj, "ce_start_distance", 0.0)),
-                    float(_property(obj, "ce_max_opacity", 1.0)),
-                    float(_property(obj, "ce_cutoff_distance", 0.0)),
-                    bool(_property(obj, "ce_enabled", True)))
             else:
-                raise ValueError(f"unsupported empty entity classname: {classname}")
+                schema = schemas.entity(classname)
+                if schema is None:
+                    raise ValueError(f"unsupported empty entity classname: {classname}")
+                data = schema_entity(
+                    obj, schema, transform, asset_path, resolve_asset_path)
         else:
             continue
         entities.append(EntityDescription(data, name))

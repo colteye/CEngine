@@ -19,29 +19,9 @@ enum EntityFlags : std::uint32_t {
     EntityEnabled = 1u << 0u,
 };
 
-enum PropFlags : std::uint32_t {
-    PropVisible = 1u << 0u,
-    PropCollisionEnabled = 1u << 1u,
-    PropDynamic = 1u << 2u,
-    PropShadowOnly = 1u << 3u,
-};
-
-enum LightFlags : std::uint32_t {
-    LightEnabled = 1u << 0u,
-    LightCastsShadow = 1u << 1u,
-};
-
-enum EnvironmentFlags : std::uint32_t {
-    EnvironmentEnabled = 1u << 0u,
-};
-
 enum EntityClassBlockFlags : std::uint32_t {
     EntityClassBlockRequired = 1u << 0u,
 };
-
-enum class LightType : std::uint32_t { Point = 0, Sun = 1, Spot = 2, Area = 3 };
-enum class LightMode : std::uint32_t { Realtime = 0, Baked = 1, Mixed = 2 };
-enum class PlayerViewMode : std::uint32_t { FirstPerson = 0, ThirdPerson = 1 };
 
 #pragma pack(push, 1)
 struct DiskSceneHeader {
@@ -69,7 +49,7 @@ struct DiskSceneSettings {
     float ambient_color[3] = {};
     float exposure = 1.0f;
     float gravity[3] = {0.0f, 0.0f, -9.81f};
-    std::uint32_t active_player_entity = InvalidEntityIndex;
+    std::uint32_t active_entity = InvalidEntityIndex;
     std::uint32_t reserved[4] = {};
 };
 
@@ -118,87 +98,6 @@ struct DiskTransform {
     float scale[3] = {1.0f, 1.0f, 1.0f};
 };
 
-struct DiskProp {
-    DiskTransform transform;
-    std::uint32_t mesh_asset = InvalidAssetIndex;
-    std::uint32_t first_material_asset = InvalidAssetIndex;
-    std::uint32_t material_count = 0;
-    std::uint32_t lightmap_asset = InvalidAssetIndex;
-    float lightmap_scale[2] = {1.0f, 1.0f};
-    float lightmap_offset[2] = {};
-    float lightmap_rgbm_range = 8.0f;
-    std::uint32_t flags = PropVisible;
-    float collision_half_extents[3] = {0.5f, 0.5f, 0.5f};
-    float mass = 1.0f;
-};
-
-struct DiskPlayerEntity {
-    DiskTransform transform;
-    std::uint32_t view_mode = 0;
-    float vertical_fov_radians = 1.0471976f;
-    float orthographic_size = 10.0f;
-    float near_clip = 0.1f;
-    float far_clip = 1000.0f;
-    std::uint32_t enabled = 1;
-};
-
-struct DiskLightEntity {
-    DiskTransform transform;
-    std::uint32_t type = 0;
-    std::uint32_t mode = 0;
-    float color[3] = {1.0f, 1.0f, 1.0f};
-    float intensity = 1.0f;
-    float range = 10.0f;
-    float inner_angle_radians = 0.0f;
-    float outer_angle_radians = 0.7853982f;
-    float area_size[2] = {1.0f, 1.0f};
-    std::uint32_t flags = LightEnabled | LightCastsShadow;
-};
-
-struct DiskPrefabEntity {
-    DiskTransform transform;
-    std::uint32_t prefab_asset = InvalidAssetIndex;
-    std::uint32_t first_lightmap = InvalidAssetIndex;
-    std::uint32_t lightmap_count = 0;
-};
-
-struct DiskPrefabLightmap {
-    std::uint32_t object_index = 0;
-    std::uint32_t lightmap_asset = InvalidAssetIndex;
-    float scale[2] = {1.0f, 1.0f};
-    float offset[2] = {};
-    float rgbm_range = 8.0f;
-};
-
-struct DiskTriggerEntity {
-    DiskTransform transform;
-    float half_extents[3] = {0.5f, 0.5f, 0.5f};
-    std::uint32_t flags = 1;
-};
-
-struct DiskPlayerStart {
-    DiskTransform transform;
-    std::uint32_t team = 0;
-};
-
-struct DiskSkyboxEntity {
-    DiskTransform transform;
-    std::uint32_t panorama_asset = InvalidAssetIndex;
-    float intensity = 1.0f;
-    float rotation_radians = 0.0f;
-    std::uint32_t flags = EnvironmentEnabled;
-};
-
-struct DiskExponentialHeightFogEntity {
-    DiskTransform transform;
-    float inscattering_color[3] = {0.5f, 0.6f, 0.7f};
-    float density = 0.02f;
-    float height_falloff = 0.2f;
-    float start_distance = 0.0f;
-    float max_opacity = 1.0f;
-    float cutoff_distance = 0.0f;
-    std::uint32_t flags = EnvironmentEnabled;
-};
 #pragma pack(pop)
 
 static_assert(sizeof(DiskSceneHeader) == 96);
@@ -208,15 +107,6 @@ static_assert(sizeof(DiskSceneEntity) == 20);
 static_assert(sizeof(DiskEntityClassBlock) == 52);
 static_assert(sizeof(DiskEntityConnection) == 28);
 static_assert(sizeof(DiskTransform) == 40);
-static_assert(sizeof(DiskProp) == 96);
-static_assert(sizeof(DiskPlayerEntity) == 64);
-static_assert(sizeof(DiskLightEntity) == 88);
-static_assert(sizeof(DiskPrefabEntity) == 52);
-static_assert(sizeof(DiskPrefabLightmap) == 28);
-static_assert(sizeof(DiskTriggerEntity) == 56);
-static_assert(sizeof(DiskPlayerStart) == 44);
-static_assert(sizeof(DiskSkyboxEntity) == 56);
-static_assert(sizeof(DiskExponentialHeightFogEntity) == 76);
 
 } // namespace CEngine::Assets::CSceneFormat
 

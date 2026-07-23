@@ -54,6 +54,29 @@ class BakeTarget:
     prefab_object_index: int | None = None
 
 
+@dataclass(frozen=True)
+class LightmapSettings:
+    resolution: int = DEFAULT_RESOLUTION
+    padding: int = DEFAULT_PADDING
+    samples: int = DEFAULT_SAMPLES
+    denoise: bool = DEFAULT_DENOISE
+    include_direct: bool = DEFAULT_INCLUDE_DIRECT
+
+    @classmethod
+    def from_scene(cls, scene: object) -> "LightmapSettings":
+        getter = getattr(scene, "get", lambda _key, default: default)
+        return cls(
+            resolution=int(getter(
+                "ce_lightmap_resolution", DEFAULT_RESOLUTION)),
+            padding=int(getter("ce_lightmap_padding", DEFAULT_PADDING)),
+            samples=max(1, int(getter(
+                "ce_lightmap_samples", DEFAULT_SAMPLES))),
+            denoise=bool(getter("ce_lightmap_denoise", DEFAULT_DENOISE)),
+            include_direct=bool(getter(
+                "ce_lightmap_include_direct", DEFAULT_INCLUDE_DIRECT)),
+        )
+
+
 def plan_atlas(names: Iterable[str], resolution: int, padding: int) -> dict[str, AtlasTile]:
     ordered = sorted(set(names))
     if not ordered:
@@ -641,6 +664,7 @@ def bake_scene_lightmaps(
     scene_name: str,
     prefab_objects: dict[str, list[object]] | None = None,
     logger: Callable[[str], None] | None = None,
+    settings: LightmapSettings | None = None,
 ) -> tuple[dict[str, LightmapPlacement],
            dict[str, tuple[tuple[int, LightmapPlacement], ...]], list[Path]]:
     object_list = list(objects)
@@ -656,16 +680,12 @@ def bake_scene_lightmaps(
         return {}, {}, []
 
     scene = blender.context.scene
-    resolution = int(getattr(scene, "get", lambda *_: DEFAULT_RESOLUTION)(
-        "ce_lightmap_resolution", DEFAULT_RESOLUTION))
-    padding = int(getattr(scene, "get", lambda *_: DEFAULT_PADDING)(
-        "ce_lightmap_padding", DEFAULT_PADDING))
-    denoise = bool(getattr(scene, "get", lambda *_: DEFAULT_DENOISE)(
-        "ce_lightmap_denoise", DEFAULT_DENOISE))
-    samples = max(1, int(getattr(scene, "get", lambda *_: DEFAULT_SAMPLES)(
-        "ce_lightmap_samples", DEFAULT_SAMPLES)))
-    include_direct = bool(getattr(scene, "get", lambda *_: DEFAULT_INCLUDE_DIRECT)(
-        "ce_lightmap_include_direct", DEFAULT_INCLUDE_DIRECT))
+    settings = settings or LightmapSettings.from_scene(scene)
+    resolution = settings.resolution
+    padding = settings.padding
+    denoise = settings.denoise
+    samples = settings.samples
+    include_direct = settings.include_direct
     tiles = plan_atlas((target.key for target in targets), resolution, padding)
     source_meshes = list({int(target.source.as_pointer()): target.source for target in targets}.values())
     ensure_lightmap_uvs(blender, source_meshes, resolution, padding)

@@ -1,5 +1,9 @@
 # CEngine
 
+Blender is the primary source-asset editor. See
+[Blender asset authoring](docs/blender_addon.md) for the add-on workflow,
+schema-driven entities, previews, and decoupled lightmap baking.
+
 CEngine is now built with CMake instead of Visual Studio project files.
 
 ## Repository layout

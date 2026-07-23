@@ -7,25 +7,21 @@ from pathlib import Path, PurePosixPath
 
 from .assetfile import ASSET_HEADER, ASSET_MAGIC, ASSET_VERSION
 from .formats import AssetType
+from .game_schema import entity_struct, load_bundled_game
 from .scene_format import (
-    ASSET_REFERENCE, PLAYER_ENTITY, ENTITY_CLASS_BLOCK,
-    ENTITY_CLASS_VERSION, ENTITY_CONNECTION, LIGHT_ENTITY, LightFlags, PLAYER_START,
-    PREFAB_ENTITY, PREFAB_LIGHTMAP, PROP, PropFlags, SCENE_ENTITY, SCENE_HEADER,
-    SCENE_MAGIC, SCENE_SETTINGS, SCENE_VERSION, SKYBOX_ENTITY,
-    EXPONENTIAL_HEIGHT_FOG_ENTITY, TRANSFORM, TRIGGER_ENTITY, INVALID_INDEX,
+    ASSET_REFERENCE, ENTITY_CLASS_BLOCK, ENTITY_CONNECTION,
+    SCENE_ENTITY, SCENE_HEADER, SCENE_MAGIC, SCENE_SETTINGS,
+    SCENE_VERSION, INVALID_INDEX,
 )
 
 
-CLASS_STRIDES = {
-    "empty": TRANSFORM.size,
-    "prop": PROP.size,
-    "player": PLAYER_ENTITY.size,
-    "light": LIGHT_ENTITY.size,
-    "prefab_instance": PREFAB_ENTITY.size,
-    "trigger": TRIGGER_ENTITY.size,
-    "info_player_start": PLAYER_START.size,
-    "skybox": SKYBOX_ENTITY.size,
-    "exponential_height_fog": EXPONENTIAL_HEIGHT_FOG_ENTITY.size,
+_GAME_SCHEMA = load_bundled_game()
+CLASS_SCHEMAS = {
+    str(entity["classname"]): entity for entity in _GAME_SCHEMA.entities
+}
+CLASS_RECORDS = {
+    classname: entity_struct(schema)
+    for classname, schema in CLASS_SCHEMAS.items()
 }
 
 
@@ -80,6 +76,120 @@ def _validate_dependency(project_root: Path, asset_type: AssetType, path: str, g
         raise ValueError(f"referenced asset type does not match: {path}")
     if header[4] != guid:
         raise ValueError(f"referenced asset GUID does not match: {path}")
+
+
+def _schema_asset_type(field: dict[str, object]) -> AssetType:
+    try:
+        return AssetType[str(field["asset_type"]).upper()]
+    except KeyError as error:
+        raise ValueError(
+            f"schema uses an unknown asset type: {field.get('asset_type')}"
+        ) from error
+
+
+def _validate_scalar(
+    classname: str, field: dict[str, object], value: float
+) -> None:
+    name = str(field["name"])
+    if not math.isfinite(value):
+        raise ValueError(f"{classname}.{name} must be finite")
+    if "min" in field:
+        valid = value > float(field["min"]) if field.get("min_exclusive") \
+            else value >= float(field["min"])
+        if not valid:
+            raise ValueError(f"{classname}.{name} is below its minimum")
+    if "max" in field:
+        valid = value < float(field["max"]) if field.get("max_exclusive") \
+            else value <= float(field["max"])
+        if not valid:
+            raise ValueError(f"{classname}.{name} is above its maximum")
+
+
+def _validate_entity_record(
+    classname: str,
+    schema: dict[str, object],
+    record: memoryview,
+    auxiliary: memoryview,
+    assets: list[tuple[AssetType, str]],
+) -> None:
+    values = CLASS_RECORDS[classname].unpack(record)
+    cursor = 0
+    decoded: dict[str, float | int] = {}
+
+    def require_asset(index: int, asset_type: AssetType, name: str) -> None:
+        if index >= len(assets) or assets[index][0] != asset_type:
+            raise ValueError(f"{classname}.{name} asset reference is invalid")
+
+    for field in schema["fields"]:
+        name = str(field["name"])
+        field_type = field["type"]
+        if field_type == "transform":
+            transform = values[cursor:cursor + 10]
+            if any(not math.isfinite(float(component)) for component in transform):
+                raise ValueError(f"{classname}.transform must be finite")
+            cursor += 10
+        elif field_type == "f32":
+            value = float(values[cursor])
+            _validate_scalar(classname, field, value)
+            decoded[name] = value
+            cursor += 1
+        elif field_type == "u32":
+            decoded[name] = int(values[cursor])
+            cursor += 1
+        elif field_type == "bool":
+            value = int(values[cursor])
+            if value not in (0, 1):
+                raise ValueError(f"{classname}.{name} is not a boolean")
+            decoded[name] = value
+            cursor += 1
+        elif field_type == "enum":
+            value = int(values[cursor])
+            if value not in field["values"].values():
+                raise ValueError(f"{classname}.{name} is invalid")
+            decoded[name] = value
+            cursor += 1
+        elif field_type in ("vec2", "vec3"):
+            count = 2 if field_type == "vec2" else 3
+            for component in values[cursor:cursor + count]:
+                _validate_scalar(classname, field, float(component))
+            cursor += count
+        elif field_type == "asset":
+            index = int(values[cursor])
+            if index == INVALID_INDEX:
+                if not field.get("optional", False):
+                    raise ValueError(f"{classname}.{name} is required")
+            else:
+                require_asset(index, _schema_asset_type(field), name)
+            cursor += 1
+        elif field_type == "asset_list":
+            first, count = (int(value) for value in values[cursor:cursor + 2])
+            available = len(auxiliary) // 4
+            if count:
+                if first == INVALID_INDEX or first > available or \
+                        count > available - first:
+                    raise ValueError(f"{classname}.{name} range is invalid")
+                for index in range(first, first + count):
+                    asset = struct.unpack_from("<I", auxiliary, index * 4)[0]
+                    require_asset(asset, _schema_asset_type(field), name)
+            cursor += 2
+        elif field_type == "flags":
+            value = int(values[cursor])
+            mask = sum(1 << int(member["bit"]) for member in field["members"])
+            if value & ~mask:
+                raise ValueError(f"{classname}.{name} contains unknown flags")
+            decoded[name] = value
+            cursor += 1
+        else:
+            raise ValueError(f"{classname}.{name} has an unsupported type")
+
+    for field in schema["fields"]:
+        if "greater_than" in field and \
+                float(decoded[str(field["name"])]) <= \
+                float(decoded[str(field["greater_than"])]):
+            raise ValueError(
+                f"{classname}.{field['name']} must be greater than "
+                f"{field['greater_than']}"
+            )
 
 
 def inspect_scene(path: Path, project_root: Path, validate_assets: bool = False) -> SceneInspection:
@@ -143,25 +253,22 @@ def inspect_scene(path: Path, project_root: Path, validate_assets: bool = False)
             entities_data, index * entity_stride)
         classname = text(classname_offset, classname_size, "entity classname")
         text(name_offset, name_size, "entity name")
-        if classname not in CLASS_STRIDES:
+        if classname not in CLASS_RECORDS:
             raise ValueError(f"unsupported entity classname: {classname}")
         classnames.append(classname)
 
     loaded = [False] * entity_count
     classes: list[tuple[str, int]] = []
 
-    def require_asset(index: int, asset_type: AssetType, name: str) -> None:
-        if index >= len(assets) or assets[index][0] != asset_type:
-            raise ValueError(f"{name} asset reference is invalid")
-
     for index in range(class_count):
         block = ENTITY_CLASS_BLOCK.unpack_from(classes_data, index * class_stride)
         name_offset, name_size, version, _flags, count, record_stride = block[:6]
         indices_offset, records_offset, auxiliary_offset, auxiliary_size = block[6:10]
         classname = text(name_offset, name_size, "class block classname")
-        if version != ENTITY_CLASS_VERSION or classname not in CLASS_STRIDES:
+        schema = CLASS_SCHEMAS.get(classname)
+        if schema is None or version != schema["version"]:
             raise ValueError(f"unsupported entity class block: {classname}")
-        if record_stride != CLASS_STRIDES[classname]:
+        if record_stride != CLASS_RECORDS[classname].size:
             raise ValueError(f"entity class record stride is unsupported: {classname}")
         indices = _range(payload, indices_offset, count, 4, "class entity indices")
         records = _range(payload, records_offset, count, record_stride, "class records")
@@ -172,79 +279,8 @@ def inspect_scene(path: Path, project_root: Path, validate_assets: bool = False)
                 raise ValueError(f"entity class membership is invalid: {classname}")
             loaded[entity] = True
             record = records[row * record_stride:(row + 1) * record_stride]
-            if classname == "prop":
-                values = PROP.unpack(record)
-                require_asset(values[10], AssetType.MESH, "prop mesh")
-                first_material, material_count = values[11:13]
-                available = len(auxiliary) // 4
-                if material_count:
-                    if first_material == INVALID_INDEX or first_material > available or \
-                            material_count > available - first_material:
-                        raise ValueError(f"{classname} material range is invalid")
-                    for material in range(first_material, first_material + material_count):
-                        require_asset(struct.unpack_from("<I", auxiliary, material * 4)[0],
-                            AssetType.MATERIAL, f"{classname} material")
-                if values[13] != INVALID_INDEX:
-                    require_asset(values[13], AssetType.TEXTURE, "prop lightmap")
-                    if values[19] & int(PropFlags.DYNAMIC):
-                        raise ValueError("only a static prop may have a baked lightmap")
-                    if (values[14] <= 0.0 or values[15] <= 0.0 or
-                            values[16] < 0.0 or values[17] < 0.0 or
-                            values[14] + values[16] > 1.0 or
-                            values[15] + values[17] > 1.0):
-                        raise ValueError("prop lightmap atlas transform is invalid")
-                    if values[18] <= 0.0:
-                        raise ValueError("prop lightmap RGBM range is invalid")
-                if values[19] & int(PropFlags.COLLISION_ENABLED):
-                    if any(value <= 0.0 for value in values[20:23]):
-                        raise ValueError("prop collision dimensions are invalid")
-                    if values[19] & int(PropFlags.DYNAMIC) and values[23] <= 0.0:
-                        raise ValueError("dynamic prop mass is invalid")
-            elif classname == "prefab_instance":
-                values = PREFAB_ENTITY.unpack(record)
-                require_asset(values[10], AssetType.ASSET, "prefab")
-                first_lightmap, lightmap_count = values[11:13]
-                if len(auxiliary) % PREFAB_LIGHTMAP.size:
-                    raise ValueError("prefab lightmap table is invalid")
-                available = len(auxiliary) // PREFAB_LIGHTMAP.size
-                if lightmap_count == 0:
-                    if first_lightmap != INVALID_INDEX:
-                        raise ValueError("empty prefab lightmap range is invalid")
-                elif first_lightmap == INVALID_INDEX or first_lightmap > available or \
-                        lightmap_count > available - first_lightmap:
-                    raise ValueError("prefab lightmap range is invalid")
-                previous_object = -1
-                for lightmap in range(first_lightmap, first_lightmap + lightmap_count):
-                    binding = PREFAB_LIGHTMAP.unpack_from(
-                        auxiliary, lightmap * PREFAB_LIGHTMAP.size)
-                    require_asset(binding[1], AssetType.TEXTURE, "prefab lightmap")
-                    if (binding[0] <= previous_object or binding[2] <= 0.0 or binding[3] <= 0.0 or
-                            binding[4] < 0.0 or binding[5] < 0.0 or
-                            binding[2] + binding[4] > 1.0 or
-                            binding[3] + binding[5] > 1.0 or binding[6] <= 0.0):
-                        raise ValueError("prefab lightmap binding is invalid")
-                    previous_object = binding[0]
-            elif classname == "player":
-                values = PLAYER_ENTITY.unpack(record)
-                if values[10] > 1 or values[13] <= 0.0 or values[14] <= values[13]:
-                    raise ValueError("camera record is invalid")
-            elif classname == "light":
-                values = LIGHT_ENTITY.unpack(record)
-                if values[10] > 3 or values[11] > 2 or values[15] < 0.0 or values[16] < 0.0:
-                    raise ValueError("light record is invalid")
-                if values[-1] & ~int(LightFlags.ENABLED | LightFlags.CASTS_SHADOW):
-                    raise ValueError("light flags are invalid")
-            elif classname == "skybox":
-                values = SKYBOX_ENTITY.unpack(record)
-                require_asset(values[10], AssetType.TEXTURE, "skybox panorama")
-                if (not math.isfinite(values[11]) or values[11] < 0.0 or
-                        not math.isfinite(values[12]) or values[13] & ~1):
-                    raise ValueError("skybox record is invalid")
-            elif classname == "exponential_height_fog":
-                values = EXPONENTIAL_HEIGHT_FOG_ENTITY.unpack(record)
-                if (any(not math.isfinite(value) or value < 0.0 for value in values[10:18]) or
-                        values[16] > 1.0 or values[18] & ~1):
-                    raise ValueError("exponential height fog record is invalid")
+            _validate_entity_record(
+                classname, schema, record, auxiliary, assets)
         classes.append((classname, count))
     if not all(loaded):
         raise ValueError("one or more entities have no class record")

@@ -15,6 +15,7 @@
 namespace CEngine::Renderer {
 
 struct OpenGLDrawItem {
+	const MeshData* mesh_data = nullptr;
 	Material* material = nullptr;
 	glm::mat4 transform = glm::mat4(1.0f);
 	Bounds world_bounds;

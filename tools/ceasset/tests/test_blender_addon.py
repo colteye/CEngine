@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 
 ADDON = Path(__file__).resolve().parents[2] / "blender_addon" / "cengine_asset_exporter" / "__init__.py"
+ADDON_UI = ADDON.with_name("ui.py")
 BLENDER_ADDON_ROOT = ADDON.parents[1]
 PACKAGE_ADDON = ADDON.parents[1] / "package_addon.py"
 CEASSET_ROOT = Path(__file__).resolve().parents[1]
@@ -23,9 +24,10 @@ SPEC = importlib.util.spec_from_file_location(
     submodule_search_locations=[str(ADDON.parent)],
 )
 assert SPEC is not None and SPEC.loader is not None
-addon = importlib.util.module_from_spec(SPEC)
-sys.modules[SPEC.name] = addon
-SPEC.loader.exec_module(addon)
+addon_package = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = addon_package
+SPEC.loader.exec_module(addon_package)
+addon = addon_package.exporter
 
 PACKAGE_SPEC = importlib.util.spec_from_file_location("package_addon", PACKAGE_ADDON)
 assert PACKAGE_SPEC is not None and PACKAGE_SPEC.loader is not None
@@ -151,7 +153,7 @@ class BlenderAddonTests(unittest.TestCase):
         self.assertIsNone(addon.default_output_root_for_source(None))
 
     def test_operator_invoke_accepts_blender_event_argument(self) -> None:
-        tree = ast.parse(ADDON.read_text())
+        tree = ast.parse(ADDON_UI.read_text())
         invoke = next(
             node
             for node in ast.walk(tree)
@@ -159,6 +161,18 @@ class BlenderAddonTests(unittest.TestCase):
         )
 
         self.assertEqual([arg.arg for arg in invoke.args.args], ["self", "context", "event"])
+
+    def test_blender_property_annotations_are_evaluated(self) -> None:
+        tree = ast.parse(ADDON_UI.read_text())
+
+        postponed = any(
+            isinstance(node, ast.ImportFrom)
+            and node.module == "__future__"
+            and any(alias.name == "annotations" for alias in node.names)
+            for node in tree.body
+        )
+
+        self.assertFalse(postponed)
 
     def test_blend_source_path_rejects_unsaved_file(self) -> None:
         addon.bpy = types.SimpleNamespace(data=types.SimpleNamespace(filepath=""))
@@ -397,7 +411,6 @@ class BlenderAddonTests(unittest.TestCase):
                 patch.object(addon, "write_material_assets") as write_materials,
                 patch.object(addon, "write_skeleton_assets", return_value=[]),
                 patch.object(addon, "write_animation_assets", return_value=[]),
-                patch.object(addon, "bake_scene_lightmaps", return_value=({}, {}, [])),
                 patch.object(addon, "write_mesh_assets") as write_meshes,
                 patch.object(addon, "register_outputs"),
             ):
@@ -428,7 +441,7 @@ class BlenderAddonTests(unittest.TestCase):
             self.assertIn(b"SM_Body", casset.read_bytes())
             self.assertNotIn(b"SM_Orphan", casset.read_bytes())
 
-    def test_scene_collection_writes_cscene_after_generating_referenced_casset(self) -> None:
+    def test_scene_collection_flattens_collection_instance_into_cscene(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "assets" / "source" / "maps" / "Test.blend"
@@ -450,7 +463,10 @@ class BlenderAddonTests(unittest.TestCase):
                 patch.object(addon, "write_material_assets") as write_materials,
                 patch.object(addon, "write_skeleton_assets", return_value=[]),
                 patch.object(addon, "write_animation_assets", return_value=[]),
-                patch.object(addon, "bake_scene_lightmaps", return_value=({}, {}, [])),
+                patch.object(
+                    addon, "bake_scene_lightmaps",
+                    return_value=({}, {}, []),
+                    create=True) as bake_lightmaps,
                 patch.object(addon, "write_mesh_assets") as write_meshes,
             ):
                 write_materials.return_value = [
@@ -471,14 +487,17 @@ class BlenderAddonTests(unittest.TestCase):
                 ]
                 result = addon.export_current_file(compiled)
 
+            bake_lightmaps.assert_not_called()
             cscene = compiled / "maps" / "Test" / "Test.cscene"
             casset = compiled / "maps" / "Test" / "Door.casset"
             self.assertEqual(result.scenes, 1)
-            self.assertEqual(result.collections, 1)
+            self.assertEqual(result.collections, 0)
             self.assertTrue(cscene.exists())
-            self.assertTrue(casset.exists())
-            self.assertIn(b"assets/compiled/maps/Test/Door.casset", cscene.read_bytes())
-            self.assertIn(b"assets/compiled/maps/meshes/SM_Floor.cmesh", cscene.read_bytes())
+            self.assertFalse(casset.exists())
+            scene_bytes = cscene.read_bytes()
+            self.assertNotIn(b"assets/compiled/maps/Test/Door.casset", scene_bytes)
+            self.assertIn(b"assets/compiled/maps/meshes/SM_Floor.cmesh", scene_bytes)
+            self.assertIn(b"assets/compiled/maps/meshes/SM_Door.cmesh", scene_bytes)
 
     def test_object_component_assets_reference_generated_targets(self) -> None:
         obj = FakeObject("SM_Body", ["HeroSkin"])
@@ -505,16 +524,21 @@ class BlenderAddonTests(unittest.TestCase):
     def test_packaged_addon_contains_exporter_and_converter_library(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "cengine_asset_exporter.zip"
-            package_addon.write_addon_zip(output)
+            game_file = CEASSET_ROOT.parents[1] / "schemas" / "engine.game.json"
+            package_addon.write_addon_zip(output, game_file=game_file)
 
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
 
             self.assertIn("__init__.py", names)
             self.assertIn("blender_manifest.toml", names)
+            self.assertIn("exporter.py", names)
             self.assertIn("meshes.py", names)
             self.assertIn("lightmaps.py", names)
+            self.assertIn("authoring.py", names)
+            self.assertIn("ui.py", names)
             self.assertIn("ceassetlib/assetfile.py", names)
+            self.assertIn("ceassetlib/game.json", names)
             self.assertIn("vendor/PIL/Image.py", names)
             self.assertIn("vendor/PIL/_imaging.cp311-win_amd64.pyd", names)
             self.assertNotIn("wheels/pillow-12.3.0-cp311-cp311-win_amd64.whl", names)

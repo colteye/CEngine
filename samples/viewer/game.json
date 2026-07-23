@@ -1,0 +1,51 @@
+{
+  "format_version": 1,
+  "imports": ["../../schemas/engine.game.json"],
+  "module": {
+    "id": "viewer",
+    "name": "CEngine Viewer",
+    "version": "0.1.0"
+  },
+  "game": {
+    "id": "viewer",
+    "name": "CEngine Viewer",
+    "version": "0.1.0"
+  },
+  "content": {
+    "source_roots": ["assets/source"],
+    "asset_roots": ["assets/compiled"]
+  },
+  "entities": [
+    {
+      "classname": "player",
+      "version": 1,
+      "fields": [
+        {"name": "transform", "type": "transform"},
+        {
+          "name": "view_mode",
+          "type": "enum",
+          "enum": "PlayerViewMode",
+          "default": 0,
+          "blender_property": "ce_view_mode",
+          "values": {"FirstPerson": 0, "ThirdPerson": 1}
+        },
+        {"name": "vertical_fov_radians", "type": "f32", "default": 1.0471976, "min": 0.0},
+        {"name": "third_person_distance", "type": "f32", "default": 4.0, "min": 0.0},
+        {
+          "name": "near_clip",
+          "type": "f32",
+          "default": 0.1,
+          "min": 0.0,
+          "min_exclusive": true
+        },
+        {
+          "name": "far_clip",
+          "type": "f32",
+          "default": 1000.0,
+          "greater_than": "near_clip"
+        },
+        {"name": "enabled", "type": "bool", "default": true}
+      ]
+    }
+  ]
+}

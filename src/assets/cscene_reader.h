@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace CEngine::Assets {
 
@@ -13,15 +14,15 @@ template <typename T> struct DiskView {
     const T* data = nullptr;
     std::size_t size = 0;
     const T* begin() const { return data; }
-    const T* end() const { return data + size; }
+    const T* end() const { return size == 0 ? data : data + size; }
     const T& operator[](std::size_t index) const { return data[index]; }
     bool Empty() const { return size == 0; }
 };
 
 class CSceneFile {
 public:
-    bool Load(const std::filesystem::path& path, std::string* error = nullptr);
-    const CSceneFormat::DiskSceneSettings& Settings() const { return *settings_; }
+    bool Load(const std::filesystem::path& path);
+    const CSceneFormat::DiskSceneSettings& Settings() const { return settings_; }
     DiskView<CSceneFormat::DiskAssetReference> AssetReferences() const;
     DiskView<CSceneFormat::DiskSceneEntity> Entities() const;
     DiskView<CSceneFormat::DiskEntityClassBlock> ClassBlocks() const;
@@ -32,13 +33,18 @@ public:
     std::string_view String(std::uint32_t offset, std::uint32_t size) const;
 
 private:
-    bool Validate(std::string* error);
+    bool Validate();
     const std::uint8_t* At(std::uint64_t offset) const { return payload_.data + offset; }
 
     AssetFile asset_;
     ByteView payload_;
     CSceneFormat::DiskSceneHeader header_ = {};
-    const CSceneFormat::DiskSceneSettings* settings_ = nullptr;
+    CSceneFormat::DiskSceneSettings settings_ = {};
+    std::vector<CSceneFormat::DiskAssetReference> asset_references_;
+    std::vector<CSceneFormat::DiskSceneEntity> entities_;
+    std::vector<CSceneFormat::DiskEntityClassBlock> class_blocks_;
+    std::vector<CSceneFormat::DiskEntityConnection> connections_;
+    std::vector<std::vector<std::uint32_t>> class_entities_;
 };
 
 } // namespace CEngine::Assets

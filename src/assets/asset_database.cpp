@@ -1,13 +1,12 @@
 #include "assets/asset_database.h"
 
+#include "assets/asset_error.h"
 #include "assets/asset_io.h"
 
 #include <algorithm>
 
 namespace CEngine::Assets {
 namespace {
-void SetError(std::string* error, std::string message) { if (error) *error = std::move(message); }
-
 bool IsExternalPayload(AssetType type)
 {
     return type == AssetType::Texture || type == AssetType::Audio;
@@ -32,25 +31,35 @@ AssetDatabase::AssetDatabase(std::filesystem::path project_root)
 }
 
 AssetHandle AssetDatabase::Acquire(std::string_view project_relative_path,
-    AssetType expected_type, const Guid& expected_guid, std::string* error)
+    AssetType expected_type, const Guid& expected_guid)
 {
     std::string normalized;
     if (!NormalizeProjectAssetPath(project_relative_path, normalized))
-    { SetError(error, "asset path must be project-relative"); return {}; }
+    {
+        AssetError("asset path must be project-relative");
+        return {};
+    }
     if (expected_type == AssetType::Unknown || expected_type == AssetType::Scene)
-    { SetError(error, "asset reference type is invalid"); return {}; }
+    {
+        AssetError("asset reference type is invalid");
+        return {};
+    }
 
     for (std::uint32_t index = 0; index < slots_.size(); ++index)
     {
         const Slot& slot = slots_[index];
         if (!slot.live || slot.path != normalized) continue;
         if (slot.type != expected_type || slot.guid != expected_guid)
-        { SetError(error, "asset reference conflicts with an existing path"); return {}; }
+        {
+            AssetError("asset reference conflicts with an existing path");
+            return {};
+        }
         ++slots_[index].references;
         return {index, slot.generation};
     }
 
-    if (!ValidateTarget(project_root_ / normalized, normalized, expected_type, expected_guid, error))
+    if (!ValidateTarget(
+            project_root_ / normalized, normalized, expected_type, expected_guid))
         return {};
 
     std::uint32_t index;
@@ -75,6 +84,7 @@ bool AssetDatabase::Release(AssetHandle handle)
     slot.path.clear();
     slot.guid = {};
     slot.type = AssetType::Unknown;
+    slot.texture_cache = {};
     ++slot.generation;
     if (slot.generation == 0) ++slot.generation;
     free_indices_.push_back(handle.index);
@@ -83,19 +93,24 @@ bool AssetDatabase::Release(AssetHandle handle)
 }
 
 bool AssetDatabase::ValidateTarget(const std::filesystem::path& full_path,
-    std::string_view relative_path, AssetType expected_type, const Guid& expected_guid,
-    std::string* error) const
+    std::string_view relative_path, AssetType expected_type,
+    const Guid& expected_guid) const
 {
     if (!std::filesystem::is_regular_file(full_path))
-    { SetError(error, "referenced asset does not exist: " + std::string(relative_path)); return false; }
+        return AssetError(
+            "referenced asset does not exist: " + std::string(relative_path));
     if (IsExternalPayload(expected_type)) return true;
 
     AssetFile file;
-    if (!file.Load(full_path, error)) return false;
+    if (!file.Load(full_path)) return false;
     if (file.Type() != expected_type)
-    { SetError(error, "referenced asset type does not match: " + std::string(relative_path)); return false; }
+        return AssetError(
+            "referenced asset type does not match: " +
+            std::string(relative_path));
     if (file.GetGuid() != expected_guid)
-    { SetError(error, "referenced asset GUID does not match: " + std::string(relative_path)); return false; }
+        return AssetError(
+            "referenced asset GUID does not match: " +
+            std::string(relative_path));
     return true;
 }
 
@@ -127,6 +142,7 @@ void AssetDatabase::ReleaseAll()
         slot.guid = {};
         slot.type = AssetType::Unknown;
         slot.references = 0;
+        slot.texture_cache = {};
         ++slot.generation;
         if (slot.generation == 0) ++slot.generation;
         free_indices_.push_back(index);

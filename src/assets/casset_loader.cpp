@@ -1,21 +1,62 @@
 #include "assets/casset_loader.h"
 
+#include "assets/asset_error.h"
+#include "assets/binary.h"
+
 #include <cstring>
 
 namespace CEngine::Assets {
 namespace {
 
-void SetError(std::string* error, const std::string& message)
+bool ReadHeader(ByteView bytes, DiskCAssetHeader& value)
 {
-    if (error != nullptr)
-    {
-        *error = message;
-    }
+    if (bytes.size < sizeof(value)) return false;
+    std::size_t offset = 0;
+    std::memcpy(value.magic.data(), bytes.data, value.magic.size());
+    offset += value.magic.size();
+    return ReadU16LE(bytes, offset, value.version) &&
+        ReadU16LE(bytes, offset, value.header_size) &&
+        ReadU32LE(bytes, offset, value.composition_type) &&
+        ReadU32LE(bytes, offset, value.object_count) &&
+        ReadU32LE(bytes, offset, value.object_table_offset) &&
+        ReadU32LE(bytes, offset, value.component_count) &&
+        ReadU32LE(bytes, offset, value.component_table_offset) &&
+        ReadU32LE(bytes, offset, value.string_table_offset) &&
+        ReadU32LE(bytes, offset, value.string_table_size) &&
+        ReadU32LE(bytes, offset, value.source_path_offset) &&
+        ReadU32LE(bytes, offset, value.source_path_size) &&
+        ReadU32LE(bytes, offset, value.collection_name_offset) &&
+        ReadU32LE(bytes, offset, value.collection_name_size);
+}
+
+bool ReadObjectRow(
+    ByteView bytes, std::size_t offset, DiskCAssetObject& value)
+{
+    if (!ReadU32LE(bytes, offset, value.name_offset) ||
+        !ReadU32LE(bytes, offset, value.name_size) ||
+        !ReadU32LE(bytes, offset, value.role) ||
+        !ReadU32LE(bytes, offset, value.object_type) ||
+        !ReadU32LE(bytes, offset, value.parent_name_offset) ||
+        !ReadU32LE(bytes, offset, value.parent_name_size) ||
+        !ReadU32LE(bytes, offset, value.first_component) ||
+        !ReadU32LE(bytes, offset, value.component_count))
+        return false;
+    for (float& component : value.world_from_local)
+        if (!ReadF32LE(bytes, offset, component)) return false;
+    return true;
+}
+
+bool ReadComponentRow(
+    ByteView bytes, std::size_t offset, DiskCAssetComponent& value)
+{
+    return ReadU32LE(bytes, offset, value.kind) &&
+        ReadU32LE(bytes, offset, value.path_offset) &&
+        ReadU32LE(bytes, offset, value.path_size);
 }
 
 } // namespace
 
-bool CAsset::Load(const std::filesystem::path& path, std::string* error)
+bool CAsset::Load(const std::filesystem::path& path)
 {
     file = {};
     header = {};
@@ -23,35 +64,33 @@ bool CAsset::Load(const std::filesystem::path& path, std::string* error)
     component_table = {};
     string_table = {};
 
-    if (!file.Load(path, error))
+    if (!file.Load(path))
     {
         return false;
     }
-    return Parse(error);
+    return Parse();
 }
 
-bool CAsset::Parse(std::string* error)
+bool CAsset::Parse()
 {
     if (file.Type() != AssetType::Asset)
     {
-        SetError(error, "asset is not a .casset composition");
-        return false;
+        return AssetError("asset is not a .casset composition");
     }
 
     const ByteView payload = file.Payload();
     if (payload.size < sizeof(DiskCAssetHeader))
     {
-        SetError(error, "casset payload is invalid");
-        return false;
+        return AssetError("casset payload is invalid");
     }
 
-    std::memcpy(&header, payload.data, sizeof(header));
+    if (!ReadHeader(payload, header))
+        return AssetError("casset payload is invalid");
     if (header.magic != CAssetPayloadMagic ||
         header.version != CAssetPayloadVersion ||
         header.header_size != sizeof(DiskCAssetHeader))
     {
-        SetError(error, "casset payload header is not supported");
-        return false;
+        return AssetError("casset payload header is not supported");
     }
 
     const std::size_t object_table_size =
@@ -65,8 +104,7 @@ bool CAsset::Parse(std::string* error)
         header.string_table_offset > payload.size ||
         header.string_table_size > payload.size - header.string_table_offset)
     {
-        SetError(error, "casset payload tables are outside the payload");
-        return false;
+        return AssetError("casset payload tables are outside the payload");
     }
 
     object_table = {payload.data + header.object_table_offset, object_table_size};
@@ -77,8 +115,8 @@ bool CAsset::Parse(std::string* error)
     if (!StringViewAt(header.source_path_offset, header.source_path_size, view) ||
         !StringViewAt(header.collection_name_offset, header.collection_name_size, view))
     {
-        SetError(error, "casset source or collection name is outside the string table");
-        return false;
+        return AssetError(
+            "casset source or collection name is outside the string table");
     }
 
     for (std::uint32_t index = 0; index < header.object_count; ++index)
@@ -86,14 +124,13 @@ bool CAsset::Parse(std::string* error)
         CAssetObject object;
         if (!Object(index, object))
         {
-            SetError(error, "casset object table is invalid");
-            return false;
+            return AssetError("casset object table is invalid");
         }
         if (object.first_component > header.component_count ||
             object.component_count > header.component_count - object.first_component)
         {
-            SetError(error, "casset object component range is invalid");
-            return false;
+            return AssetError(
+                "casset object component range is invalid");
         }
     }
 
@@ -102,8 +139,7 @@ bool CAsset::Parse(std::string* error)
         CAssetComponent component;
         if (!Component(index, component))
         {
-            SetError(error, "casset component table is invalid");
-            return false;
+            return AssetError("casset component table is invalid");
         }
     }
 
@@ -132,10 +168,11 @@ bool CAsset::Object(std::uint32_t index, CAssetObject& object) const
     }
 
     DiskCAssetObject disk_object;
-    std::memcpy(
-        &disk_object,
-        object_table.data + static_cast<std::size_t>(index) * sizeof(DiskCAssetObject),
-        sizeof(disk_object));
+    if (!ReadObjectRow(
+            object_table,
+            static_cast<std::size_t>(index) * sizeof(DiskCAssetObject),
+            disk_object))
+        return false;
 
     std::string_view name;
     std::string_view parent_name;
@@ -151,7 +188,10 @@ bool CAsset::Object(std::uint32_t index, CAssetObject& object) const
     object.parent_name = parent_name;
     object.first_component = disk_object.first_component;
     object.component_count = disk_object.component_count;
-    std::memcpy(object.world_from_local.data(), disk_object.world_from_local, sizeof(disk_object.world_from_local));
+    for (std::size_t component = 0;
+         component < object.world_from_local.size(); ++component)
+        object.world_from_local[component] =
+            disk_object.world_from_local[component];
     return true;
 }
 
@@ -163,10 +203,12 @@ bool CAsset::Component(std::uint32_t index, CAssetComponent& component) const
     }
 
     DiskCAssetComponent disk_component;
-    std::memcpy(
-        &disk_component,
-        component_table.data + static_cast<std::size_t>(index) * sizeof(DiskCAssetComponent),
-        sizeof(disk_component));
+    if (!ReadComponentRow(
+            component_table,
+            static_cast<std::size_t>(index) *
+                sizeof(DiskCAssetComponent),
+            disk_component))
+        return false;
 
     std::string_view path;
     if (!StringViewAt(disk_component.path_offset, disk_component.path_size, path))

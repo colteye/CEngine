@@ -10,6 +10,8 @@
 
 namespace CEngine::Renderer {
 
+class RenderSystem;
+
 class OpenGLDirectLightBuffer
 {
 public:
@@ -19,7 +21,7 @@ public:
 	~OpenGLDirectLightBuffer();
 
 	void Initialize(GLuint shader_id, const char* block_name);
-	void BindAndUploadIfNeeded();
+	void BindAndUploadIfNeeded(RenderSystem& rendering);
 	void Destroy();
 
 private:
@@ -41,6 +43,8 @@ public:
 
 private:
 	GLuint buffer = 0;
+	OpenGLShadowGpuData uploaded_data {};
+	bool uploaded = false;
 };
 
 struct OpenGLShadowSamplers
@@ -60,7 +64,28 @@ struct OpenGLAmbientUniforms
 	GLint enabled = -1;
 
 	void Initialize(GLuint shader_id);
-	void Upload() const;
+	void Upload(const RenderSystem& rendering) const;
+};
+
+struct OpenGLEnvironmentUniforms
+{
+	GLint irradiance = -1;
+	GLint prefiltered = -1;
+	GLint ibl_enabled = -1;
+	GLint ibl_intensity = -1;
+	GLint ibl_rotation = -1;
+	GLint fog_enabled = -1;
+	GLint fog_color = -1;
+	GLint fog_density = -1;
+	GLint fog_height_falloff = -1;
+	GLint fog_base_height = -1;
+	GLint fog_start_distance = -1;
+	GLint fog_max_opacity = -1;
+	GLint fog_cutoff_distance = -1;
+
+	void Initialize(GLuint shader_id);
+	void BindAndUpload(const RenderSystem& rendering,
+		GLuint irradiance_texture, GLuint prefiltered_texture) const;
 };
 
 

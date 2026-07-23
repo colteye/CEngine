@@ -83,45 +83,6 @@ layout(std140) uniform ShadowBlock {
 
 const float PI = 3.14159265359;
 
-float DistributionGGX(vec3 N, vec3 H, float roughness)
-{
-    float a      = roughness*roughness;
-    float a2     = a*a;
-    float NdotH  = max(dot(N, H), 0.0);
-    float NdotH2 = NdotH*NdotH;
-	
-    float num   = a2;
-    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
-    denom = PI * denom * denom;
-	
-    return num / denom;
-}
-
-float GeometrySchlickGGX(float NdotV, float roughness)
-{
-    float r = (roughness + 1.0);
-    float k = (r*r) / 8.0;
-
-    float num   = NdotV;
-    float denom = NdotV * (1.0 - k) + k;
-	
-    return num / denom;
-}
-float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
-{
-    float NdotV = max(dot(N, V), 0.0);
-    float NdotL = max(dot(N, L), 0.0);
-    float ggx2  = GeometrySchlickGGX(NdotV, roughness);
-    float ggx1  = GeometrySchlickGGX(NdotL, roughness);
-	
-    return ggx1 * ggx2;
-}
-
-vec3 FresnelSchlick(float NdotH, vec3 F0)
-{
-    return F0 + (1.0 - F0) * pow(1.0 - NdotH, 5.0);
-}
-
 vec3 CalculateNormals()
 {
 	// Preprocess tangent space normal map.
@@ -135,164 +96,7 @@ vec3 CalculateNormals()
     return normalize(TBN * normal_tex);
 }
 
-float AtlasShadow(mat4 light_matrix, vec4 rect, vec4 params, vec3 world_pos, vec3 N, vec3 L)
-{
-    vec3 receiver_pos = world_pos + L * params.y;
-    vec4 clip_pos = light_matrix * vec4(receiver_pos, 1.0);
-    vec3 projected = clip_pos.xyz / clip_pos.w;
-    vec2 shadow_uv = projected.xy * 0.5 + 0.5;
-    float current_depth = projected.z * 0.5 + 0.5;
-    if (shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0 ||
-        current_depth < 0.0 || current_depth > 1.0) {
-        return 1.0;
-    }
-
-    vec2 atlas_uv = rect.xy + shadow_uv * rect.zw;
-    float bias = max(params.x * (1.0 - clamp(dot(N, L), 0.0, 1.0)), params.x * 0.25);
-    float atlas_texel = 1.0 / shadow_counts.w;
-    vec2 atlas_min = rect.xy + vec2(atlas_texel);
-    vec2 atlas_max = rect.xy + rect.zw - vec2(atlas_texel);
-    vec2 offsets[4] = vec2[](
-        vec2(-0.75, -0.75), vec2(0.75, -0.75),
-        vec2(-0.75, 0.75), vec2(0.75, 0.75)
-    );
-    float lit = 0.0;
-    for (int sample_index = 0; sample_index < 4; ++sample_index) {
-        vec2 sample_uv = clamp(atlas_uv + offsets[sample_index] * atlas_texel, atlas_min, atlas_max);
-        lit += texture(shadow_atlas, vec3(sample_uv, current_depth - bias));
-    }
-    return lit * 0.25;
-}
-
-float SamplePointMap(int index, vec3 direction, float reference_depth)
-{
-	vec4 sample_coord = vec4(direction, reference_depth);
-	if (index == 0) return texture(point_shadow_maps[0], sample_coord);
-	if (index == 1) return texture(point_shadow_maps[1], sample_coord);
-	if (index == 2) return texture(point_shadow_maps[2], sample_coord);
-	if (index == 3) return texture(point_shadow_maps[3], sample_coord);
-	return texture(point_shadow_maps[3], sample_coord);
-}
-
-float PointShadow(int index, vec3 world_pos, vec3 N, vec3 L)
-{
-    vec4 point_data = point_shadow_params[index];
-    vec4 filter_data = point_filter_params[index];
-	vec3 receiver_pos = world_pos + L * filter_data.y;
-	vec3 from_light = receiver_pos - point_data.xyz;
-    float current_distance = length(from_light);
-    float far_plane = point_data.w;
-    if (far_plane <= 0.0 || current_distance >= far_plane) {
-        return 1.0;
-    }
-
-	float bias = max(filter_data.x * (1.0 - clamp(dot(N, L), 0.0, 1.0)), filter_data.x * 0.25);
-	// Shadow bias is a normalized depth offset for every shadow-map type. Keep
-	// the point-light path consistent with the atlas path instead of treating it
-	// as world units and dividing it by the light range a second time.
-	float reference_depth = clamp(current_distance / far_plane - bias, 0.0, 1.0);
-	float disk_radius = 3.0 / max(filter_data.z, 64.0);
-	vec3 offsets[4] = vec3[](
-		vec3(1.0, 1.0, 1.0),
-		vec3(1.0, -1.0, -1.0),
-		vec3(-1.0, 1.0, -1.0),
-		vec3(-1.0, -1.0, 1.0)
-	);
-
-	float lit = 0.0;
-	vec3 direction = from_light / current_distance;
-	for (int sample_index = 0; sample_index < 4; ++sample_index) {
-		lit += SamplePointMap(index,
-			normalize(direction + offsets[sample_index] * disk_radius), reference_depth);
-	}
-	return lit * 0.25;
-}
-
-float DirectionalShadow(int cascade_start, vec3 world_pos, vec3 N, vec3 L)
-{
-    float view_depth = -(view * vec4(world_pos, 1.0)).z;
-    int selected = -1;
-    for (int cascade = 0; cascade < 4; ++cascade) {
-        int index = cascade_start + cascade;
-        if (view_depth <= cascade_shadow_params[index].x) {
-            selected = index;
-            break;
-        }
-    }
-    if (selected < 0) {
-        return 1.0;
-    }
-
-    float shadow = AtlasShadow(cascade_shadow_matrices[selected], cascade_atlas_rects[selected],
-        vec4(cascade_shadow_params[selected].y, cascade_shadow_params[selected].z, 0.0, 0.0),
-        world_pos, N, L);
-    float blend_range = cascade_shadow_params[selected].w;
-    if (blend_range > 0.0 && selected + 1 < cascade_start + 4) {
-        float split = cascade_shadow_params[selected].x;
-        float blend = smoothstep(0.0, 1.0, clamp((view_depth - (split - blend_range)) / blend_range, 0.0, 1.0));
-        float next_shadow = AtlasShadow(cascade_shadow_matrices[selected + 1], cascade_atlas_rects[selected + 1],
-            vec4(cascade_shadow_params[selected + 1].y, cascade_shadow_params[selected + 1].z, 0.0, 0.0),
-            world_pos, N, L);
-        shadow = mix(shadow, next_shadow, blend);
-    }
-    return shadow;
-}
-
-float LightShadow(GpuLight light, vec3 world_pos, vec3 N, vec3 L)
-{
-    int index = int(light.params.z + 0.5);
-    float shadow_type = light.params.w;
-    if (index < 0 || abs(shadow_type - SHADOW_TYPE_NONE) < 0.5) {
-        return 1.0;
-    }
-    if (abs(shadow_type - SHADOW_TYPE_SPOT) < 0.5) {
-        return AtlasShadow(spot_shadow_matrices[index], spot_atlas_rects[index], spot_shadow_params[index],
-            world_pos, N, L);
-    }
-    if (abs(shadow_type - SHADOW_TYPE_DIRECTIONAL) < 0.5) {
-        return DirectionalShadow(index, world_pos, N, L);
-    }
-    if (abs(shadow_type - SHADOW_TYPE_POINT) < 0.5) {
-        return PointShadow(index, world_pos, N, L);
-    }
-    return 1.0;
-}
-
-vec3 RotateEnvironment(vec3 direction) {
-    float c = cos(ibl_rotation_radians), s = sin(ibl_rotation_radians);
-    direction.xy = mat2(c, -s, s, c) * direction.xy;
-    return direction;
-}
-
-vec3 FresnelSchlickRoughness(float ndotv, vec3 f0, float roughness) {
-    return f0 + (max(vec3(1.0 - roughness), f0) - f0) * pow(1.0 - ndotv, 5.0);
-}
-
-vec2 EnvironmentBrdf(float ndotv, float roughness) {
-    const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
-    const vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
-    vec4 r = roughness * c0 + c1;
-    float a004 = min(r.x * r.x, exp2(-9.28 * ndotv)) * r.x + r.y;
-    return vec2(-1.04, 1.04) * a004 + r.zw;
-}
-
-vec3 ApplyHeightFog(vec3 color, vec3 world_pos) {
-    if (!fog_enabled) return color;
-    vec3 delta = world_pos - cam_pos_world;
-    float distance_to_surface = length(delta);
-    if (distance_to_surface <= fog_start_distance ||
-        (fog_cutoff_distance > 0.0 && distance_to_surface > fog_cutoff_distance)) return color;
-    vec3 ray = delta / max(distance_to_surface, 0.0001);
-    float distance_in_fog = distance_to_surface - fog_start_distance;
-    float start_height = cam_pos_world.z + ray.z * fog_start_distance;
-    float start_density = fog_density * exp(clamp(-fog_height_falloff *
-        (start_height - fog_base_height), -80.0, 80.0));
-    float slope = fog_height_falloff * ray.z;
-    float optical_depth = abs(slope) < 0.00001 ? start_density * distance_in_fog :
-        start_density * (1.0 - exp(-slope * distance_in_fog)) / slope;
-    float amount = min(1.0 - exp(-max(optical_depth, 0.0)), fog_max_opacity);
-    return mix(color, fog_inscattering_color, amount);
-}
+#include "pbr_lighting.glsl"
 
 void main()
 {		
@@ -324,75 +128,10 @@ void main()
 
     vec3 V = normalize(cam_pos_world - vertex_pos_world);
 
-    vec3 F0 = vec3(0.04); 
-    F0 = mix(F0, albedo, metallic);
-	           
-    // reflectance equation
-    vec3 Lo = vec3(0.0);
-    int light_count = min(int(light_info.x), MAX_DIRECT_LIGHTS);
-    for(int i = 0; i < light_count; ++i) 
-    {
-        GpuLight light = lights[i];
-        float light_type = light.params.x;
-        float attenuation = 1.0;
-        float spot_factor = 1.0;
-        vec3 L = vec3(0.0);
-
-        // calculate per-light radiance
-        if (abs(light_type - LIGHT_TYPE_DIRECTIONAL) < 0.5)
-        {
-            L = normalize(-light.direction_spot.xyz);
-        }
-        else
-        {
-            vec3 light_delta = light.position_range.xyz - vertex_pos_world;
-            float distance = length(light_delta);
-            if (distance <= 0.0001)
-            {
-                continue;
-            }
-
-            L = light_delta / distance;
-            attenuation = 1.0 / (distance * distance);
-
-            float range = light.position_range.w;
-            if (range > 0.0)
-            {
-                float range_factor = clamp(1.0 - distance / range, 0.0, 1.0);
-                attenuation *= range_factor * range_factor;
-            }
-
-            if (abs(light_type - LIGHT_TYPE_SPOT) < 0.5)
-            {
-                float theta = dot(normalize(-L), normalize(light.direction_spot.xyz));
-                float inner_cos = light.params.y;
-                float outer_cos = light.direction_spot.w;
-                float epsilon = max(inner_cos - outer_cos, 0.0001);
-                spot_factor = clamp((theta - outer_cos) / epsilon, 0.0, 1.0);
-            }
-        }
-
-        vec3 H = normalize(V + L);
-        vec3 radiance = light.color_intensity.rgb * attenuation * light.color_intensity.a * spot_factor;
-        float shadow = receives_shadows ? LightShadow(light, vertex_pos_world, N, L) : 1.0;
-        
-        // cook-torrance brdf
-        float NDF = DistributionGGX(N, H, roughness);        
-        float G   = GeometrySmith(N, V, L, roughness);      
-        vec3 F    = FresnelSchlick(max(dot(H, V), 0.0), F0);       
-        
-        vec3 kS = F;
-        vec3 kD = vec3(1.0) - kS;
-        kD *= 1.0 - metallic;	  
-        
-        vec3 numerator    = NDF * G * F;
-        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0);
-        vec3 specular     = numerator / max(denominator, 0.001);  
-            
-        // add to outgoing radiance Lo
-        float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL * shadow;
-    }   
+    vec3 F0 = mix(vec3(0.04), albedo, metallic);
+    vec3 Lo = evaluate_direct_lights(
+        vertex_pos_world, N, V, albedo, metallic, roughness,
+        receives_shadows);
   
     float sky_weight = clamp(N.z * 0.5 + 0.5, 0.0, 1.0);
     vec3 ambient_color = mix(ambient_ground_color, ambient_sky_color, sky_weight);
@@ -401,25 +140,28 @@ void main()
 	vec3 ibl = vec3(0.0);
 	if (ibl_enabled) {
 		float ndotv = max(dot(N, V), 0.0);
-		vec3 f = FresnelSchlickRoughness(ndotv, F0, roughness);
+		vec3 f = fresnel_schlick_roughness(ndotv, F0, roughness);
 		vec3 kd = (vec3(1.0) - f) * (1.0 - metallic);
-		vec3 diffuse_ibl = texture(ibl_irradiance, RotateEnvironment(N)).rgb * albedo;
+		vec3 diffuse_ibl = texture(
+            ibl_irradiance, rotate_environment(N)).rgb * albedo;
 		vec3 reflection = reflect(-V, N);
-		vec3 prefiltered = textureLod(ibl_prefiltered, RotateEnvironment(reflection), roughness * 4.0).rgb;
-		vec2 brdf = EnvironmentBrdf(ndotv, roughness);
+		vec3 prefiltered = textureLod(
+            ibl_prefiltered, rotate_environment(reflection),
+            roughness * 4.0).rgb;
+		vec2 brdf = environment_brdf(ndotv, roughness);
 		vec3 specular_ibl = prefiltered * (f * brdf.x + brdf.y);
 		ibl = ((has_lightmap ? vec3(0.0) : kd * diffuse_ibl * ao) + specular_ibl * ao) * ibl_intensity;
 	}
 	vec3 baked_irradiance = vec3(0.0);
 	if (has_lightmap) {
 		vec2 atlas_uv = lightmap_uv * lightmap_scale_offset.xy + lightmap_scale_offset.zw;
-		vec4 rgbm = texture(lightmap, atlas_uv);
-		baked_irradiance = rgbm.rgb * (rgbm.a * lightmap_rgbm_range);
+		baked_irradiance = texture(lightmap, atlas_uv).rgb;
 	}
 	vec3 baked_indirect = albedo * baked_irradiance;
 	// Per-light shadow visibility is applied to Lo only; baked GI remains
 	// visible when a mixed light's realtime direct term is fully shadowed.
-    vec3 color = ApplyHeightFog(ambient + ibl + baked_indirect + Lo, vertex_pos_world);
+    vec3 color = apply_height_fog(
+        ambient + ibl + baked_indirect + Lo, vertex_pos_world);
 	
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));  

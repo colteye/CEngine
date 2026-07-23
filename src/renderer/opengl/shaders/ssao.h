@@ -5,15 +5,17 @@
 
 namespace CEngine::Renderer {
 
+class RenderSystem;
+
 class SSAO
 {
 public:
 
 	SSAO();
 	void UseCompute() const;
-	void UpdateCompute();
+	void UpdateCompute(const RenderSystem& rendering);
 	void UseComposite() const;
-	void UpdateComposite();
+	void UpdateComposite(const RenderSystem& rendering);
 	void SetTextures(GLuint render, GLuint depth, GLuint normal_roughness, GLuint ao, int width, int height);
 
 private:

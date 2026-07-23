@@ -10,10 +10,10 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
 
+namespace CEngine { struct EngineContext; }
 namespace CEngine::Scene {
 
 class Scene;
-struct EntityEvent;
 
 struct EntityId {
     static constexpr std::uint32_t InvalidIndex = std::numeric_limits<std::uint32_t>::max();
@@ -25,10 +25,6 @@ struct EntityId {
 constexpr bool operator==(EntityId left, EntityId right)
 { return left.index == right.index && left.generation == right.generation; }
 constexpr bool operator!=(EntityId left, EntityId right) { return !(left == right); }
-
-struct EntityContext {
-    Scene& scene;
-};
 
 enum EntityFlags : std::uint32_t {
     EntityEnabled = 1u << 0u,
@@ -49,10 +45,10 @@ public:
     virtual ~Entity() = default;
     virtual std::string_view Classname() const = 0;
 
-    virtual void OnLoaded(EntityContext&) {}
-    virtual void OnSceneReady(EntityContext&) {}
-    virtual void OnEvent(EntityContext&, const EntityEvent&) {}
-    virtual void OnStop(EntityContext&) {}
+    virtual void Initialize(EngineContext&) {}
+    virtual void Update(EngineContext&, float) {}
+    virtual void LateUpdate(EngineContext&, float) {}
+    virtual void Shutdown(EngineContext&) {}
 
     EntityId Id() const { return id_; }
     const std::string& Name() const { return name_; }

@@ -1,0 +1,194 @@
+{
+  "format_version": 1,
+  "module": {
+    "id": "cengine",
+    "name": "CEngine",
+    "version": "0.1.0"
+  },
+  "asset_types": [
+    {"name": "texture", "extension": ".dds"},
+    {"name": "material", "extension": ".cmat"},
+    {"name": "mesh", "extension": ".cmesh"},
+    {"name": "skeleton", "extension": ".cskel"},
+    {"name": "animation", "extension": ".canim"},
+    {"name": "physics", "extension": ".cphys"},
+    {"name": "scene", "extension": ".cscene"},
+    {"name": "asset", "extension": ".casset"}
+  ],
+  "entities": [
+    {
+      "classname": "prop",
+      "version": 1,
+      "fields": [
+        {"name": "transform", "type": "transform"},
+        {"name": "mesh", "type": "asset", "asset_type": "mesh"},
+        {"name": "materials", "type": "asset_list", "asset_type": "material"},
+        {
+          "name": "lightmap",
+          "type": "asset",
+          "asset_type": "texture",
+          "optional": true
+        },
+        {
+          "name": "lightmap_scale",
+          "type": "vec2",
+          "default": [1.0, 1.0]
+        },
+        {
+          "name": "lightmap_offset",
+          "type": "vec2",
+          "default": [0.0, 0.0]
+        },
+        {
+          "name": "lightmap_rgbm_range",
+          "type": "f32",
+          "default": 8.0,
+          "min": 0.0,
+          "min_exclusive": true
+        },
+        {
+          "name": "flags",
+          "type": "flags",
+          "members": [
+            {"name": "visible", "bit": 0, "default": true},
+            {
+              "name": "collision_enabled",
+              "bit": 1,
+              "default": false,
+              "blender_property": "ce_collision"
+            },
+            {"name": "dynamic", "bit": 2, "default": false},
+            {"name": "shadow_only", "bit": 3, "default": false}
+          ]
+        },
+        {
+          "name": "collision_half_extents",
+          "type": "vec3",
+          "default": [0.5, 0.5, 0.5],
+          "min": 0.0,
+          "min_exclusive": true
+        },
+        {
+          "name": "mass",
+          "type": "f32",
+          "default": 1.0,
+          "min": 0.0,
+          "min_exclusive": true
+        }
+      ]
+    },
+    {
+      "classname": "light",
+      "version": 1,
+      "fields": [
+        {"name": "transform", "type": "transform"},
+        {
+          "name": "type",
+          "type": "enum",
+          "enum": "LightType",
+          "default": 0,
+          "values": {"Point": 0, "Sun": 1, "Spot": 2, "Area": 3}
+        },
+        {
+          "name": "mode",
+          "type": "enum",
+          "enum": "LightMode",
+          "default": 0,
+          "blender_property": "ce_light_mode",
+          "values": {"Realtime": 0, "Baked": 1, "Mixed": 2}
+        },
+        {"name": "color", "type": "vec3", "default": [1.0, 1.0, 1.0], "min": 0.0},
+        {"name": "intensity", "type": "f32", "default": 1.0, "min": 0.0},
+        {"name": "range", "type": "f32", "default": 10.0, "min": 0.0},
+        {"name": "inner_angle_radians", "type": "f32", "default": 0.0},
+        {"name": "outer_angle_radians", "type": "f32", "default": 0.7853982},
+        {"name": "area_size", "type": "vec2", "default": [1.0, 1.0], "min": 0.0},
+        {
+          "name": "flags",
+          "type": "flags",
+          "members": [
+            {"name": "enabled", "bit": 0, "default": true},
+            {"name": "casts_shadows", "bit": 1, "default": true}
+          ]
+        }
+      ]
+    },
+    {
+      "classname": "skybox",
+      "version": 1,
+      "fields": [
+        {"name": "transform", "type": "transform"},
+        {"name": "panorama", "type": "asset", "asset_type": "texture"},
+        {"name": "intensity", "type": "f32", "default": 1.0, "min": 0.0},
+        {"name": "rotation_radians", "type": "f32", "default": 0.0},
+        {
+          "name": "flags",
+          "type": "flags",
+          "members": [{"name": "enabled", "bit": 0, "default": true}]
+        }
+      ]
+    },
+    {
+      "classname": "exponential_height_fog",
+      "version": 1,
+      "fields": [
+        {"name": "transform", "type": "transform"},
+        {
+          "name": "inscattering_color",
+          "type": "vec3",
+          "default": [0.5, 0.6, 0.7],
+          "min": 0.0
+        },
+        {
+          "name": "density",
+          "type": "f32",
+          "default": 0.02,
+          "min": 0.0,
+          "blender_property": "ce_fog_density"
+        },
+        {"name": "height_falloff", "type": "f32", "default": 0.2, "min": 0.0},
+        {"name": "start_distance", "type": "f32", "default": 0.0, "min": 0.0},
+        {"name": "max_opacity", "type": "f32", "default": 1.0, "min": 0.0, "max": 1.0},
+        {"name": "cutoff_distance", "type": "f32", "default": 0.0, "min": 0.0},
+        {
+          "name": "flags",
+          "type": "flags",
+          "members": [{"name": "enabled", "bit": 0, "default": true}]
+        }
+      ]
+    },
+    {
+      "classname": "post_process",
+      "version": 1,
+      "fields": [
+        {"name": "transform", "type": "transform"},
+        {"name": "bloom_threshold", "type": "f32", "default": 1.0, "min": 0.0},
+        {"name": "bloom_intensity", "type": "f32", "default": 0.12, "min": 0.0},
+        {"name": "exposure", "type": "f32", "default": 1.0, "min": 0.0},
+        {"name": "contrast", "type": "f32", "default": 1.0, "min": 0.0},
+        {"name": "saturation", "type": "f32", "default": 1.0, "min": 0.0},
+        {"name": "focus_distance", "type": "f32", "default": 8.0, "min": 0.0},
+        {"name": "focus_range", "type": "f32", "default": 4.0, "min": 0.0},
+        {"name": "depth_of_field_strength", "type": "f32", "default": 1.0, "min": 0.0},
+        {"name": "sun_lens_flare_intensity", "type": "f32", "default": 0.35, "min": 0.0},
+        {"name": "sun_disc_size", "type": "f32", "default": 0.012, "min": 0.0},
+        {"name": "sun_disc_softness", "type": "f32", "default": 0.006, "min": 0.0},
+        {"name": "ssao_radius", "type": "f32", "default": 0.65, "min": 0.0},
+        {"name": "ssao_bias", "type": "f32", "default": 0.025, "min": 0.0},
+        {"name": "ssao_intensity", "type": "f32", "default": 0.65, "min": 0.0},
+        {"name": "ssao_contrast", "type": "f32", "default": 1.0, "min": 0.0},
+        {
+          "name": "flags",
+          "type": "flags",
+          "members": [
+            {"name": "bloom_enabled", "bit": 0, "default": true},
+            {"name": "tone_mapping_enabled", "bit": 1, "default": true},
+            {"name": "depth_of_field_enabled", "bit": 2, "default": false},
+            {"name": "sun_lens_flare_enabled", "bit": 3, "default": true},
+            {"name": "ssao_enabled", "bit": 4, "default": true}
+          ]
+        }
+      ]
+    }
+  ]
+}

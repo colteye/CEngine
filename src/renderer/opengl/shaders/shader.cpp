@@ -1,11 +1,88 @@
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <vector>
-
 #include "shader.h"
 
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <unordered_set>
+#include <vector>
+
 namespace CEngine::Renderer {
+namespace {
+
+bool ReadShaderSource(const std::filesystem::path& path,
+	std::unordered_set<std::string>& includes, std::string& output)
+{
+	const std::filesystem::path normalized = path.lexically_normal();
+	const std::string key = normalized.generic_string();
+	if (!includes.emplace(key).second)
+	{
+		std::cerr << "Shader include cycle contains: " << key << '\n';
+		return false;
+	}
+
+	std::ifstream stream(normalized);
+	if (!stream)
+	{
+		std::cerr << "Could not open shader: " << key << '\n';
+		includes.erase(key);
+		return false;
+	}
+
+	std::string line;
+	while (std::getline(stream, line))
+	{
+		const std::size_t first = line.find_first_not_of(" \t");
+		if (first != std::string::npos &&
+			line.compare(first, 10, "#include \"") == 0)
+		{
+			const std::size_t end = line.find('"', first + 10);
+			if (end == std::string::npos ||
+				!ReadShaderSource(normalized.parent_path() /
+					line.substr(first + 10, end - first - 10),
+					includes, output))
+			{
+				includes.erase(key);
+				return false;
+			}
+			continue;
+		}
+		output += line;
+		output.push_back('\n');
+	}
+
+	includes.erase(key);
+	return true;
+}
+
+bool LoadShaderSource(
+	const std::filesystem::path& path, std::string& output)
+{
+	std::unordered_set<std::string> includes;
+	return ReadShaderSource(path, includes, output);
+}
+
+bool CompileShader(GLuint shader, const std::string& source,
+	const std::string& path)
+{
+	std::cout << "Compiling shader: " << path << '\n';
+	const char* source_pointer = source.c_str();
+	glShaderSource(shader, 1, &source_pointer, nullptr);
+	glCompileShader(shader);
+
+	GLint compiled = GL_FALSE;
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+	GLint log_length = 0;
+	glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &log_length);
+	if (log_length > 1)
+	{
+		std::vector<char> log(static_cast<std::size_t>(log_length));
+		glGetShaderInfoLog(shader, log_length, nullptr, log.data());
+		std::cerr << log.data() << '\n';
+	}
+	return compiled == GL_TRUE;
+}
+
+} // namespace
 
 ShaderProgram::~ShaderProgram()
 {
@@ -18,106 +95,50 @@ ShaderProgram::~ShaderProgram()
 
 bool ShaderProgram::Load(const std::string& vertex_file_path, const std::string& fragment_file_path)
 {
-	// Create the shaders
 	GLuint vertex_id = glCreateShader(GL_VERTEX_SHADER);
 	GLuint fragment_id = glCreateShader(GL_FRAGMENT_SHADER);
-
-	// Read the Vertex Shader code from the file
 	std::string vertex_code;
-	std::ifstream vertex_stream(vertex_file_path, std::ios::in);
-
-	if (vertex_stream.is_open()) 
-	{
-		std::stringstream sstr;
-		sstr << vertex_stream.rdbuf();
-		vertex_code = sstr.str();
-		vertex_stream.close();
-	}
-	else 
-	{
-		std::cout << "Impossible to open vertex shader: " << vertex_file_path << "\n";
-		glDeleteShader(vertex_id);
-		glDeleteShader(fragment_id);
-		return false;
-	}
-
-	// Read the Fragment Shader code from the file
 	std::string fragment_code;
-	std::ifstream fragment_stream(fragment_file_path, std::ios::in);
-	if (fragment_stream.is_open()) 
+	if (!LoadShaderSource(vertex_file_path, vertex_code) ||
+		!LoadShaderSource(fragment_file_path, fragment_code) ||
+		!CompileShader(vertex_id, vertex_code, vertex_file_path) ||
+		!CompileShader(fragment_id, fragment_code, fragment_file_path))
 	{
-		std::stringstream sstr;
-		sstr << fragment_stream.rdbuf();
-		fragment_code = sstr.str();
-		fragment_stream.close();
-	}
-	else
-	{
-		std::cout << "Impossible to open fragment shader: " << fragment_file_path << "\n";
 		glDeleteShader(vertex_id);
 		glDeleteShader(fragment_id);
 		return false;
 	}
 
-	GLint result = GL_FALSE;
-	int log_length;
+	const GLuint linked_program = glCreateProgram();
+	glAttachShader(linked_program, vertex_id);
+	glAttachShader(linked_program, fragment_id);
+	glLinkProgram(linked_program);
 
-	// Compile Vertex Shader
-	printf("Compiling shader : %s\n", vertex_file_path.c_str());
-	char const * vertex_src_ptr = vertex_code.c_str();
-	glShaderSource(vertex_id, 1, &vertex_src_ptr, nullptr);
-	glCompileShader(vertex_id);
-
-	// Check Vertex Shader
-	glGetShaderiv(vertex_id, GL_COMPILE_STATUS, &result);
-	glGetShaderiv(vertex_id, GL_INFO_LOG_LENGTH, &log_length);
-	if (log_length > 0) 
+	GLint linked = GL_FALSE;
+	glGetProgramiv(linked_program, GL_LINK_STATUS, &linked);
+	GLint log_length = 0;
+	glGetProgramiv(linked_program, GL_INFO_LOG_LENGTH, &log_length);
+	if (log_length > 1)
 	{
-		std::vector<char> vertex_error_msg(log_length + 1);
-		glGetShaderInfoLog(vertex_id, log_length, nullptr, &vertex_error_msg[0]);
-		printf("%s\n", &vertex_error_msg[0]);
+		std::vector<char> log(static_cast<std::size_t>(log_length));
+		glGetProgramInfoLog(
+			linked_program, log_length, nullptr, log.data());
+		std::cerr << log.data() << '\n';
 	}
 
-	// Compile Fragment Shader
-	printf("Compiling shader : %s\n", fragment_file_path.c_str());
-	char const * fragment_src_ptr = fragment_code.c_str();
-	glShaderSource(fragment_id, 1, &fragment_src_ptr, nullptr);
-	glCompileShader(fragment_id);
-
-	// Check Fragment Shader
-	glGetShaderiv(fragment_id, GL_COMPILE_STATUS, &result);
-	glGetShaderiv(fragment_id, GL_INFO_LOG_LENGTH, &log_length);
-	if (log_length > 0) 
-	{
-		std::vector<char> fragment_error_msg(log_length + 1);
-		glGetShaderInfoLog(fragment_id, log_length, nullptr, &fragment_error_msg[0]);
-		printf("%s\n", &fragment_error_msg[0]);
-	}
-
-	// Link the program
-	printf("Linking program\n");
-	program_id = glCreateProgram();
-	glAttachShader(program_id, vertex_id);
-	glAttachShader(program_id, fragment_id);
-	glLinkProgram(program_id);
-
-	// Check the program
-	glGetProgramiv(program_id, GL_LINK_STATUS, &result);
-	glGetProgramiv(program_id, GL_INFO_LOG_LENGTH, &log_length);
-	if (log_length > 0) 
-	{
-		std::vector<char> prog_error_msg(log_length + 1);
-		glGetProgramInfoLog(program_id, log_length, nullptr, &prog_error_msg[0]);
-		printf("%s\n", &prog_error_msg[0]);
-	}
-
-	glDetachShader(program_id, vertex_id);
-	glDetachShader(program_id, fragment_id);
-
+	glDetachShader(linked_program, vertex_id);
+	glDetachShader(linked_program, fragment_id);
 	glDeleteShader(vertex_id);
 	glDeleteShader(fragment_id);
 
-	return result == GL_TRUE;
+	if (linked != GL_TRUE)
+	{
+		glDeleteProgram(linked_program);
+		return false;
+	}
+	if (program_id != 0) glDeleteProgram(program_id);
+	program_id = linked_program;
+	return true;
 }
 
 } // namespace CEngine::Renderer

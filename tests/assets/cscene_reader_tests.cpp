@@ -53,15 +53,15 @@ std::vector<std::uint8_t> MinimalPayload()
 bool Write(const std::filesystem::path& path, std::vector<std::uint8_t> payload)
 {
     AssetWriteDesc desc; desc.type = AssetType::Scene; desc.payload = std::move(payload);
-    std::string error; return WriteBinaryAsset(path, desc, &error);
+    return WriteBinaryAsset(path, desc);
 }
 
 bool ValidFixtureLoads()
 {
     const auto root = Root(); const auto path = root / "minimal.cscene";
     if (!Write(path, MinimalPayload())) return false;
-    CSceneFile file; std::string error;
-    const bool result = Expect(file.Load(path, &error), error.c_str()) &&
+    CSceneFile file;
+    const bool result = Expect(file.Load(path), "fixture should load") &&
         Expect(file.Entities().size == 1, "fixture should contain one entity") &&
         Expect(file.ClassBlocks().size == 1, "fixture should contain one class block") &&
         Expect(file.String(file.Entities()[0].classname_offset, file.Entities()[0].classname_size) == "empty", "classname should load") &&
@@ -71,21 +71,24 @@ bool ValidFixtureLoads()
 
 bool InvalidRangesFail()
 {
-    const auto root = Root(); std::string error; CSceneFile file;
+    const auto root = Root(); CSceneFile file;
     auto payload = MinimalPayload();
     auto* header = reinterpret_cast<DiskSceneHeader*>(payload.data());
     header->entity_table_offset = UINT64_MAX - 4;
     const auto bad_offset = root / "bad-offset.cscene"; Write(bad_offset, payload);
-    if (!Expect(!file.Load(bad_offset, &error), "overflowing table offset should fail")) return false;
+    if (!Expect(!file.Load(bad_offset),
+            "overflowing table offset should fail")) return false;
     payload = MinimalPayload();
     header = reinterpret_cast<DiskSceneHeader*>(payload.data());
     auto* block = reinterpret_cast<DiskEntityClassBlock*>(payload.data() + header->class_table_offset);
     block->record_stride = UINT32_MAX; block->count = UINT32_MAX;
     const auto bad_size = root / "bad-size.cscene"; Write(bad_size, payload);
-    if (!Expect(!file.Load(bad_size, &error), "overflowing class range should fail")) return false;
+    if (!Expect(!file.Load(bad_size),
+            "overflowing class range should fail")) return false;
     payload = MinimalPayload(); header = reinterpret_cast<DiskSceneHeader*>(payload.data()); header->version = 99;
     const auto bad_version = root / "bad-version.cscene"; Write(bad_version, payload);
-    const bool result = Expect(!file.Load(bad_version, &error), "unsupported scene version should fail");
+    const bool result = Expect(
+        !file.Load(bad_version), "unsupported scene version should fail");
     std::filesystem::remove_all(root); return result;
 }
 } // namespace
@@ -95,13 +98,12 @@ int main(int argc, char** argv)
     if (argc == 2)
     {
         CSceneFile file;
-        std::string error;
-        return Expect(file.Load(argv[1], &error), error.c_str()) &&
-            Expect(file.Entities().size == 3, "Python fixture should contain three entities") &&
+        return Expect(file.Load(argv[1]), "Python fixture should load") &&
+            Expect(file.Entities().size == 4, "Python fixture should contain four entities") &&
             Expect(file.ClassBlocks().size == 3, "Python fixture should contain three class blocks") &&
             Expect(file.Connections().size == 1, "Python fixture should contain one connection") &&
             Expect(file.String(file.Entities()[0].classname_offset,
-                       file.Entities()[0].classname_size) == "prefab_instance",
+                       file.Entities()[0].classname_size) == "light",
                 "Python fixture classname should match") ? 0 : 1;
     }
     return ValidFixtureLoads() && InvalidRangesFail() ? 0 : 1;

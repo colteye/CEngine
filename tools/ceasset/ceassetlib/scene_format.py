@@ -3,6 +3,8 @@ from __future__ import annotations
 import struct
 from enum import IntEnum, IntFlag
 
+from .game_schema import entity_struct, load_bundled_game
+
 SCENE_MAGIC = b"CSCN"
 SCENE_VERSION = 4
 ENTITY_CLASS_VERSION = 1
@@ -25,6 +27,14 @@ class LightFlags(IntFlag):
     CASTS_SHADOW = 1 << 1
 
 
+class PostProcessFlags(IntFlag):
+    BLOOM_ENABLED = 1 << 0
+    TONE_MAPPING_ENABLED = 1 << 1
+    DEPTH_OF_FIELD_ENABLED = 1 << 2
+    SUN_LENS_FLARE_ENABLED = 1 << 3
+    SSAO_ENABLED = 1 << 4
+
+
 class EntityClassBlockFlags(IntFlag):
     REQUIRED = 1 << 0
 
@@ -38,15 +48,26 @@ SCENE_ENTITY = struct.Struct("<IIIII")
 ENTITY_CLASS_BLOCK = struct.Struct("<IIHHIIQQQQ")
 ENTITY_CONNECTION = struct.Struct("<IIIIIIf")
 TRANSFORM = struct.Struct("<3f4f3f")
-PROP = struct.Struct("<3f4f3fIIII2f2ffI3ff")
-PLAYER_ENTITY = struct.Struct("<3f4f3fIffffI")
-LIGHT_ENTITY = struct.Struct("<3f4f3fII3f4f2fI")
-PREFAB_ENTITY = struct.Struct("<3f4f3fIII")
-PREFAB_LIGHTMAP = struct.Struct("<II2f2ff")
-TRIGGER_ENTITY = struct.Struct("<3f4f3f3fI")
-PLAYER_START = struct.Struct("<3f4f3fI")
-SKYBOX_ENTITY = struct.Struct("<3f4f3fIffI")
-EXPONENTIAL_HEIGHT_FOG_ENTITY = struct.Struct("<3f4f3f3f5fI")
+_GAME_SCHEMA = load_bundled_game()
+
+
+def _entity_record(classname: str) -> struct.Struct | None:
+    entity = _GAME_SCHEMA.entity(classname)
+    return entity_struct(entity) if entity is not None else None
+
+
+PROP = _entity_record("prop")
+PLAYER_ENTITY = _entity_record("player")
+LIGHT_ENTITY = _entity_record("light")
+SKYBOX_ENTITY = _entity_record("skybox")
+EXPONENTIAL_HEIGHT_FOG_ENTITY = _entity_record("exponential_height_fog")
+POST_PROCESS_ENTITY = _entity_record("post_process")
+
+assert PROP is not None
+assert LIGHT_ENTITY is not None
+assert SKYBOX_ENTITY is not None
+assert EXPONENTIAL_HEIGHT_FOG_ENTITY is not None
+assert POST_PROCESS_ENTITY is not None
 
 FIXED_STRUCTURE_SIZES = {
     "DiskSceneHeader": SCENE_HEADER.size,
@@ -57,12 +78,10 @@ FIXED_STRUCTURE_SIZES = {
     "DiskEntityConnection": ENTITY_CONNECTION.size,
     "DiskTransform": TRANSFORM.size,
     "DiskProp": PROP.size,
-    "DiskPlayerEntity": PLAYER_ENTITY.size,
     "DiskLightEntity": LIGHT_ENTITY.size,
-    "DiskPrefabEntity": PREFAB_ENTITY.size,
-    "DiskPrefabLightmap": PREFAB_LIGHTMAP.size,
-    "DiskTriggerEntity": TRIGGER_ENTITY.size,
-    "DiskPlayerStart": PLAYER_START.size,
     "DiskSkyboxEntity": SKYBOX_ENTITY.size,
-    "DiskExponentialHeightFogEntity": EXPONENTIAL_HEIGHT_FOG_ENTITY.size,
+    "DiskFogEntity": EXPONENTIAL_HEIGHT_FOG_ENTITY.size,
+    "DiskPostProcessEntity": POST_PROCESS_ENTITY.size,
 }
+if PLAYER_ENTITY is not None:
+    FIXED_STRUCTURE_SIZES["DiskPlayerEntity"] = PLAYER_ENTITY.size

@@ -1,12 +1,14 @@
 #include "assets/material_loader.h"
 
+#include "assets/asset_error.h"
 #include "assets/asset_io.h"
+#include "assets/binary.h"
+#include "assets/texture_loader.h"
 
 #include <array>
 #include <cctype>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 #include <string_view>
 #include <utility>
 
@@ -51,12 +53,37 @@ struct DiskMaterialTexture {
 static_assert(sizeof(DiskMaterialHeader) == 72, "DiskMaterialHeader must stay packed and stable.");
 static_assert(sizeof(DiskMaterialTexture) == 12, "DiskMaterialTexture must stay packed and stable.");
 
-void SetError(std::string* error, const std::string& message)
+bool ReadHeader(ByteView bytes, DiskMaterialHeader& value)
 {
-    if (error != nullptr)
-    {
-        *error = message;
-    }
+    if (bytes.size < sizeof(value)) return false;
+    std::size_t offset = 0;
+    std::memcpy(value.magic.data(), bytes.data, value.magic.size());
+    offset += value.magic.size();
+    if (!ReadU16LE(bytes, offset, value.version) ||
+        !ReadU16LE(bytes, offset, value.header_size) ||
+        !ReadU32LE(bytes, offset, value.shader) ||
+        !ReadU32LE(bytes, offset, value.render_mode) ||
+        !ReadU32LE(bytes, offset, value.texture_count) ||
+        !ReadU32LE(bytes, offset, value.texture_table_offset) ||
+        !ReadU32LE(bytes, offset, value.string_table_offset) ||
+        !ReadU32LE(bytes, offset, value.string_table_size) ||
+        !ReadU32LE(bytes, offset, value.name_offset) ||
+        !ReadU32LE(bytes, offset, value.name_size))
+        return false;
+    for (float& component : value.base_color)
+        if (!ReadF32LE(bytes, offset, component)) return false;
+    return ReadF32LE(bytes, offset, value.metallic_factor) &&
+        ReadF32LE(bytes, offset, value.roughness_factor) &&
+        ReadF32LE(bytes, offset, value.ao_factor) &&
+        ReadF32LE(bytes, offset, value.alpha_cutoff);
+}
+
+bool ReadTextureRow(
+    ByteView bytes, std::size_t offset, DiskMaterialTexture& value)
+{
+    return ReadU32LE(bytes, offset, value.slot) &&
+        ReadU32LE(bytes, offset, value.path_offset) &&
+        ReadU32LE(bytes, offset, value.path_size);
 }
 
 bool StringViewAt(ByteView string_table, std::uint32_t offset, std::uint32_t size, std::string_view& view)
@@ -122,11 +149,6 @@ std::filesystem::path ProjectRootForAsset(const std::filesystem::path& asset_pat
     return {};
 }
 
-std::string ExistingGenericPath(const std::filesystem::path& path)
-{
-    return path.lexically_normal().generic_string();
-}
-
 bool IsDdsPath(const std::filesystem::path& path)
 {
     std::string extension = path.extension().string();
@@ -137,113 +159,91 @@ bool IsDdsPath(const std::filesystem::path& path)
     return extension == ".dds";
 }
 
-bool HasDdsMagic(const std::filesystem::path& path)
-{
-    std::ifstream stream(path, std::ios::binary);
-    std::array<char, 4> magic{};
-    return stream.read(magic.data(), static_cast<std::streamsize>(magic.size())) &&
-        magic == std::array<char, 4>{'D', 'D', 'S', ' '};
-}
-
 bool ResolveTexturePath(const std::filesystem::path& material_path, std::string_view stored_path,
-    std::string& resolved_path, std::string* error)
+    std::filesystem::path& resolved_path)
 {
     const std::filesystem::path raw_path(stored_path);
     const std::filesystem::path normalized = raw_path.lexically_normal();
     if (normalized.is_absolute() || normalized.empty() || normalized.begin() == normalized.end() ||
         *normalized.begin() != "assets")
     {
-        SetError(error, "material texture path must be project-relative and start with assets/");
-        return false;
+        return AssetError(
+            "material texture path must be project-relative and start with assets/");
     }
 
     for (const std::filesystem::path& component : normalized)
     {
         if (component == "..")
         {
-            SetError(error, "material texture path escapes the project");
-            return false;
+            return AssetError("material texture path escapes the project");
         }
     }
 
     if (!IsDdsPath(normalized))
     {
-        SetError(error, "material texture dependency is not a .dds target asset");
-        return false;
+        return AssetError(
+            "material texture dependency is not a .dds target asset");
     }
 
     const std::filesystem::path project_root = ProjectRootForAsset(material_path);
     if (project_root.empty())
     {
-        SetError(error, "material is not inside a project assets directory");
-        return false;
+        return AssetError(
+            "material is not inside a project assets directory");
     }
 
     const std::filesystem::path full_path = project_root / normalized;
-    if (!std::filesystem::is_regular_file(full_path))
-    {
-        SetError(error, "material texture dependency does not exist: " + ExistingGenericPath(full_path));
-        return false;
-    }
-    if (!HasDdsMagic(full_path))
-    {
-        SetError(error, "material texture dependency is not a DDS file: " + ExistingGenericPath(full_path));
-        return false;
-    }
-    resolved_path = ExistingGenericPath(full_path);
+    resolved_path = full_path.lexically_normal();
     return true;
 }
 
 } // namespace
 
-bool LoadMaterialAsset(const std::filesystem::path& path, Renderer::Material& material, std::string* error)
+bool LoadMaterialAsset(
+    const std::filesystem::path& path, Renderer::Material& material)
 {
     AssetFile asset;
-    if (!asset.Load(path, error))
+    if (!asset.Load(path))
     {
         return false;
     }
     if (asset.Type() != AssetType::Material)
     {
-        SetError(error, "asset is not a material");
-        return false;
+        return AssetError("asset is not a material");
     }
 
     const ByteView payload = asset.Payload();
     if (payload.size < sizeof(DiskMaterialHeader))
     {
-        SetError(error, "material payload is invalid");
-        return false;
+        return AssetError("material payload is invalid");
     }
 
     DiskMaterialHeader header;
-    std::memcpy(&header, payload.data, sizeof(header));
+    if (!ReadHeader(payload, header))
+        return AssetError("material payload is invalid");
     if (header.magic != MaterialPayloadMagic ||
         header.version != MaterialPayloadVersion ||
         header.header_size != sizeof(DiskMaterialHeader))
     {
-        SetError(error, "material payload header is not supported");
-        return false;
+        return AssetError("material payload header is not supported");
     }
     if (!IsUnitValue(header.base_color[0]) || !IsUnitValue(header.base_color[1]) ||
         !IsUnitValue(header.base_color[2]) || !IsUnitValue(header.base_color[3]) ||
         !IsUnitValue(header.metallic_factor) || !IsUnitValue(header.roughness_factor) ||
         !IsUnitValue(header.ao_factor) || !IsUnitValue(header.alpha_cutoff))
     {
-        SetError(error, "material factors must be finite values from zero through one");
-        return false;
+        return AssetError(
+            "material factors must be finite values from zero through one");
     }
     const Renderer::MaterialShaderType shader_type = MaterialShaderFromDisk(header.shader);
     if (shader_type == Renderer::MaterialShaderType::Unknown)
     {
-        SetError(error, "material shader id is not supported");
-        return false;
+        return AssetError("material shader id is not supported");
     }
     Renderer::MaterialRenderMode render_mode;
     if (!MaterialRenderModeFromDisk(header.render_mode, render_mode))
     {
-        SetError(error, "material render mode is not supported");
-        return false;
+        return AssetError("material render mode is not supported");
     }
 
     const std::size_t texture_table_size =
@@ -253,8 +253,8 @@ bool LoadMaterialAsset(const std::filesystem::path& path, Renderer::Material& ma
         header.string_table_offset > payload.size ||
         header.string_table_size > payload.size - header.string_table_offset)
     {
-        SetError(error, "material payload tables are outside the payload");
-        return false;
+        return AssetError(
+            "material payload tables are outside the payload");
     }
 
     const ByteView texture_table = {payload.data + header.texture_table_offset, texture_table_size};
@@ -263,60 +263,66 @@ bool LoadMaterialAsset(const std::filesystem::path& path, Renderer::Material& ma
     std::string_view material_name;
     if (!StringViewAt(string_table, header.name_offset, header.name_size, material_name))
     {
-        SetError(error, "material name is outside the string table");
-        return false;
+        return AssetError("material name is outside the string table");
     }
 
-    std::string albedo_path;
-    std::string normal_path;
-    std::string metallic_roughness_ao_path;
+    std::string albedo_path_text;
+    std::string normal_path_text;
+    std::string metallic_roughness_ao_path_text;
     for (std::uint32_t index = 0; index < header.texture_count; ++index)
     {
         DiskMaterialTexture texture;
-        std::memcpy(&texture, texture_table.data + static_cast<std::size_t>(index) * sizeof(texture), sizeof(texture));
+        if (!ReadTextureRow(
+                texture_table,
+                static_cast<std::size_t>(index) * sizeof(texture),
+                texture))
+            return AssetError("material texture table is invalid");
 
         std::string_view path_view;
         if (!StringViewAt(string_table, texture.path_offset, texture.path_size, path_view))
         {
-            SetError(error, "material texture path is outside the string table");
-            return false;
+            return AssetError(
+                "material texture path is outside the string table");
         }
 
         switch (texture.slot)
         {
         case TextureSlotBaseColor:
-            albedo_path = std::string(path_view);
+            albedo_path_text = std::string(path_view);
             break;
         case TextureSlotNormal:
-            normal_path = std::string(path_view);
+            normal_path_text = std::string(path_view);
             break;
         case TextureSlotMetallicRoughnessAo:
-            metallic_roughness_ao_path = std::string(path_view);
+            metallic_roughness_ao_path_text = std::string(path_view);
             break;
         default:
             break;
         }
     }
 
-    if ((!albedo_path.empty() && !ResolveTexturePath(path, albedo_path, albedo_path, error)) ||
-        (!normal_path.empty() && !ResolveTexturePath(path, normal_path, normal_path, error)) ||
-        (!metallic_roughness_ao_path.empty() &&
-            !ResolveTexturePath(path, metallic_roughness_ao_path, metallic_roughness_ao_path, error)))
-    {
+    Renderer::Material loaded;
+    const auto load_texture = [&](const std::string& stored_path,
+                                  Renderer::Texture& texture) {
+        if (stored_path.empty()) return true;
+        std::filesystem::path texture_path;
+        return ResolveTexturePath(path, stored_path, texture_path) &&
+            LoadTextureAsset(texture_path, texture);
+    };
+    if (!load_texture(albedo_path_text, loaded.albedo) ||
+        !load_texture(normal_path_text, loaded.normal) ||
+        !load_texture(
+            metallic_roughness_ao_path_text, loaded.metallic_roughness_ao))
         return false;
-    }
-    Renderer::Material loaded(
-        shader_type,
-        albedo_path,
-        normal_path,
-        metallic_roughness_ao_path);
+
+    loaded.shader_type = shader_type;
     loaded.material_name = material_name.empty() ? path.stem().string() : std::string(material_name);
-    loaded.SetBaseColorFactor(glm::vec4(header.base_color[0], header.base_color[1],
-        header.base_color[2], header.base_color[3]));
-    loaded.SetMetallicRoughnessAoFactors(glm::vec3(
-        header.metallic_factor, header.roughness_factor, header.ao_factor));
-    loaded.SetRenderMode(render_mode);
-    loaded.SetAlphaCutoff(header.alpha_cutoff);
+    loaded.base_color_factor = glm::vec4(header.base_color[0], header.base_color[1],
+        header.base_color[2], header.base_color[3]);
+    loaded.metallic_roughness_ao_factors = glm::vec3(
+        header.metallic_factor, header.roughness_factor, header.ao_factor);
+    loaded.render_mode = render_mode;
+    loaded.alpha_cutoff = header.alpha_cutoff;
     material = std::move(loaded);
     return true;
 }

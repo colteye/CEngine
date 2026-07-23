@@ -26,12 +26,9 @@ class SceneFormatTests(unittest.TestCase):
                 "DiskProp": 96,
                 "DiskPlayerEntity": 64,
                 "DiskLightEntity": 88,
-                "DiskPrefabEntity": 52,
-                "DiskPrefabLightmap": 28,
-                "DiskTriggerEntity": 56,
-                "DiskPlayerStart": 44,
                 "DiskSkyboxEntity": 56,
-                "DiskExponentialHeightFogEntity": 76,
+                "DiskFogEntity": 76,
+                "DiskPostProcessEntity": 104,
             },
         )
 

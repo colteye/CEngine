@@ -8,13 +8,16 @@
 
 namespace CEngine::Renderer {
 
+class RenderSystem;
+
 class DeferredLighting
 {
 public:
 	DeferredLighting();
 
 	void Use() const;
-	void Update(GLuint albedo, GLuint normal_roughness, GLuint material, GLuint baked_light, GLuint depth,
+	void Update(RenderSystem& rendering,
+		GLuint albedo, GLuint normal_roughness, GLuint material, GLuint baked_light, GLuint depth,
 		int width, int height,
 		const OpenGLShadowGpuData& shadow_data, GLuint shadow_atlas,
 		const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_shadow_maps,
@@ -28,6 +31,7 @@ private:
 	OpenGLShadowBuffer shadow_buffer;
 	OpenGLShadowSamplers shadow_samplers;
 	OpenGLAmbientUniforms ambient_uniforms;
+	OpenGLEnvironmentUniforms environment_uniforms;
 
 	GLint albedo_id = -1;
 	GLint normal_roughness_id = -1;

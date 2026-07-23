@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstring>
 #include <iostream>
 #include <limits>
 
@@ -13,6 +14,9 @@
 namespace CEngine::Renderer {
 
 namespace {
+constexpr float kDirectionalShadowDistance = 200.0f;
+constexpr float kCascadeSplitLambda = 0.9f;
+
 glm::vec3 NormalizeOrDefault(const glm::vec3& value, const glm::vec3& fallback)
 {
 	const float length = glm::length(value);
@@ -89,7 +93,7 @@ glm::vec4 AtlasRect(const OpenGLShadowSystem::AtlasTile& tile)
 		static_cast<float>(tile.y) / atlas_size + inset, size, size);
 }
 
-float SpotOuterDegrees(const LightRecord& light)
+float SpotOuterDegrees(const Light& light)
 {
 	return glm::degrees(std::acos(std::max(-1.0f, std::min(1.0f, light.spot_outer_cos))));
 }
@@ -100,13 +104,26 @@ float CascadeBlendRange(float split_depth, bool last_cascade)
 }
 } // namespace
 
+bool OpenGLShadowSystem::SameMatrix(
+	const glm::mat4& left, const glm::mat4& right)
+{
+	return std::memcmp(&left[0][0], &right[0][0], sizeof(glm::mat4)) == 0;
+}
+
+bool OpenGLShadowSystem::SameRect(
+	const glm::vec4& left, const glm::vec4& right)
+{
+	return std::memcmp(&left[0], &right[0], sizeof(glm::vec4)) == 0;
+}
+
 OpenGLShadowSystem::~OpenGLShadowSystem()
 {
 	Destroy();
 }
 
-bool OpenGLShadowSystem::Initialize()
+bool OpenGLShadowSystem::Initialize(RenderSystem& in_rendering)
 {
+	rendering = &in_rendering;
 	glGenFramebuffers(1, &depth_fbo);
 
 	glGenTextures(1, &atlas_texture);
@@ -123,7 +140,13 @@ bool OpenGLShadowSystem::Initialize()
 
 	point_light_indices.fill(std::numeric_limits<size_t>::max());
 	point_resolutions.fill(0);
-	point_last_rendered_frame.fill(0);
+	point_valid.fill(false);
+	point_slot_used.fill(false);
+	cached_spot_valid.fill(false);
+	cached_cascade_valid.fill(false);
+	cached_renderable_revision = 0;
+	cached_light_state_revision = 0;
+	shadow_content_changed = true;
 	for (GLuint& texture : point_textures)
 	{
 		glGenTextures(1, &texture);
@@ -167,11 +190,17 @@ void OpenGLShadowSystem::Destroy()
 
 	point_light_indices.fill(std::numeric_limits<size_t>::max());
 	point_resolutions.fill(0);
-	point_last_rendered_frame.fill(0);
+	point_valid.fill(false);
 	depth_only.reset();
 	point_depth.reset();
 	gpu_data = OpenGLShadowGpuData();
-	frame_index = 0;
+	point_slot_used.fill(false);
+	cached_spot_valid.fill(false);
+	cached_cascade_valid.fill(false);
+	cached_renderable_revision = 0;
+	cached_light_state_revision = 0;
+	shadow_content_changed = true;
+	rendering = nullptr;
 }
 
 OpenGLShadowSystem::AtlasTile OpenGLShadowSystem::AllocateAtlasTile(int requested_size)
@@ -205,6 +234,7 @@ int OpenGLShadowSystem::AllocatePointSlot(size_t light_index, int resolution)
 		{
 			if (point_resolutions[slot] == resolution && point_textures[slot] != 0)
 			{
+				point_slot_used[slot] = true;
 				return slot;
 			}
 			if (point_textures[slot] != 0)
@@ -214,6 +244,7 @@ int OpenGLShadowSystem::AllocatePointSlot(size_t light_index, int resolution)
 			}
 			point_light_indices[slot] = std::numeric_limits<size_t>::max();
 			point_resolutions[slot] = 0;
+			point_valid[slot] = false;
 			break;
 		}
 	}
@@ -240,7 +271,8 @@ int OpenGLShadowSystem::AllocatePointSlot(size_t light_index, int resolution)
 			glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 			point_light_indices[slot] = light_index;
 			point_resolutions[slot] = resolution;
-			point_last_rendered_frame[slot] = 0;
+			point_valid[slot] = false;
+			point_slot_used[slot] = true;
 			return slot;
 		}
 	}
@@ -255,18 +287,25 @@ void OpenGLShadowSystem::Render(const std::vector<OpenGLDrawItem>& draw_items, c
 		return;
 	}
 
-	++frame_index;
 	gpu_data = OpenGLShadowGpuData();
+	point_slot_used.fill(false);
 	atlas_cursor_x = 0;
 	atlas_cursor_y = 0;
 	atlas_row_height = 0;
 
-	const std::vector<LightRecord>& lights = RenderSystem::GetDirectLights();
+	const std::vector<Light>& lights = rendering->GetDirectLights();
 	std::vector<LightShadowGpuHandle> handles(lights.size());
+	const std::uint64_t renderable_revision =
+		rendering->GetRenderableRevision();
+	const std::uint64_t light_state_revision =
+		rendering->GetLightStateRevision();
+	shadow_content_changed =
+		renderable_revision != cached_renderable_revision ||
+		light_state_revision != cached_light_state_revision;
 
 	for (size_t light_index = 0; light_index < lights.size(); ++light_index)
 	{
-		const LightRecord& light = lights[light_index];
+		const Light& light = lights[light_index];
 		if (!light.enabled || !light.casts_shadows)
 		{
 			continue;
@@ -286,14 +325,23 @@ void OpenGLShadowSystem::Render(const std::vector<OpenGLDrawItem>& draw_items, c
 		}
 	}
 
+	for (int slot = 0; slot < OpenGLShadows::kMaxPointShadows; ++slot)
+	{
+		if (point_slot_used[slot]) continue;
+		point_light_indices[slot] = std::numeric_limits<size_t>::max();
+		point_resolutions[slot] = 0;
+		point_valid[slot] = false;
+	}
+	cached_renderable_revision = renderable_revision;
+	cached_light_state_revision = light_state_revision;
 	gpu_data.shadow_counts = glm::vec4(static_cast<float>(OpenGLShadows::kMaxSpotShadows),
 		static_cast<float>(OpenGLShadows::kMaxDirectionalCascades),
 		static_cast<float>(OpenGLShadows::kMaxPointShadows),
 		static_cast<float>(OpenGLShadows::kAtlasSize));
-	RenderSystem::SetLightShadowHandles(handles);
+	rendering->SetLightShadowHandles(handles);
 }
 
-void OpenGLShadowSystem::RenderSpotShadow(size_t light_index, const LightRecord& light,
+void OpenGLShadowSystem::RenderSpotShadow(size_t light_index, const Light& light,
 	const std::vector<OpenGLDrawItem>& draw_items, const OpenGLRenderQueues& queues,
 	std::vector<LightShadowGpuHandle>& handles)
 {
@@ -329,10 +377,20 @@ void OpenGLShadowSystem::RenderSpotShadow(size_t light_index, const LightRecord&
 		static_cast<float>(resolution), far_plane);
 	handles[light_index] = { spot_index, OpenGLShadows::kTypeSpot };
 
-	RenderDepthToAtlas(tile, view, projection, draw_items, queues);
+	const glm::mat4 matrix = projection * view;
+	const glm::vec4 rect = gpu_data.spot_atlas_rects[spot_index];
+	if (shadow_content_changed || !cached_spot_valid[spot_index] ||
+		!SameMatrix(cached_spot_matrices[spot_index], matrix) ||
+		!SameRect(cached_spot_rects[spot_index], rect))
+	{
+		RenderDepthToAtlas(tile, view, projection, draw_items, queues);
+		cached_spot_matrices[spot_index] = matrix;
+		cached_spot_rects[spot_index] = rect;
+		cached_spot_valid[spot_index] = true;
+	}
 }
 
-void OpenGLShadowSystem::RenderDirectionalShadow(size_t light_index, const LightRecord& light,
+void OpenGLShadowSystem::RenderDirectionalShadow(size_t light_index, const Light& light,
 	const std::vector<OpenGLDrawItem>& draw_items, const OpenGLRenderQueues& queues,
 	std::vector<LightShadowGpuHandle>& handles)
 {
@@ -351,11 +409,12 @@ void OpenGLShadowSystem::RenderDirectionalShadow(size_t light_index, const Light
 		return;
 	}
 
-	const RenderFrameConstants& constants = RenderSystem::GetFrameConstants();
+	const RenderFrameConstants& constants = rendering->GetFrameConstants();
 	const glm::mat4 inverse_view = glm::inverse(constants.view);
 	const float near_plane = std::max(0.01f, ProjectionNear(constants.proj));
-	const float far_plane = std::max(near_plane + 1.0f, ProjectionFar(constants.proj));
-	const float split_lambda = 0.6f;
+	const float far_plane = std::min(
+		std::max(near_plane + 1.0f, ProjectionFar(constants.proj)),
+		kDirectionalShadowDistance);
 	std::array<float, OpenGLShadows::kCascadeCount + 1> splits {};
 	splits[0] = near_plane;
 	for (int cascade = 1; cascade <= OpenGLShadows::kCascadeCount; ++cascade)
@@ -363,7 +422,8 @@ void OpenGLShadowSystem::RenderDirectionalShadow(size_t light_index, const Light
 		const float ratio = static_cast<float>(cascade) / static_cast<float>(OpenGLShadows::kCascadeCount);
 		const float log_split = near_plane * std::pow(far_plane / near_plane, ratio);
 		const float linear_split = near_plane + (far_plane - near_plane) * ratio;
-		splits[cascade] = split_lambda * log_split + (1.0f - split_lambda) * linear_split;
+		splits[cascade] = kCascadeSplitLambda * log_split +
+			(1.0f - kCascadeSplitLambda) * linear_split;
 	}
 
 	const glm::vec3 light_direction = NormalizeOrDefault(light.direction, glm::vec3(-0.4f, -1.0f, -0.2f));
@@ -410,7 +470,9 @@ void OpenGLShadowSystem::RenderDirectionalShadow(size_t light_index, const Light
 				world_units_per_texel - up_coordinate);
 		}
 
-		glm::mat4 view = glm::lookAt(center - light_direction * (radius + 100.0f), center, light_up);
+		const float z_padding = std::max(10.0f, radius * 2.0f);
+		glm::mat4 view = glm::lookAt(
+			center - light_direction * (radius + z_padding), center, light_up);
 
 		glm::vec3 min_bounds(std::numeric_limits<float>::max());
 		glm::vec3 max_bounds(std::numeric_limits<float>::lowest());
@@ -427,7 +489,6 @@ void OpenGLShadowSystem::RenderDirectionalShadow(size_t light_index, const Light
 		min_bounds.y = -radius - xy_padding;
 		max_bounds.y = radius + xy_padding;
 
-		const float z_padding = 100.0f;
 		const float near_depth = std::max(0.01f, -max_bounds.z - z_padding);
 		const float far_depth = std::max(near_depth + 1.0f, -min_bounds.z + z_padding);
 		const glm::mat4 projection = glm::ortho(min_bounds.x, max_bounds.x, min_bounds.y, max_bounds.y,
@@ -440,14 +501,24 @@ void OpenGLShadowSystem::RenderDirectionalShadow(size_t light_index, const Light
 			light.shadow_normal_bias, CascadeBlendRange(splits[cascade + 1],
 				cascade == OpenGLShadows::kCascadeCount - 1));
 
-		RenderDepthToAtlas(tile, view, projection, draw_items, queues);
+		const glm::mat4 matrix = projection * view;
+		const glm::vec4 rect = gpu_data.cascade_atlas_rects[cascade_index];
+		if (shadow_content_changed || !cached_cascade_valid[cascade_index] ||
+			!SameMatrix(cached_cascade_matrices[cascade_index], matrix) ||
+			!SameRect(cached_cascade_rects[cascade_index], rect))
+		{
+			RenderDepthToAtlas(tile, view, projection, draw_items, queues);
+			cached_cascade_matrices[cascade_index] = matrix;
+			cached_cascade_rects[cascade_index] = rect;
+			cached_cascade_valid[cascade_index] = true;
+		}
 	}
 
 	handles[light_index] = { cascade_base, OpenGLShadows::kTypeDirectional };
 
 }
 
-void OpenGLShadowSystem::RenderPointShadow(size_t light_index, const LightRecord& light,
+void OpenGLShadowSystem::RenderPointShadow(size_t light_index, const Light& light,
 	const std::vector<OpenGLDrawItem>& draw_items, const OpenGLRenderQueues& queues,
 	std::vector<LightShadowGpuHandle>& handles)
 {
@@ -458,9 +529,8 @@ void OpenGLShadowSystem::RenderPointShadow(size_t light_index, const LightRecord
 		return;
 	}
 
-	const uint32_t interval = std::max<uint32_t>(1, light.shadow_update_rate);
-	const bool should_update = point_last_rendered_frame[slot] == 0 ||
-		(frame_index - point_last_rendered_frame[slot]) >= interval;
+	const bool should_update = shadow_content_changed ||
+		!point_valid[slot];
 	const float far_plane = light.range > 0.0f ? light.range : 25.0f;
 	gpu_data.point_params[slot] = glm::vec4(light.position, far_plane);
 	gpu_data.point_shadow_params[slot] = glm::vec4(light.shadow_bias, light.shadow_normal_bias,
@@ -471,7 +541,7 @@ void OpenGLShadowSystem::RenderPointShadow(size_t light_index, const LightRecord
 	{
 		return;
 	}
-	point_last_rendered_frame[slot] = frame_index;
+	point_valid[slot] = true;
 
 	const glm::mat4 projection = glm::perspective(glm::radians(90.0f), 1.0f, 0.05f, far_plane);
 	const std::array<glm::mat4, 6> views = {
@@ -497,6 +567,7 @@ void OpenGLShadowSystem::RenderDepthToAtlas(const AtlasTile& tile, const glm::ma
 	assert(depth_only != nullptr);
 	const Frustum light_frustum = ExtractFrustum(projection * view);
 	depth_only->Use();
+	depth_only->UpdateFrame(view, projection);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, depth_fbo);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, atlas_texture, 0);
@@ -513,7 +584,7 @@ void OpenGLShadowSystem::RenderDepthToAtlas(const AtlasTile& tile, const glm::ma
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
 	glEnable(GL_POLYGON_OFFSET_FILL);
-	glPolygonOffset(2.0f, 4.0f);
+	glPolygonOffset(1.1f, 2.0f);
 
 	GLuint bound_vertex_array = 0;
 	for (uint32_t draw_index : queues.shadow_casters)
@@ -528,7 +599,8 @@ void OpenGLShadowSystem::RenderDepthToAtlas(const AtlasTile& tile, const glm::ma
 			glBindVertexArray(item.vertex_array_obj);
 			bound_vertex_array = item.vertex_array_obj;
 		}
-		depth_only->Update(item.transform, view, projection, *item.material, item.albedo_tex);
+		depth_only->UpdateObject(
+			item.transform, *item.material, item.albedo_tex);
 		glDrawArrays(GL_TRIANGLES, item.start_index, item.count);
 	}
 
@@ -546,6 +618,8 @@ void OpenGLShadowSystem::RenderPointFace(GLenum face, GLuint texture, int resolu
 	assert(point_depth != nullptr);
 	const Frustum light_frustum = ExtractFrustum(projection * view);
 	point_depth->Use();
+	point_depth->UpdateFrame(
+		view, projection, position, far_plane);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, depth_fbo);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, face, texture, 0);
@@ -575,7 +649,8 @@ void OpenGLShadowSystem::RenderPointFace(GLenum face, GLuint texture, int resolu
 			glBindVertexArray(item.vertex_array_obj);
 			bound_vertex_array = item.vertex_array_obj;
 		}
-		point_depth->Update(item.transform, view, projection, position, far_plane, *item.material, item.albedo_tex);
+		point_depth->UpdateObject(
+			item.transform, *item.material, item.albedo_tex);
 		glDrawArrays(GL_TRIANGLES, item.start_index, item.count);
 	}
 

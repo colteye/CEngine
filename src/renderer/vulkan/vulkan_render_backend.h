@@ -15,20 +15,19 @@ namespace CEngine::Renderer {
 class VulkanRenderBackend final : public IRenderBackend
 {
 public:
-	bool Initialize(GLFWwindow* window, int window_width, int window_height) override;
+	bool Initialize(RenderSystem& rendering,
+		GLFWwindow* window, int window_width, int window_height) override;
 	void Shutdown() override;
 	bool Resize(int window_width, int window_height) override;
 	void Render() override;
-	void RenderDepthOnly(const glm::mat4& view, const glm::mat4& projection,
-		uint32_t native_depth_texture, int texture_width, int texture_height) override;
 	bool RegisterRenderable(std::uint32_t slot, const Renderable& renderable) override;
 	void RemoveRenderable(std::uint32_t slot) override;
-	void UpdateRenderableTransform(std::uint32_t slot, const glm::mat4& transform,
-		const Bounds& world_bounds) override;
+	void UpdateRenderable(std::uint32_t slot, const glm::mat4& transform,
+		const Bounds& world_bounds, std::uint32_t flags) override;
 	bool RegisterMaterial(Material* material) override;
 	void RemoveMaterial(Material* material) override;
-	bool RegisterLightmap(const Lightmap* lightmap) override;
-	void RemoveLightmap(const Lightmap* lightmap) override;
+	bool RegisterLightmap(const Texture* lightmap) override;
+	void RemoveLightmap(const Texture* lightmap) override;
 
 private:
 	struct QueueFamilyIndices {

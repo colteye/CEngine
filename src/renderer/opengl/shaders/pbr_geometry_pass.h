@@ -8,13 +8,18 @@
 
 namespace CEngine::Renderer {
 
+class RenderSystem;
+
 class PBRGeometryPass
 {
 public:
 	PBRGeometryPass();
 
 	void Use() const;
-	void Update(const glm::mat4& model, const Material& material, const glm::vec2& lightmap_scale,
+	void UpdateFrame(const RenderSystem& rendering);
+	void UpdateObject(
+		const glm::mat4& model, const Material& material,
+		const glm::vec2& lightmap_scale,
 		const glm::vec2& lightmap_offset, float lightmap_rgbm_range);
 	void SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao, GLuint lightmap);
 

@@ -1,3 +1,4 @@
+#include "assets/asset_database.h"
 #include "assets/casset_loader.h"
 #include "assets/material_loader.h"
 #include "assets/mesh_loader.h"
@@ -119,9 +120,22 @@ void AppendU32(std::vector<std::uint8_t>& bytes, std::uint32_t value)
 
 void WriteDdsStub(const std::filesystem::path& path)
 {
+    std::vector<std::uint8_t> bytes(128 + 8);
+    const auto write_u32 = [&](std::size_t offset, std::uint32_t value) {
+        for (std::size_t byte = 0; byte < 4; ++byte)
+            bytes[offset + byte] =
+                static_cast<std::uint8_t>(value >> (byte * 8u));
+    };
+    write_u32(0, 0x20534444u);
+    write_u32(4, 124);
+    write_u32(12, 4);
+    write_u32(16, 4);
+    write_u32(76, 32);
+    write_u32(84, 0x31545844u);
     std::filesystem::create_directories(path.parent_path());
     std::ofstream stream(path, std::ios::binary);
-    stream.write("DDS ", 4);
+    stream.write(reinterpret_cast<const char*>(bytes.data()),
+        static_cast<std::streamsize>(bytes.size()));
 }
 
 void AppendStaticVertex(std::vector<std::uint8_t>& bytes,
@@ -232,14 +246,15 @@ bool CommonAssetPayloadRemainsDirectlyAddressable()
     material.source_hash = 7;
     material.payload = Bytes("binary material payload");
 
-    std::string error;
-    if (!Expect(WriteBinaryAsset(material_path, material, &error), error.c_str()))
+    if (!Expect(
+            WriteBinaryAsset(material_path, material),
+            "material asset should write"))
     {
         return false;
     }
 
     AssetFile loaded;
-    if (!Expect(loaded.Load(material_path, &error), error.c_str()))
+    if (!Expect(loaded.Load(material_path), "material asset should load"))
     {
         return false;
     }
@@ -277,15 +292,18 @@ bool MeshLoaderBuildsRendererMeshFromTargetAsset()
     mesh_asset.source_hash = 9;
     mesh_asset.payload = StaticMeshPayload();
 
-    std::string error;
-    if (!Expect(WriteBinaryAsset(mesh_path, mesh_asset, &error), error.c_str()))
+    if (!Expect(
+            WriteBinaryAsset(mesh_path, mesh_asset),
+            "mesh asset should write"))
     {
         return false;
     }
 
     auto* material = reinterpret_cast<Renderer::Material*>(static_cast<std::uintptr_t>(1));
     Renderer::Mesh mesh;
-    if (!Expect(LoadMeshAsset(mesh_path, { material }, mesh, &error), error.c_str()))
+    if (!Expect(
+            LoadMeshAsset(mesh_path, {material}, mesh),
+            "mesh asset should load"))
     {
         return false;
     }
@@ -324,15 +342,18 @@ bool MeshLoaderTreatsSkinnedMeshesAsStaticGeometry()
     mesh_asset.source_hash = 13;
     mesh_asset.payload = StaticMeshPayload(MeshFlagSkinned, 56);
 
-    std::string error;
-    if (!Expect(WriteBinaryAsset(mesh_path, mesh_asset, &error), error.c_str()))
+    if (!Expect(
+            WriteBinaryAsset(mesh_path, mesh_asset),
+            "skinned mesh asset should write"))
     {
         return false;
     }
 
     auto* material = reinterpret_cast<Renderer::Material*>(static_cast<std::uintptr_t>(1));
     Renderer::Mesh mesh;
-    if (!Expect(LoadMeshAsset(mesh_path, { material }, mesh, &error), error.c_str()))
+    if (!Expect(
+            LoadMeshAsset(mesh_path, {material}, mesh),
+            "skinned mesh asset should load"))
     {
         return false;
     }
@@ -354,12 +375,15 @@ bool MeshLoaderReadsLightmapUvStream()
     asset.type = AssetType::Mesh;
     asset.guid = GuidFromStableName("assets/compiled/maps/Floor.cmesh");
     asset.payload = StaticMeshPayload(MeshFlagLightmapUv, 40);
-    std::string error;
-    if (!Expect(WriteBinaryAsset(path, asset, &error), error.c_str())) return false;
+    if (!Expect(
+            WriteBinaryAsset(path, asset),
+            "lightmap mesh asset should write")) return false;
 
     auto* material = reinterpret_cast<Renderer::Material*>(static_cast<std::uintptr_t>(1));
     Renderer::Mesh mesh;
-    if (!Expect(LoadMeshAsset(path, {material}, mesh, &error), error.c_str())) return false;
+    if (!Expect(
+            LoadMeshAsset(path, {material}, mesh),
+            "lightmap mesh asset should load")) return false;
     const Renderer::MeshData& data = mesh.GetMaterialMeshData().begin()->second;
     const bool result =
         Expect(data.has_lightmap_uv, "mesh should retain its lightmap UV flag") &&
@@ -408,48 +432,51 @@ bool MaterialLoaderAllowsNeutralSurfaceSlots()
     material_asset.source_hash = 11;
     material_asset.payload = std::move(payload);
 
-    std::string error;
-    if (!Expect(WriteBinaryAsset(material_path, material_asset, &error), error.c_str()))
+    if (!Expect(
+            WriteBinaryAsset(material_path, material_asset),
+            "neutral material asset should write"))
     {
         return false;
     }
 
     Renderer::Material material;
-    if (!Expect(LoadMaterialAsset(material_path, material, &error), error.c_str()))
+    if (!Expect(
+            LoadMaterialAsset(material_path, material),
+            "neutral material asset should load"))
     {
         return false;
     }
-    if (!Expect(material.GetAlbedoPath().empty(),
+    if (!Expect(material.albedo.Empty(),
             "material loader should preserve an empty albedo slot for a neutral GPU fallback"))
     {
         return false;
     }
-    if (!Expect(material.GetNormalPath().empty(),
+    if (!Expect(material.normal.Empty(),
             "material loader should preserve an empty normal slot for a flat GPU fallback"))
     {
         return false;
     }
-    if (!Expect(material.GetMetallicRoughnessAoPath().empty(),
+    if (!Expect(material.metallic_roughness_ao.Empty(),
             "material loader should preserve an empty MRA slot when constants are authored"))
     {
         return false;
     }
-    if (!Expect(material.GetBaseColorFactor() == glm::vec4(0.25f, 0.5f, 0.75f, 1.0f),
+    if (!Expect(material.base_color_factor == glm::vec4(0.25f, 0.5f, 0.75f, 1.0f),
             "material loader should preserve an authored base-color constant"))
     {
         return false;
     }
-    if (!Expect(material.GetMetallicRoughnessAoFactors() == glm::vec3(0.1f, 0.8f, 0.9f),
+    if (!Expect(material.metallic_roughness_ao_factors == glm::vec3(0.1f, 0.8f, 0.9f),
             "material loader should preserve authored metallic, roughness, and AO constants"))
     {
         return false;
     }
-    if (!Expect(material.GetRenderMode() == Renderer::MaterialRenderMode::AlphaHashDither,
+    if (!Expect(material.render_mode == Renderer::MaterialRenderMode::AlphaHashDither,
             "material loader should preserve the authored render mode"))
     {
         return false;
     }
-    if (!Expect(std::abs(material.GetAlphaCutoff() - 0.42f) < 0.0001f,
+    if (!Expect(std::abs(material.alpha_cutoff - 0.42f) < 0.0001f,
             "material loader should preserve the authored alpha cutoff"))
     {
         return false;
@@ -467,8 +494,6 @@ bool MaterialLoaderResolvesProjectTexturePaths()
     const std::string material_key = "assets/compiled/gallery/materials/Stone.cmat";
     const std::string material_name = "Stone";
     const std::string stored_texture_path = "assets/compiled/gallery/textures/Stone.dds";
-    const std::string expected_texture_path = texture_path.lexically_normal().generic_string();
-
     WriteDdsStub(texture_path);
 
     std::vector<std::uint8_t> strings;
@@ -500,19 +525,26 @@ bool MaterialLoaderResolvesProjectTexturePaths()
     material_asset.source_hash = 19;
     material_asset.payload = std::move(payload);
 
-    std::string error;
-    if (!Expect(WriteBinaryAsset(material_path, material_asset, &error), error.c_str()))
+    if (!Expect(
+            WriteBinaryAsset(material_path, material_asset),
+            "textured material asset should write"))
     {
         return false;
     }
 
     Renderer::Material material;
-    if (!Expect(LoadMaterialAsset(material_path, material, &error), error.c_str()))
+    if (!Expect(
+            LoadMaterialAsset(material_path, material),
+            "textured material asset should load"))
     {
         return false;
     }
-    if (!Expect(material.GetAlbedoPath() == expected_texture_path,
-            "material loader should resolve project-relative DDS paths from the project root"))
+    if (!Expect(!material.albedo.Empty() &&
+            material.albedo.format == Renderer::TextureFormat::Dxt1 &&
+            material.albedo.mips.size() == 1 &&
+            material.albedo.mips.front().width == 4 &&
+            material.albedo.mips.front().height == 4,
+            "material loader should load project-relative DDS texture data"))
     {
         return false;
     }
@@ -581,14 +613,15 @@ bool CAssetLoaderReadsBinaryComposition()
     asset.source_hash = 21;
     asset.payload = std::move(payload);
 
-    std::string error;
-    if (!Expect(WriteBinaryAsset(casset_path, asset, &error), error.c_str()))
+    if (!Expect(
+            WriteBinaryAsset(casset_path, asset),
+            "composition asset should write"))
     {
         return false;
     }
 
     CAsset casset;
-    if (!Expect(casset.Load(casset_path, &error), error.c_str()))
+    if (!Expect(casset.Load(casset_path), "composition asset should load"))
     {
         return false;
     }
@@ -683,20 +716,23 @@ bool SkeletonViewReadsBinaryBonesAndNames()
     skeleton.source_hash = 17;
     skeleton.payload = std::move(payload);
 
-    std::string error;
-    if (!Expect(WriteBinaryAsset(skeleton_path, skeleton, &error), error.c_str()))
+    if (!Expect(
+            WriteBinaryAsset(skeleton_path, skeleton),
+            "skeleton asset should write"))
     {
         return false;
     }
 
     AssetFile file;
-    if (!Expect(file.Load(skeleton_path, &error), error.c_str()))
+    if (!Expect(file.Load(skeleton_path), "skeleton file should load"))
     {
         return false;
     }
 
     SkeletonAsset skeleton_asset;
-    if (!Expect(skeleton_asset.Load(skeleton_path, &error), error.c_str()))
+    if (!Expect(
+            skeleton_asset.Load(skeleton_path),
+            "skeleton asset should load"))
     {
         return false;
     }
@@ -726,6 +762,28 @@ bool SkeletonViewReadsBinaryBonesAndNames()
     return true;
 }
 
+bool TextureLoadsAreShared()
+{
+    const std::filesystem::path root = TestRoot();
+    const std::string path = "assets/compiled/maps/shared.dds";
+    WriteDdsStub(root / path);
+
+    AssetDatabase database(root);
+    const AssetHandle handle =
+        database.Acquire(path, AssetType::Texture, GuidFromStableName(path));
+    const auto first = database.LoadTexture(handle, false);
+    const auto second = database.LoadTexture(handle, false);
+    const auto flipped = database.LoadTexture(handle, true);
+    const bool result =
+        Expect(first && second && flipped, "shared textures should load") &&
+        Expect(first.get() == second.get(),
+            "matching texture requests should share one decoded value") &&
+        Expect(first.get() != flipped.get(),
+            "different texture orientations should not share decoded values");
+    std::filesystem::remove_all(root);
+    return result;
+}
+
 } // namespace
 
 int main()
@@ -738,7 +796,8 @@ int main()
         !MaterialLoaderAllowsNeutralSurfaceSlots() ||
         !MaterialLoaderResolvesProjectTexturePaths() ||
         !CAssetLoaderReadsBinaryComposition() ||
-        !SkeletonViewReadsBinaryBonesAndNames())
+        !SkeletonViewReadsBinaryBonesAndNames() ||
+        !TextureLoadsAreShared())
     {
         return 1;
     }

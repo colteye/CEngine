@@ -8,6 +8,8 @@
 
 namespace CEngine::Renderer {
 
+class RenderSystem;
+
 class PBRStandard
 {
 public:
@@ -19,7 +21,8 @@ public:
 
 	PBRStandard();
 	void Use() const;
-	void UpdateFrame(const OpenGLShadowGpuData& shadow_data,
+	void UpdateFrame(RenderSystem& rendering,
+		const OpenGLShadowGpuData& shadow_data,
 		GLuint shadow_atlas, const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_shadow_maps,
 		GLuint irradiance_map, GLuint prefiltered_map);
 	void UpdateObject(const glm::mat4& model, const Material& material, const glm::vec2& lightmap_scale,
@@ -36,6 +39,7 @@ private:
 	OpenGLShadowBuffer shadow_buffer;
 	OpenGLShadowSamplers shadow_samplers;
 	OpenGLAmbientUniforms ambient_uniforms;
+	OpenGLEnvironmentUniforms environment_uniforms;
 	GLuint cam_pos_id;
 	GLuint m_id, v_id, p_id;
 	GLuint albedo_id, normal_id, metallic_roughness_ao_id;

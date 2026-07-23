@@ -4,13 +4,6 @@
 
 namespace CEngine::Renderer {
 
-namespace {
-bool RequiresAlphaTest(MaterialRenderMode mode)
-{
-	return mode == MaterialRenderMode::AlphaClip || mode == MaterialRenderMode::AlphaHashDither;
-}
-}
-
 DepthOnly::DepthOnly()
 {
 	shader_program.Load("shaders/opengl/depth_only.vert", "shaders/opengl/depth_only.frag");
@@ -22,16 +15,23 @@ void DepthOnly::Use() const
 	shader_program.Use();
 }
 
-void DepthOnly::Update(const glm::mat4& model, const glm::mat4& view, const glm::mat4& projection,
+void DepthOnly::UpdateFrame(
+	const glm::mat4& view, const glm::mat4& projection)
+{
+	glUniformMatrix4fv(
+		view_id, 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(
+		projection_id, 1, GL_FALSE, glm::value_ptr(projection));
+}
+
+void DepthOnly::UpdateObject(const glm::mat4& model,
 	const Material& material, GLuint albedo_texture)
 {
-	const bool alpha_test = RequiresAlphaTest(material.GetRenderMode());
+	const bool alpha_test = RequiresAlphaTest(material.render_mode);
 
 	glUniformMatrix4fv(model_id, 1, GL_FALSE, glm::value_ptr(model));
-	glUniformMatrix4fv(view_id, 1, GL_FALSE, glm::value_ptr(view));
-	glUniformMatrix4fv(projection_id, 1, GL_FALSE, glm::value_ptr(projection));
-	glUniform4fv(base_color_factor_id, 1, glm::value_ptr(material.GetBaseColorFactor()));
-	glUniform1f(alpha_cutoff_id, material.GetAlphaCutoff());
+	glUniform4fv(base_color_factor_id, 1, glm::value_ptr(material.base_color_factor));
+	glUniform1f(alpha_cutoff_id, material.alpha_cutoff);
 	glUniform1i(alpha_test_id, alpha_test ? 1 : 0);
 
 	if (alpha_test)

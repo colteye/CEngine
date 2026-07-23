@@ -20,7 +20,7 @@ void SSAO::UseCompute() const
 	compute_program.Use();
 }
 
-void SSAO::UpdateCompute()
+void SSAO::UpdateCompute(const RenderSystem& rendering)
 {
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, depth_tex);
@@ -29,12 +29,12 @@ void SSAO::UpdateCompute()
 	glBindTexture(GL_TEXTURE_2D, normal_roughness_tex);
 	glUniform1i(normal_roughness_id, 1);
 
-	const RenderFrameConstants& constants = RenderSystem::GetFrameConstants();
+	const RenderFrameConstants& constants = rendering.GetFrameConstants();
 	const glm::mat4 inverse_projection = glm::inverse(constants.proj);
 	glUniformMatrix4fv(projection_id, 1, GL_FALSE, glm::value_ptr(constants.proj));
 	glUniformMatrix4fv(inverse_projection_id, 1, GL_FALSE, glm::value_ptr(inverse_projection));
 	glUniformMatrix4fv(view_id, 1, GL_FALSE, glm::value_ptr(constants.view));
-	const SSAOSettings& settings = RenderSystem::GetSSAOSettings();
+	const SSAOSettings& settings = rendering.GetSSAOSettings();
 	glUniform1f(radius_id, settings.radius);
 	glUniform1f(bias_id, settings.bias);
 	glUniform1f(intensity_id, settings.enabled ? settings.intensity : 0.0f);
@@ -46,7 +46,7 @@ void SSAO::UseComposite() const
 	composite_program.Use();
 }
 
-void SSAO::UpdateComposite()
+void SSAO::UpdateComposite(const RenderSystem& rendering)
 {
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, render_tex);
@@ -58,10 +58,10 @@ void SSAO::UpdateComposite()
 	glBindTexture(GL_TEXTURE_2D, ao_tex);
 	glUniform1i(composite_ao_id, 2);
 	glUniform2f(texel_size_id, 1.0f / texture_width, 1.0f / texture_height);
-	const RenderFrameConstants& constants = RenderSystem::GetFrameConstants();
+	const RenderFrameConstants& constants = rendering.GetFrameConstants();
 	const glm::mat4 inverse_projection = glm::inverse(constants.proj);
 	glUniformMatrix4fv(composite_inverse_projection_id, 1, GL_FALSE, glm::value_ptr(inverse_projection));
-	const ExponentialHeightFog& fog = RenderSystem::GetExponentialHeightFog();
+	const ExponentialHeightFog& fog = rendering.GetExponentialHeightFog();
 	glUniform1i(fog_enabled_id, fog.enabled);
 	glUniform1f(fog_density_id, fog.density);
 	glUniform1f(fog_start_distance_id, fog.start_distance);

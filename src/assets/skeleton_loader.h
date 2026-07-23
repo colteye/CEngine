@@ -39,7 +39,7 @@ static_assert(sizeof(DiskSkeletonBone) == 76, "DiskSkeletonBone must stay packed
 
 class SkeletonAsset {
 public:
-    bool Load(const std::filesystem::path& path, std::string* error = nullptr);
+    bool Load(const std::filesystem::path& path);
 
     std::uint32_t BoneCount() const { return header.bone_count; }
     std::string_view ArmatureName() const;
@@ -47,7 +47,7 @@ public:
     std::string_view BoneName(std::uint32_t index) const;
 
 private:
-    bool Parse(std::string* error);
+    bool Parse();
     bool StringViewAt(std::uint32_t offset, std::uint32_t size, std::string_view& view) const;
 
     AssetFile file;

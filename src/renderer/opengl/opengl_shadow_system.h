@@ -15,6 +15,8 @@
 
 namespace CEngine::Renderer {
 
+class RenderSystem;
+
 class OpenGLShadowSystem
 {
 public:
@@ -29,7 +31,7 @@ public:
 	OpenGLShadowSystem& operator=(const OpenGLShadowSystem&) = delete;
 	~OpenGLShadowSystem();
 
-	bool Initialize();
+	bool Initialize(RenderSystem& rendering);
 	void Destroy();
 	void Render(const std::vector<OpenGLDrawItem>& draw_items, const OpenGLRenderQueues& queues);
 
@@ -40,13 +42,13 @@ public:
 private:
 	AtlasTile AllocateAtlasTile(int requested_size);
 	int AllocatePointSlot(size_t light_index, int resolution);
-	void RenderSpotShadow(size_t light_index, const LightRecord& light,
+	void RenderSpotShadow(size_t light_index, const Light& light,
 		const std::vector<OpenGLDrawItem>& draw_items, const OpenGLRenderQueues& queues,
 		std::vector<LightShadowGpuHandle>& handles);
-	void RenderDirectionalShadow(size_t light_index, const LightRecord& light,
+	void RenderDirectionalShadow(size_t light_index, const Light& light,
 		const std::vector<OpenGLDrawItem>& draw_items, const OpenGLRenderQueues& queues,
 		std::vector<LightShadowGpuHandle>& handles);
-	void RenderPointShadow(size_t light_index, const LightRecord& light,
+	void RenderPointShadow(size_t light_index, const Light& light,
 		const std::vector<OpenGLDrawItem>& draw_items, const OpenGLRenderQueues& queues,
 		std::vector<LightShadowGpuHandle>& handles);
 	void RenderDepthToAtlas(const AtlasTile& tile, const glm::mat4& view, const glm::mat4& projection,
@@ -54,20 +56,35 @@ private:
 	void RenderPointFace(GLenum face, GLuint texture, int resolution, const glm::mat4& view,
 		const glm::mat4& projection, const glm::vec3& position, float far_plane,
 		const std::vector<OpenGLDrawItem>& draw_items, const OpenGLRenderQueues& queues);
+	static bool SameMatrix(const glm::mat4& left, const glm::mat4& right);
+	static bool SameRect(const glm::vec4& left, const glm::vec4& right);
 
 	GLuint atlas_texture = 0;
 	GLuint depth_fbo = 0;
+	RenderSystem* rendering = nullptr;
 	OpenGLShadowGpuData gpu_data;
 	std::array<GLuint, OpenGLShadows::kMaxPointShadows> point_textures {};
 	std::array<size_t, OpenGLShadows::kMaxPointShadows> point_light_indices {};
 	std::array<int, OpenGLShadows::kMaxPointShadows> point_resolutions {};
-	std::array<uint64_t, OpenGLShadows::kMaxPointShadows> point_last_rendered_frame {};
+	std::array<bool, OpenGLShadows::kMaxPointShadows> point_valid {};
+	std::array<bool, OpenGLShadows::kMaxPointShadows> point_slot_used {};
+	std::array<glm::mat4, OpenGLShadows::kMaxSpotShadows> cached_spot_matrices {};
+	std::array<glm::vec4, OpenGLShadows::kMaxSpotShadows> cached_spot_rects {};
+	std::array<bool, OpenGLShadows::kMaxSpotShadows> cached_spot_valid {};
+	std::array<glm::mat4, OpenGLShadows::kMaxDirectionalCascades>
+		cached_cascade_matrices {};
+	std::array<glm::vec4, OpenGLShadows::kMaxDirectionalCascades>
+		cached_cascade_rects {};
+	std::array<bool, OpenGLShadows::kMaxDirectionalCascades>
+		cached_cascade_valid {};
 	std::unique_ptr<DepthOnly> depth_only;
 	std::unique_ptr<PointShadowDepth> point_depth;
 	int atlas_cursor_x = 0;
 	int atlas_cursor_y = 0;
 	int atlas_row_height = 0;
-	uint64_t frame_index = 0;
+	std::uint64_t cached_renderable_revision = 0;
+	std::uint64_t cached_light_state_revision = 0;
+	bool shadow_content_changed = true;
 };
 
 

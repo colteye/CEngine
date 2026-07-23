@@ -31,7 +31,7 @@ projects unless they block that step.
 
 ## Verified baseline
 
-Verified on 2026-07-21:
+Verified on 2026-07-23:
 
 ```sh
 cmake --preset mac-debug
@@ -43,8 +43,9 @@ python3 -m unittest discover tools/ceasset/tests
 Results:
 
 - CMake configure and build passed;
-- 8 of 8 CTest tests passed;
-- 84 asset-tool tests ran successfully (83 passed, 1 skipped because Pillow is
+- 10 of 10 CTest tests passed, including the cooked Sponza scene with its
+  game-owned player entity;
+- 112 asset-tool tests ran successfully (111 passed, 1 skipped because Pillow is
   supplied by the packaged Blender add-on rather than the host Python);
 - Markdown links and `git diff --check` passed.
 
@@ -53,27 +54,30 @@ Results:
 | Capability | State | Evidence and gap |
 | --- | --- | --- |
 | target asset headers/readers | implemented | `src/assets/asset_format.*`, typed readers, and asset tests exist |
-| deterministic Python/Blender cooking paths | partial | exporters and 84 tests exist; no committed M0 room fixture exists |
+| asset loading boundary | implemented for active formats | cooked file I/O and decoding live under `src/assets`; entities request typed mesh/material/texture values through `AssetDatabase`, while render backends only upload those values |
+| game/entity schemas | implemented for `.cscene` entities | portable engine/viewer game JSON files generate standard-library-only, explicit little-endian C++ readers plus the flattened schema packaged in the Blender add-on |
+| deterministic Python/Blender cooking paths | partial | exporters and 112 tests exist; no committed M0 room fixture exists |
 | `.cscene` reading and validation | implemented | `src/assets/cscene_reader.*` plus malformed-range/version tests |
-| scene loading and activation | partial | `src/scene/scene_loader.*` constructs an unpublished scene; the viewer binds render/physics state before entity activation, but the committed M0 fixture is missing |
+| scene loading and activation | partial | `src/assets/scene_loader.*` constructs an unpublished runtime scene; `src/scene` contains only live scene state/execution, but the committed M0 fixture is missing |
 | generation-checked entity identity | implemented | `EntityId { index, generation }`, stale-handle tests, and reusable slots exist |
 | initial entity storage | implemented | `Scene` stores `std::unique_ptr<Entity>` in generation slots |
 | unified prop model | implemented | one `prop` entity class uses a single `dynamic` flag; static is the default |
 | deferred structural changes | missing | create and destroy are currently immediate |
 | scheduled entity behavior | missing | no authoritative scheduler or fixed-tick simulation root exists |
-| main-thread renderer | implemented | the viewer invokes the retained renderer directly on the main thread; one backend is selected per build behind the existing `IRenderBackend` boundary |
+| main-thread renderer | implemented | the viewer owns one concrete `RenderSystem` instance and invokes it directly on the main thread; renderer state is instance-owned, each prop owns exactly one retained renderable record, and one backend is selected per build behind the existing `IRenderBackend` boundary |
 | environment presentation | implemented, optional | typed `skybox` and `exponential_height_fog` scene entities drive HDR panorama sky rendering, diffuse/specular IBL, and analytic height fog; this does not change the active M0 gate |
 | generation-checked render handles | implemented | reusable renderable and light slots carry generations and reject stale handles before reaching the backend |
-| scene/render binding | partial/divergent | `SceneRenderState` creates retained objects, but dynamic updates directly read entity storage rather than applying a presentation snapshot |
-| basic Jolt bodies and fixed substeps | implemented | static/dynamic prop boxes, spheres, and a four-substep accumulator exist |
+| scene/render binding | partial/divergent | entity lifecycle methods currently create and update retained renderer records directly through `RenderSystem`; the M0 presentation snapshot remains deferred |
+| basic Jolt bodies and fixed substeps | implemented | prop lifecycle methods create/destroy static or dynamic bodies through `PhysicsSystem`; the four-substep accumulator remains system-owned |
 | M0 deterministic Jolt policy | implemented | Jolt runs through `JobSystemSingleThreaded` for the authoritative M0 step |
 | generation-checked physics handles | implemented | reusable Jolt body slots carry generations and reject stale handles |
 | queries, triggers, contacts, character path | missing | required M0 physics surface is not implemented |
-| action snapshot and `UserCommand` | missing | current controls read GLFW directly and mutate the camera |
+| action snapshot and `UserCommand` | deferred | `InputSystem` owns a backend-neutral device API with GLFW isolated behind `GlfwInputBackend`; viewer-owned controls populate named frame actions consumed by entity updates, with no tick-addressed command yet |
 | authoritative simulation/tick owner | missing | physics currently owns its own real-delta accumulator |
 | `PresentationSnapshot` and `ClientView` | missing | renderer bindings currently update from live scene entities |
-| player/controller | missing | only free-camera controls and `info_player_start` data exist |
-| authored player placement and viewer possession | implemented ahead of the original step order | Blender `EMPTY` with `ce_classname = "player"` cooks to a `PlayerEntity`; the viewer possesses its first enabled player and synchronizes the existing free-look controls back to that entity. This is explicitly a local-view bridge, not the deferred authoritative controller/network design. |
+| player/controller | partial, game-owned | the viewer sample registers its own action IDs, default bindings, and `PlayerEntity`; collision-backed authoritative movement remains deferred |
+| authored player placement and viewer possession | implemented ahead of the original step order | the viewer registers its generated player data with `EntityFactory`; its game-owned `PlayerEntity` publishes pose/lens parameters to the renderer-owned camera. The engine has no built-in player class. |
+| game/add-on extension path | implemented | a temporary custom game/entity test generates and executes standalone C++, loads the same schema in Python, and the viewer build packages its flattened schema into the add-on |
 | interactive door | missing | no door entity or recorded interaction path exists |
 | M0 command capture/state hash | missing | no canonical declared-state capture exists |
 | M0 performance harness | missing | profile targets exist but there is no `CEngineM0Profile` executable or JSON result writer |

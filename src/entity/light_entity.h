@@ -2,6 +2,8 @@
 #define CENGINE_SCENE_ENTITIES_LIGHT_ENTITY_H
 
 #include "entity/entity.h"
+#include "engine/engine_entities.generated.h"
+#include "renderer/light.h"
 
 #include <string_view>
 
@@ -9,8 +11,8 @@
 
 namespace CEngine::Entities {
 
-enum class LightType : std::uint32_t { Point, Sun, Spot, Area };
-enum class LightMode : std::uint32_t { Realtime, Baked, Mixed };
+using LightType = Generated::EngineEntities::LightType;
+using LightMode = Generated::EngineEntities::LightMode;
 
 // Realtime and Mixed lights both provide direct light and shadows at runtime.
 // Baked lights are represented entirely by the static lightmap.
@@ -19,19 +21,17 @@ constexpr bool HasRuntimeDirectLighting(LightMode mode)
     return mode == LightMode::Realtime || mode == LightMode::Mixed;
 }
 
-class LightEntity final : public Scene::Entity {
+class LightEntity final : public Scene::Entity,
+    public Generated::EngineEntities::LightProperties {
 public:
-    LightType type = LightType::Point;
-    LightMode mode = LightMode::Realtime;
-    glm::vec3 color = glm::vec3(1.0f);
-    float intensity = 1.0f;
-    float range = 10.0f;
-    float inner_angle_radians = 0.0f;
-    float outer_angle_radians = 0.7853982f;
-    glm::vec2 area_size = glm::vec2(1.0f);
-    bool enabled = true;
-    bool casts_shadows = true;
     std::string_view Classname() const override;
+    void Initialize(EngineContext& context) override;
+    void Update(EngineContext& context, float delta_seconds) override;
+    void Shutdown(EngineContext& context) override;
+
+private:
+    Renderer::Light RenderLight() const;
+    Renderer::LightHandle renderer_light_;
 };
 
 } // namespace CEngine::Entities

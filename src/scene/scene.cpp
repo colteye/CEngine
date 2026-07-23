@@ -1,7 +1,8 @@
 #include "scene/scene.h"
 
 #include "assets/asset_database.h"
-#include "entity/entity_factory.h"
+#include "engine_context.h"
+#include "physics/physics_system.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -15,10 +16,11 @@ Scene::~Scene()
         for (Assets::AssetHandle handle : asset_references_) asset_database_->Release(handle);
 }
 
-void Scene::Activate()
+void Scene::Activate(EngineContext& context)
 {
     if (active_) return;
-    EntityContext context{*this};
+    context.scene = this;
+    active_context_ = &context;
     try
     {
         started_entities_.clear();
@@ -26,12 +28,14 @@ void Scene::Activate()
         for (const auto& entity : entities_)
         {
             if (entity == nullptr) continue;
-            entity->OnLoaded(context);
+            entity->Initialize(context);
             started_entities_.push_back(entity.get());
         }
         active_ = true;
         for (const auto& entity : entities_)
-            if (entity != nullptr) entity->OnSceneReady(context);
+            if (entity != nullptr && entity->Enabled()) entity->Update(context, 0.0f);
+        for (const auto& entity : entities_)
+            if (entity != nullptr && entity->Enabled()) entity->LateUpdate(context, 0.0f);
     }
     catch (...)
     {
@@ -41,17 +45,27 @@ void Scene::Activate()
     }
 }
 
+void Scene::Update(EngineContext& context, float delta_seconds)
+{
+    if (!active_) return;
+    for (const auto& entity : entities_)
+        if (entity != nullptr && entity->Enabled()) entity->Update(context, delta_seconds);
+    if (context.physics != nullptr) context.physics->Step(delta_seconds);
+    for (const auto& entity : entities_)
+        if (entity != nullptr && entity->Enabled()) entity->LateUpdate(context, delta_seconds);
+}
+
 void Scene::Stop() noexcept
 {
     if (!active_) return;
-    EntityContext context{*this};
     for (auto entity = started_entities_.rbegin(); entity != started_entities_.rend(); ++entity)
     {
-        try { (*entity)->OnStop(context); }
+        try { (*entity)->Shutdown(*active_context_); }
         catch (...) {}
     }
     started_entities_.clear();
     active_ = false;
+    active_context_ = nullptr;
 }
 
 void Scene::Reserve(std::size_t entity_count)
@@ -69,10 +83,9 @@ void Scene::AddConnection(EntityConnection connection)
     connections_.push_back(std::move(connection));
 }
 
-Entity& Scene::CreateEntity(std::string_view classname, std::string_view name)
+Entity& Scene::AddEntity(std::unique_ptr<Entity> entity, std::string_view name)
 {
-    std::unique_ptr<Entity> entity = Entities::MakeEntity(classname);
-    if (entity == nullptr) throw std::invalid_argument("unsupported entity classname");
+    if (entity == nullptr) throw std::invalid_argument("entity must not be null");
     std::uint32_t index;
     if (free_slots_.empty())
     {
@@ -98,8 +111,8 @@ bool Scene::DestroyEntity(EntityId entity)
     if (!IsAlive(entity)) return false;
     if (active_)
     {
-        EntityContext context{*this};
-        entities_[entity.index]->OnStop(context);
+        if (active_context_ != nullptr)
+            entities_[entity.index]->Shutdown(*active_context_);
         const auto started = std::find(started_entities_.begin(), started_entities_.end(), entities_[entity.index].get());
         if (started != started_entities_.end()) started_entities_.erase(started);
     }
@@ -149,14 +162,15 @@ Assets::AssetType Scene::ReferencedAssetType(std::uint32_t index) const
         asset_database_->Type(asset_references_[index]) : Assets::AssetType::Unknown;
 }
 
-std::uint32_t Scene::AppendMaterial(Assets::AssetHandle material)
+void Scene::AppendAuxiliaryAsset(Assets::AssetHandle asset)
 {
-    const std::uint32_t index = static_cast<std::uint32_t>(materials_.size());
-    materials_.push_back(material);
-    return index;
+    auxiliary_assets_.push_back(asset);
 }
 
-Assets::AssetHandle Scene::Material(std::uint32_t index) const
-{ return index < materials_.size() ? materials_[index] : Assets::AssetHandle{}; }
+Assets::AssetHandle Scene::AuxiliaryAsset(std::uint32_t index) const
+{
+    return index < auxiliary_assets_.size() ?
+        auxiliary_assets_[index] : Assets::AssetHandle{};
+}
 
 } // namespace CEngine::Scene

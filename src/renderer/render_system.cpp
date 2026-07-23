@@ -9,34 +9,37 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 
 namespace {
-constexpr size_t kMaxGpuLights = 64;
+bool SameLight(const CEngine::Renderer::Light& left,
+	const CEngine::Renderer::Light& right)
+{
+	return left.type == right.type &&
+		left.position == right.position &&
+		left.direction == right.direction &&
+		left.color == right.color &&
+		left.intensity == right.intensity &&
+		left.range == right.range &&
+		left.spot_inner_cos == right.spot_inner_cos &&
+		left.spot_outer_cos == right.spot_outer_cos &&
+		left.enabled == right.enabled &&
+		left.casts_shadows == right.casts_shadows &&
+		left.shadow_resolution == right.shadow_resolution &&
+		left.shadow_bias == right.shadow_bias &&
+		left.shadow_normal_bias == right.shadow_normal_bias;
+}
 }
 
 namespace CEngine::Renderer {
 
 static_assert(sizeof(GpuLight) == sizeof(glm::vec4) * 4, "GpuLight must stay tightly packed as four vec4 lanes.");
 
-std::unique_ptr<IRenderBackend> RenderSystem::backend;
-
-std::vector<Renderable> RenderSystem::renderables;
-std::vector<std::uint32_t> RenderSystem::renderable_generations;
-std::vector<std::uint32_t> RenderSystem::free_renderables;
-std::vector<LightRecord> RenderSystem::direct_lights;
-std::vector<std::uint32_t> RenderSystem::light_generations;
-std::vector<std::uint32_t> RenderSystem::free_lights;
-std::vector<GpuLight> RenderSystem::gpu_lights;
-std::vector<LightShadowGpuHandle> RenderSystem::light_shadow_handles;
-RenderFrameConstants RenderSystem::frame_constants;
-AmbientLighting RenderSystem::ambient_lighting;
-ImageBasedLighting RenderSystem::image_based_lighting;
-ExponentialHeightFog RenderSystem::exponential_height_fog;
-PostProcessSettings RenderSystem::post_process_settings;
-SSAOSettings RenderSystem::ssao_settings;
-bool RenderSystem::image_based_lighting_resources_dirty = true;
-uint64_t RenderSystem::light_revision = 1;
-bool RenderSystem::lights_dirty = true;
+RenderSystem::~RenderSystem()
+{
+	Shutdown();
+}
 
 bool RenderSystem::Initialize(GLFWwindow* window, int window_width, int window_height)
 {
@@ -48,13 +51,13 @@ bool RenderSystem::Initialize(GLFWwindow* window, int window_width, int window_h
 	backend = std::make_unique<VulkanRenderBackend>();
 #endif
 
-	if (!backend->Initialize(window, window_width, window_height))
+	if (!backend->Initialize(*this, window, window_width, window_height))
 	{
 		backend.reset();
 		return false;
 	}
 
-	gpu_lights.reserve(kMaxGpuLights);
+	gpu_lights.reserve(MaxGpuLights);
 	return true;
 }
 
@@ -69,14 +72,23 @@ void RenderSystem::Shutdown()
 	renderables.clear();
 	renderable_generations.clear();
 	free_renderables.clear();
+	renderable_revision = 1;
 	direct_lights.clear();
 	light_generations.clear();
 	free_lights.clear();
 	gpu_lights.clear();
 	light_shadow_handles.clear();
+	frame_constants = {};
+	active_camera = {};
+	camera_aspect_ratio = 4.0f / 3.0f;
+	ambient_lighting = {};
+	image_based_lighting = {};
+	exponential_height_fog = {};
 	post_process_settings = {};
 	ssao_settings = {};
+	image_based_lighting_resources_dirty = true;
 	light_revision = 1;
+	light_state_revision = 1;
 	lights_dirty = true;
 }
 
@@ -90,34 +102,6 @@ void RenderSystem::Render()
 	if (backend != nullptr)
 	{
 		backend->Render();
-	}
-}
-
-void RenderSystem::RenderDepthOnly(const glm::mat4& view, const glm::mat4& projection,
-	uint32_t native_depth_texture, int texture_width, int texture_height)
-{
-	if (backend != nullptr)
-	{
-		backend->RenderDepthOnly(view, projection, native_depth_texture, texture_width, texture_height);
-	}
-}
-
-void RenderSystem::RegisterMesh(const Mesh* mesh)
-{
-	if (mesh == nullptr)
-	{
-		return;
-	}
-
-	for (const auto& it : mesh->GetMaterialMeshData())
-	{
-		Renderable renderable;
-		renderable.mesh = mesh;
-		renderable.material = it.first;
-		renderable.transform = glm::mat4(1.0f);
-		renderable.local_bounds = it.second.local_bounds.valid ? it.second.local_bounds : CalculateBounds(it.second.vertices);
-		renderable.world_bounds = TransformBounds(renderable.local_bounds, renderable.transform);
-		RegisterRenderable(renderable);
 	}
 }
 
@@ -154,6 +138,7 @@ RenderableHandle RenderSystem::RegisterRenderable(const Renderable& renderable)
 		return {};
 	}
 
+	++renderable_revision;
 	return handle;
 }
 
@@ -165,19 +150,28 @@ void RenderSystem::RemoveRenderable(RenderableHandle handle)
 	++renderable_generations[handle.index];
 	if (renderable_generations[handle.index] == 0) ++renderable_generations[handle.index];
 	free_renderables.push_back(handle.index);
+	++renderable_revision;
 }
 
-void RenderSystem::UpdateRenderableTransform(RenderableHandle handle, const glm::mat4& transform)
+void RenderSystem::UpdateRenderable(
+	RenderableHandle handle, const glm::mat4& transform, std::uint32_t flags)
 {
 	if (ResolveRenderable(handle) == nullptr) return;
 
 	Renderable& renderable = renderables[handle.index];
+	if (renderable.flags == flags &&
+		std::memcmp(&renderable.transform[0][0], &transform[0][0],
+			sizeof(glm::mat4)) == 0)
+		return;
 	renderable.transform = transform;
+	renderable.flags = flags;
 	renderable.world_bounds = TransformBounds(renderable.local_bounds, renderable.transform);
 	if (backend != nullptr)
 	{
-		backend->UpdateRenderableTransform(handle.index, renderable.transform, renderable.world_bounds);
+		backend->UpdateRenderable(
+			handle.index, renderable.transform, renderable.world_bounds, flags);
 	}
+	++renderable_revision;
 }
 
 bool RenderSystem::RegisterMaterial(Material* material)
@@ -190,37 +184,17 @@ void RenderSystem::RemoveMaterial(Material* material)
 	if (backend != nullptr) backend->RemoveMaterial(material);
 }
 
-bool RenderSystem::RegisterLightmap(const Lightmap* lightmap)
+bool RenderSystem::RegisterLightmap(const Texture* lightmap)
 {
 	return backend == nullptr || backend->RegisterLightmap(lightmap);
 }
 
-void RenderSystem::RemoveLightmap(const Lightmap* lightmap)
+void RenderSystem::RemoveLightmap(const Texture* lightmap)
 {
 	if (backend != nullptr) backend->RemoveLightmap(lightmap);
 }
 
-LightHandle RenderSystem::RegisterLight(const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow)
-{
-	LightRecord light;
-	light.type = LightType::Point;
-	light.position = light_pos;
-	light.color = light_col;
-	light.intensity = light_pow;
-	return RegisterLight(light);
-}
-
-void RenderSystem::UpdateLight(LightHandle id, const glm::vec3& light_pos, const glm::vec3& light_col, float light_pow)
-{
-	LightRecord light;
-	light.type = LightType::Point;
-	light.position = light_pos;
-	light.color = light_col;
-	light.intensity = light_pow;
-	UpdateLight(id, light);
-}
-
-LightHandle RenderSystem::RegisterLight(const LightRecord& light)
+LightHandle RenderSystem::RegisterLight(const Light& light)
 {
 	LightHandle handle;
 	if (free_lights.empty())
@@ -240,6 +214,7 @@ LightHandle RenderSystem::RegisterLight(const LightRecord& light)
 	}
 	lights_dirty = true;
 	++light_revision;
+	++light_state_revision;
 	return handle;
 }
 
@@ -253,33 +228,41 @@ void RenderSystem::RemoveLight(LightHandle id)
 	free_lights.push_back(id.index);
 	lights_dirty = true;
 	++light_revision;
+	++light_state_revision;
 }
 
-void RenderSystem::UpdateLight(LightHandle id, const LightRecord& light)
+void RenderSystem::UpdateLight(LightHandle id, const Light& light)
 {
 	if (ResolveLight(id) == nullptr) return;
+	if (SameLight(direct_lights[id.index], light)) return;
 	direct_lights[id.index] = light;
 	lights_dirty = true;
 	++light_revision;
+	++light_state_revision;
 }
 
-const std::vector<Renderable>& RenderSystem::GetRenderables()
+const std::vector<Renderable>& RenderSystem::GetRenderables() const
 {
 	return renderables;
 }
 
-const std::vector<LightRecord>& RenderSystem::GetDirectLights()
+std::uint64_t RenderSystem::GetRenderableRevision() const
+{
+	return renderable_revision;
+}
+
+const std::vector<Light>& RenderSystem::GetDirectLights() const
 {
 	return direct_lights;
 }
 
-const Renderable* RenderSystem::ResolveRenderable(RenderableHandle handle)
+const Renderable* RenderSystem::ResolveRenderable(RenderableHandle handle) const
 {
 	return handle.index < renderables.size() &&
 		renderable_generations[handle.index] == handle.generation ? &renderables[handle.index] : nullptr;
 }
 
-const LightRecord* RenderSystem::ResolveLight(LightHandle handle)
+const Light* RenderSystem::ResolveLight(LightHandle handle) const
 {
 	return handle.index < direct_lights.size() &&
 		light_generations[handle.index] == handle.generation ? &direct_lights[handle.index] : nullptr;
@@ -294,14 +277,14 @@ const std::vector<GpuLight>& RenderSystem::GetGpuLights()
 	return gpu_lights;
 }
 
-uint64_t RenderSystem::GetLightRevision()
+std::uint64_t RenderSystem::GetLightRevision() const
 {
 	return light_revision;
 }
 
-size_t RenderSystem::GetMaxGpuLights()
+std::uint64_t RenderSystem::GetLightStateRevision() const
 {
-	return kMaxGpuLights;
+	return light_state_revision;
 }
 
 void RenderSystem::SetLightShadowHandles(const std::vector<LightShadowGpuHandle>& handles)
@@ -321,14 +304,27 @@ void RenderSystem::SetLightShadowHandles(const std::vector<LightShadowGpuHandle>
 	++light_revision;
 }
 
-void RenderSystem::SetFrameConstants(const RenderFrameConstants& constants)
-{
-	frame_constants = constants;
-}
-
-const RenderFrameConstants& RenderSystem::GetFrameConstants()
+const RenderFrameConstants& RenderSystem::GetFrameConstants() const
 {
 	return frame_constants;
+}
+
+void RenderSystem::UpdateCamera(const Camera& camera)
+{
+	active_camera = camera;
+	frame_constants = active_camera.FrameConstants(camera_aspect_ratio);
+}
+
+void RenderSystem::SetCameraAspectRatio(float aspect_ratio)
+{
+	if (!std::isfinite(aspect_ratio) || aspect_ratio <= 0.0f) return;
+	camera_aspect_ratio = aspect_ratio;
+	frame_constants = active_camera.FrameConstants(camera_aspect_ratio);
+}
+
+const Camera& RenderSystem::ActiveCamera() const
+{
+	return active_camera;
 }
 
 void RenderSystem::SetAmbientLighting(const AmbientLighting& ambient)
@@ -336,7 +332,7 @@ void RenderSystem::SetAmbientLighting(const AmbientLighting& ambient)
 	ambient_lighting = ambient;
 }
 
-const AmbientLighting& RenderSystem::GetAmbientLighting()
+const AmbientLighting& RenderSystem::GetAmbientLighting() const
 {
 	return ambient_lighting;
 }
@@ -344,12 +340,12 @@ const AmbientLighting& RenderSystem::GetAmbientLighting()
 void RenderSystem::SetImageBasedLighting(const ImageBasedLighting& lighting)
 {
 	const bool resources_changed = image_based_lighting.enabled != lighting.enabled ||
-		image_based_lighting.panorama_path != lighting.panorama_path;
+		image_based_lighting.panorama != lighting.panorama;
 	image_based_lighting = lighting;
 	image_based_lighting_resources_dirty = image_based_lighting_resources_dirty || resources_changed;
 }
 
-const ImageBasedLighting& RenderSystem::GetImageBasedLighting()
+const ImageBasedLighting& RenderSystem::GetImageBasedLighting() const
 {
 	return image_based_lighting;
 }
@@ -359,7 +355,7 @@ void RenderSystem::SetExponentialHeightFog(const ExponentialHeightFog& fog)
 	exponential_height_fog = fog;
 }
 
-const ExponentialHeightFog& RenderSystem::GetExponentialHeightFog()
+const ExponentialHeightFog& RenderSystem::GetExponentialHeightFog() const
 {
 	return exponential_height_fog;
 }
@@ -369,7 +365,7 @@ void RenderSystem::SetPostProcessSettings(const PostProcessSettings& settings)
 	post_process_settings = settings;
 }
 
-const PostProcessSettings& RenderSystem::GetPostProcessSettings()
+const PostProcessSettings& RenderSystem::GetPostProcessSettings() const
 {
 	return post_process_settings;
 }
@@ -379,7 +375,7 @@ void RenderSystem::SetSSAOSettings(const SSAOSettings& settings)
 	ssao_settings = settings;
 }
 
-const SSAOSettings& RenderSystem::GetSSAOSettings()
+const SSAOSettings& RenderSystem::GetSSAOSettings() const
 {
 	return ssao_settings;
 }
@@ -397,12 +393,12 @@ void RenderSystem::RebuildGpuLights()
 
 	for (size_t light_index = 0; light_index < direct_lights.size(); ++light_index)
 	{
-		const LightRecord& light = direct_lights[light_index];
+		const Light& light = direct_lights[light_index];
 		if (!light.enabled)
 		{
 			continue;
 		}
-		if (gpu_lights.size() >= kMaxGpuLights)
+		if (gpu_lights.size() >= MaxGpuLights)
 		{
 			break;
 		}

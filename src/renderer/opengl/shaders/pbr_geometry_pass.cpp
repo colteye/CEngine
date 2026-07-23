@@ -17,19 +17,25 @@ void PBRGeometryPass::Use() const
 	shader_program.Use();
 }
 
-void PBRGeometryPass::Update(const glm::mat4& model, const Material& material,
-	const glm::vec2& lightmap_scale, const glm::vec2& lightmap_offset, float lightmap_rgbm_range)
+void PBRGeometryPass::UpdateFrame(const RenderSystem& rendering)
 {
-	const RenderFrameConstants& constants = RenderSystem::GetFrameConstants();
-	glUniformMatrix4fv(model_id, 1, GL_FALSE, glm::value_ptr(model));
+	const RenderFrameConstants& constants = rendering.GetFrameConstants();
 	glUniformMatrix4fv(view_id, 1, GL_FALSE, glm::value_ptr(constants.view));
 	glUniformMatrix4fv(projection_id, 1, GL_FALSE, glm::value_ptr(constants.proj));
-	glUniform4fv(base_color_factor_id, 1, glm::value_ptr(material.GetBaseColorFactor()));
+}
+
+void PBRGeometryPass::UpdateObject(
+	const glm::mat4& model, const Material& material,
+	const glm::vec2& lightmap_scale, const glm::vec2& lightmap_offset,
+	float lightmap_rgbm_range)
+{
+	glUniformMatrix4fv(model_id, 1, GL_FALSE, glm::value_ptr(model));
+	glUniform4fv(base_color_factor_id, 1, glm::value_ptr(material.base_color_factor));
 	glUniform3fv(metallic_roughness_ao_factors_id, 1,
-		glm::value_ptr(material.GetMetallicRoughnessAoFactors()));
-	glUniform1f(alpha_cutoff_id, material.GetAlphaCutoff());
-	glUniform1i(render_mode_id, static_cast<int>(material.GetRenderMode()));
-	glUniform1i(receives_shadows_id, material.ReceivesShadows() ? 1 : 0);
+		glm::value_ptr(material.metallic_roughness_ao_factors));
+	glUniform1f(alpha_cutoff_id, material.alpha_cutoff);
+	glUniform1i(render_mode_id, static_cast<int>(material.render_mode));
+	glUniform1i(receives_shadows_id, material.receives_shadows ? 1 : 0);
 	glUniform4f(lightmap_scale_offset_id, lightmap_scale.x, lightmap_scale.y,
 		lightmap_offset.x, lightmap_offset.y);
 	glUniform1f(lightmap_rgbm_range_id, lightmap_rgbm_range);

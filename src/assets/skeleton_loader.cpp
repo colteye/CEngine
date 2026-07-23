@@ -1,56 +1,77 @@
 #include "assets/skeleton_loader.h"
 
+#include "assets/asset_error.h"
+#include "assets/binary.h"
+
 #include <cstring>
 
 namespace CEngine::Assets {
 namespace {
 
-void SetError(std::string* error, const std::string& message)
+bool ReadHeader(ByteView bytes, DiskSkeletonHeader& value)
 {
-    if (error != nullptr)
-    {
-        *error = message;
-    }
+    if (bytes.size < sizeof(value)) return false;
+    std::size_t offset = 0;
+    std::memcpy(value.magic.data(), bytes.data, value.magic.size());
+    offset += value.magic.size();
+    return ReadU16LE(bytes, offset, value.version) &&
+        ReadU16LE(bytes, offset, value.header_size) &&
+        ReadU32LE(bytes, offset, value.bone_count) &&
+        ReadU32LE(bytes, offset, value.bone_table_offset) &&
+        ReadU32LE(bytes, offset, value.string_table_offset) &&
+        ReadU32LE(bytes, offset, value.string_table_size) &&
+        ReadU32LE(bytes, offset, value.armature_name_offset) &&
+        ReadU32LE(bytes, offset, value.armature_name_size);
+}
+
+bool ReadBoneRow(
+    ByteView bytes, std::size_t offset, DiskSkeletonBone& value)
+{
+    if (!ReadI32LE(bytes, offset, value.parent_index) ||
+        !ReadU32LE(bytes, offset, value.name_offset) ||
+        !ReadU32LE(bytes, offset, value.name_size))
+        return false;
+    for (float& component : value.armature_from_bone)
+        if (!ReadF32LE(bytes, offset, component)) return false;
+    return true;
 }
 
 } // namespace
 
-bool SkeletonAsset::Load(const std::filesystem::path& path, std::string* error)
+bool SkeletonAsset::Load(const std::filesystem::path& path)
 {
     file = {};
     header = {};
     bone_table = {};
     string_table = {};
 
-    if (!file.Load(path, error))
+    if (!file.Load(path))
     {
         return false;
     }
-    return Parse(error);
+    return Parse();
 }
 
-bool SkeletonAsset::Parse(std::string* error)
+bool SkeletonAsset::Parse()
 {
     if (file.Type() != AssetType::Skeleton)
     {
-        SetError(error, "asset is not a skeleton");
-        return false;
+        return AssetError("asset is not a skeleton");
     }
 
     const ByteView payload = file.Payload();
     if (payload.size < sizeof(DiskSkeletonHeader))
     {
-        SetError(error, "skeleton payload is invalid");
-        return false;
+        return AssetError("skeleton payload is invalid");
     }
 
-    std::memcpy(&header, payload.data, sizeof(header));
+    if (!ReadHeader(payload, header))
+        return AssetError("skeleton payload is invalid");
     if (header.magic != SkeletonPayloadMagic ||
         header.version != SkeletonPayloadVersion ||
         header.header_size != sizeof(DiskSkeletonHeader))
     {
-        SetError(error, "skeleton payload header is not supported");
-        return false;
+        return AssetError("skeleton payload header is not supported");
     }
 
     const std::size_t bone_table_size =
@@ -60,8 +81,8 @@ bool SkeletonAsset::Parse(std::string* error)
         header.string_table_offset > payload.size ||
         header.string_table_size > payload.size - header.string_table_offset)
     {
-        SetError(error, "skeleton payload tables are outside the payload");
-        return false;
+        return AssetError(
+            "skeleton payload tables are outside the payload");
     }
 
     bone_table = {payload.data + header.bone_table_offset, bone_table_size};
@@ -70,8 +91,8 @@ bool SkeletonAsset::Parse(std::string* error)
     std::string_view armature_name;
     if (!StringViewAt(header.armature_name_offset, header.armature_name_size, armature_name))
     {
-        SetError(error, "skeleton armature name is outside the string table");
-        return false;
+        return AssetError(
+            "skeleton armature name is outside the string table");
     }
 
     for (std::uint32_t index = 0; index < header.bone_count; ++index)
@@ -79,14 +100,13 @@ bool SkeletonAsset::Parse(std::string* error)
         DiskSkeletonBone bone;
         if (!Bone(index, bone))
         {
-            SetError(error, "skeleton bone table is invalid");
-            return false;
+            return AssetError("skeleton bone table is invalid");
         }
         std::string_view bone_name;
         if (!StringViewAt(bone.name_offset, bone.name_size, bone_name))
         {
-            SetError(error, "skeleton bone name is outside the string table");
-            return false;
+            return AssetError(
+                "skeleton bone name is outside the string table");
         }
     }
 
@@ -106,11 +126,10 @@ bool SkeletonAsset::Bone(std::uint32_t index, DiskSkeletonBone& bone) const
     {
         return false;
     }
-    std::memcpy(
-        &bone,
-        bone_table.data + static_cast<std::size_t>(index) * sizeof(DiskSkeletonBone),
-        sizeof(bone));
-    return true;
+    return ReadBoneRow(
+        bone_table,
+        static_cast<std::size_t>(index) * sizeof(DiskSkeletonBone),
+        bone);
 }
 
 std::string_view SkeletonAsset::BoneName(std::uint32_t index) const

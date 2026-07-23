@@ -17,12 +17,13 @@ void DeferredLighting::Use() const
 	shader_program.Use();
 }
 
-void DeferredLighting::Update(GLuint albedo, GLuint normal_roughness, GLuint material, GLuint baked_light,
+void DeferredLighting::Update(RenderSystem& rendering,
+	GLuint albedo, GLuint normal_roughness, GLuint material, GLuint baked_light,
 	GLuint depth, int width, int height, const OpenGLShadowGpuData& shadow_data, GLuint shadow_atlas,
 	const std::array<GLuint, OpenGLShadows::kMaxPointShadows>& point_shadow_maps,
 	GLuint irradiance_map, GLuint prefiltered_map)
 {
-	const RenderFrameConstants& constants = RenderSystem::GetFrameConstants();
+	const RenderFrameConstants& constants = rendering.GetFrameConstants();
 	const glm::mat4 inverse_view = glm::inverse(constants.view);
 	const glm::mat4 inverse_projection = glm::inverse(constants.proj);
 
@@ -53,32 +54,12 @@ void DeferredLighting::Update(GLuint albedo, GLuint normal_roughness, GLuint mat
 	glUniform3fv(camera_position_id, 1, glm::value_ptr(constants.camera_position));
 	glUniform2f(texel_size_id, 1.0f / static_cast<float>(width), 1.0f / static_cast<float>(height));
 
-	ambient_uniforms.Upload();
-	direct_lights.BindAndUploadIfNeeded();
+	ambient_uniforms.Upload(rendering);
+	direct_lights.BindAndUploadIfNeeded(rendering);
 	shadow_buffer.Upload(shadow_data);
 	shadow_samplers.Bind(shadow_atlas, point_shadow_maps);
-
-	const ImageBasedLighting& ibl = RenderSystem::GetImageBasedLighting();
-	glActiveTexture(GL_TEXTURE14);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, irradiance_map);
-	glUniform1i(glGetUniformLocation(shader_program.GetId(), "ibl_irradiance"), 14);
-	glActiveTexture(GL_TEXTURE15);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, prefiltered_map);
-	glUniform1i(glGetUniformLocation(shader_program.GetId(), "ibl_prefiltered"), 15);
-	glUniform1i(glGetUniformLocation(shader_program.GetId(), "ibl_enabled"),
-		ibl.enabled && irradiance_map != 0 && prefiltered_map != 0);
-	glUniform1f(glGetUniformLocation(shader_program.GetId(), "ibl_intensity"), ibl.lighting_intensity);
-	glUniform1f(glGetUniformLocation(shader_program.GetId(), "ibl_rotation_radians"), ibl.rotation_radians);
-	const ExponentialHeightFog& fog = RenderSystem::GetExponentialHeightFog();
-	glUniform1i(glGetUniformLocation(shader_program.GetId(), "fog_enabled"), fog.enabled);
-	glUniform3fv(glGetUniformLocation(shader_program.GetId(), "fog_inscattering_color"), 1,
-		glm::value_ptr(fog.inscattering_color));
-	glUniform1f(glGetUniformLocation(shader_program.GetId(), "fog_density"), fog.density);
-	glUniform1f(glGetUniformLocation(shader_program.GetId(), "fog_height_falloff"), fog.height_falloff);
-	glUniform1f(glGetUniformLocation(shader_program.GetId(), "fog_base_height"), fog.base_height);
-	glUniform1f(glGetUniformLocation(shader_program.GetId(), "fog_start_distance"), fog.start_distance);
-	glUniform1f(glGetUniformLocation(shader_program.GetId(), "fog_max_opacity"), fog.max_opacity);
-	glUniform1f(glGetUniformLocation(shader_program.GetId(), "fog_cutoff_distance"), fog.cutoff_distance);
+	environment_uniforms.BindAndUpload(
+		rendering, irradiance_map, prefiltered_map);
 }
 
 void DeferredLighting::InitializeParameters()
@@ -88,6 +69,7 @@ void DeferredLighting::InitializeParameters()
 	shadow_buffer.Initialize(shader_id, "ShadowBlock");
 	shadow_samplers.Initialize(shader_id);
 	ambient_uniforms.Initialize(shader_id);
+	environment_uniforms.Initialize(shader_id);
 
 	albedo_id = glGetUniformLocation(shader_id, "g_albedo");
 	normal_roughness_id = glGetUniformLocation(shader_id, "g_normal_roughness");

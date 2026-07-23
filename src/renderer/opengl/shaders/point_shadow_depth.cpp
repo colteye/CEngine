@@ -4,13 +4,6 @@
 
 namespace CEngine::Renderer {
 
-namespace {
-bool RequiresAlphaTest(MaterialRenderMode mode)
-{
-	return mode == MaterialRenderMode::AlphaClip || mode == MaterialRenderMode::AlphaHashDither;
-}
-} // namespace
-
 PointShadowDepth::PointShadowDepth()
 {
 	shader_program.Load("shaders/opengl/point_shadow_depth.vert", "shaders/opengl/point_shadow_depth.frag");
@@ -22,18 +15,27 @@ void PointShadowDepth::Use() const
 	shader_program.Use();
 }
 
-void PointShadowDepth::Update(const glm::mat4& model, const glm::mat4& view, const glm::mat4& projection,
-	const glm::vec3& light_position, float far_plane, const Material& material, GLuint albedo_texture)
+void PointShadowDepth::UpdateFrame(const glm::mat4& view,
+	const glm::mat4& projection, const glm::vec3& light_position,
+	float far_plane)
 {
-	const bool alpha_test = RequiresAlphaTest(material.GetRenderMode());
+	glUniformMatrix4fv(
+		view_id, 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(
+		projection_id, 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(
+		light_position_id, 1, glm::value_ptr(light_position));
+	glUniform1f(far_plane_id, far_plane);
+}
+
+void PointShadowDepth::UpdateObject(const glm::mat4& model,
+	const Material& material, GLuint albedo_texture)
+{
+	const bool alpha_test = RequiresAlphaTest(material.render_mode);
 
 	glUniformMatrix4fv(model_id, 1, GL_FALSE, glm::value_ptr(model));
-	glUniformMatrix4fv(view_id, 1, GL_FALSE, glm::value_ptr(view));
-	glUniformMatrix4fv(projection_id, 1, GL_FALSE, glm::value_ptr(projection));
-	glUniform3fv(light_position_id, 1, glm::value_ptr(light_position));
-	glUniform1f(far_plane_id, far_plane);
-	glUniform4fv(base_color_factor_id, 1, glm::value_ptr(material.GetBaseColorFactor()));
-	glUniform1f(alpha_cutoff_id, material.GetAlphaCutoff());
+	glUniform4fv(base_color_factor_id, 1, glm::value_ptr(material.base_color_factor));
+	glUniform1f(alpha_cutoff_id, material.alpha_cutoff);
 	glUniform1i(alpha_test_id, alpha_test ? 1 : 0);
 
 	if (alpha_test)

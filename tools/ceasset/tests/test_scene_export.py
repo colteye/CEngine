@@ -8,13 +8,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from ceassetlib.formats import AssetType
+from ceassetlib.game_schema import load_bundled_game, make_schema_entity
 from ceassetlib.scene_export import (
     AssetReference,
-    PlayerEntity,
     EntityConnection,
     EntityDescription,
     LightEntity,
-    PrefabEntity, PrefabLightmap,
     SceneDescription,
     SceneSettings,
     Prop,
@@ -34,11 +33,15 @@ def guid(value: int) -> bytes:
 
 
 class SceneExportTests(unittest.TestCase):
+    game = load_bundled_game()
+
+    def player(self):
+        return make_schema_entity(self.game, "player", transform=Transform())
+
     def make_scene(self) -> SceneDescription:
         mesh = AssetReference(AssetType.MESH, "assets/compiled/props/crate.cmesh", guid(1))
         material = AssetReference(AssetType.MATERIAL, "assets/compiled/props/crate.cmat", guid(2))
         lightmap = AssetReference(AssetType.TEXTURE, "assets/compiled/maps/test/lightmap_0.dds", guid(3))
-        prefab = AssetReference(AssetType.ASSET, "assets/compiled/props/statue.casset", guid(4))
         return SceneDescription(
             entities=(
                 EntityDescription(
@@ -50,11 +53,8 @@ class SceneExportTests(unittest.TestCase):
                     name="CrateA",
                 ),
                 EntityDescription(
-                    data=PlayerEntity(),
+                    data=self.player(),
                     name="Camera",
-                ),
-                EntityDescription(
-                    data=PrefabEntity(prefab, lightmaps=(PrefabLightmap(2, lightmap),)),
                 ),
             ),
             settings=SceneSettings(active_player_entity=2),
@@ -72,11 +72,11 @@ class SceneExportTests(unittest.TestCase):
         entity_offset, entity_count, entity_stride = header[7:10]
         class_offset, class_count, class_stride = header[10:13]
         connection_offset, connection_count, connection_stride = header[13:16]
-        self.assertEqual(asset_count, 4)
+        self.assertEqual(asset_count, 3)
         self.assertEqual(asset_stride, ASSET_REFERENCE.size)
-        self.assertEqual(entity_count, 4)
+        self.assertEqual(entity_count, 3)
         self.assertEqual(entity_stride, SCENE_ENTITY.size)
-        self.assertEqual(class_count, 4)
+        self.assertEqual(class_count, 3)
         self.assertEqual(class_stride, ENTITY_CLASS_BLOCK.size)
         self.assertNotEqual(connection_offset, 0)
         self.assertEqual(connection_count, 1)
@@ -93,7 +93,7 @@ class SceneExportTests(unittest.TestCase):
                     AssetType.MESH, "../bad.cmesh", guid(9)))),)))
         with self.assertRaisesRegex(ValueError, "active player entity index"):
             build_scene_payload(SceneDescription(
-                (EntityDescription(PlayerEntity()),),
+                (EntityDescription(self.player()),),
                 SceneSettings(active_player_entity=4)))
         with self.assertRaisesRegex(ValueError, "must reference a player"):
             build_scene_payload(SceneDescription(
@@ -101,7 +101,7 @@ class SceneExportTests(unittest.TestCase):
                 SceneSettings(active_player_entity=0)))
         with self.assertRaisesRegex(ValueError, "connection entity index"):
             build_scene_payload(SceneDescription(
-                (EntityDescription(PlayerEntity()),),
+                (EntityDescription(self.player()),),
                 connections=(EntityConnection(0, "OnReady", 2, "Enable"),)))
         mesh = AssetReference(AssetType.MESH, "assets/compiled/prop.cmesh", guid(10))
         lightmap = AssetReference(AssetType.TEXTURE, "assets/compiled/lightmap.dds", guid(11))
@@ -111,10 +111,14 @@ class SceneExportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "dynamic prop mass"):
             build_scene_payload(SceneDescription((EntityDescription(
                 Prop(mesh, dynamic=True, collision_enabled=True, mass=0.0)),)))
-        prefab = AssetReference(AssetType.ASSET, "assets/compiled/test.casset", guid(12))
-        with self.assertRaisesRegex(ValueError, "duplicated"):
-            build_scene_payload(SceneDescription((EntityDescription(PrefabEntity(
-                prefab, lightmaps=(PrefabLightmap(1, lightmap), PrefabLightmap(1, lightmap)))),)))
+        with self.assertRaisesRegex(ValueError, "below its minimum"):
+            build_scene_payload(SceneDescription((EntityDescription(
+                make_schema_entity(self.game, "post_process", exposure=-1.0)),)))
+        with self.assertRaisesRegex(ValueError, "one enabled post-process"):
+            build_scene_payload(SceneDescription((
+                EntityDescription(make_schema_entity(self.game, "post_process")),
+                EntityDescription(make_schema_entity(self.game, "post_process")),
+            )))
 
 
 if __name__ == "__main__":

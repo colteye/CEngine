@@ -206,14 +206,29 @@ runtime reflection, a general message bus, or one component framework. The class
 descriptor contains only the data required to construct and load current entity
 classes. Add metadata when the cooker, tooling, or replication path consumes it.
 
+Current `.cscene` entity properties are declared in portable game JSON files and
+read by generated, standard-library-only C++ headers. Runtime entity classes
+inherit the generated public property type and keep behavior in lifecycle
+methods. `EntityFactory` performs one atomic construct-and-decode callback for
+file loading; typed programmatic spawning bypasses serialization and the
+factory. See [Game files and generated schemas](../game_schema.md).
+
 ### 6.2 Assets and scenes
 
-The runtime reads cooked target assets only. `AssetStore` loads complete immutable
-payloads synchronously before play and retains them while referenced.
+The runtime reads cooked target assets only. `AssetDatabase` validates stable
+scene references and synchronously loads complete typed values for activated
+entities. The scene retains asset handles for its lifetime; entities retain the
+material, mesh, and texture values they publish to subsystems.
 
 Initial references use `AssetId` plus the build-wide `ContentBuildId`; they do not
 support multiple simultaneously live revisions. Asset files validate magic,
 version, type, sizes, ranges, and semantic constraints before publication.
+
+Current cooked file I/O and decoding live under `src/assets`. Entity lifecycle
+code requests typed material, mesh, and texture values through the asset API;
+renderer backends receive those values and never open game-content paths.
+Backend-owned shader source files are executable resources rather than authored
+game assets and remain private to the selected renderer backend.
 
 One scene is loaded during startup. Scene loading constructs entities, creates
 required physics/render bindings, and either completes or tears down the startup
@@ -314,6 +329,14 @@ with reuse-protected `NetEntityId`; it does not expose local `EntityId` outside
 the authoritative process.
 
 Rendering runs on the main thread using one compiled backend and fixed passes.
+The application owns a concrete `RenderSystem` instance and passes it through
+`EngineContext`; its retained state is per instance rather than hidden in a
+static singleton. The selected backend receives that instance during
+initialization and owns only backend-specific resources.
+Renderable and light records are created during entity initialization, updated
+in place from lifecycle methods, and removed during entity shutdown. Unchanged
+updates do not advance renderer revisions; the OpenGL backend uses those
+revisions to retain static shadow maps instead of redrawing them every frame.
 The initial visual target is:
 
 - static room props, with system-owned batching where useful;
