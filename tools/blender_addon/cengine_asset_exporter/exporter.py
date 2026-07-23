@@ -32,6 +32,7 @@ from .materials import effective_material_names, supported_material_images, writ
 from .authoring import load_lightmap_bindings
 from .lightmaps import encode_rgbexp32
 from .meshes import write_mesh_assets
+from .physics import write_physics_assets
 from .skeletons import write_skeleton_assets
 
 
@@ -57,6 +58,7 @@ class ExportResult:
     meshes: int
     animations: int
     scenes: int = 0
+    physics: int = 0
 
 
 @dataclass(frozen=True)
@@ -681,10 +683,24 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
 
     phase_start = time.perf_counter()
     log("Mesh export started")
+    collision_helper_names = {
+        str(obj.get("ce_collision_object", "") or "")
+        for obj in objects
+        if callable(getattr(obj, "get", None)) and
+        str(obj.get("ce_collision_object", "") or "")
+    }
+    render_objects = [
+        obj for obj in objects
+        if str(getattr(obj, "name", "")) not in collision_helper_names and
+        not (
+            callable(getattr(obj, "get", None)) and
+            bool(obj.get("ce_collision_helper", False))
+        )
+    ]
     mesh_outputs = write_mesh_assets(
         source,
         root,
-        objects,
+        render_objects,
         material_outputs_by_name.get,
         skeleton_outputs_by_name.get,
         asset_path,
@@ -698,6 +714,18 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
     animation_outputs_by_armature: dict[str, list[Path]] = {}
     for animation in animation_outputs:
         animation_outputs_by_armature.setdefault(animation.armature.name, []).append(animation.output)
+
+    phase_start = time.perf_counter()
+    log("Physics export started")
+    physics_outputs = write_physics_assets(
+        source, root, objects, asset_path, source_hash)
+    physics_outputs_by_name = {
+        str(physics.source.name): physics.output
+        for physics in physics_outputs
+    }
+    log(
+        f"Physics export complete: {len(physics_outputs)} .cphys in "
+        f"{elapsed(phase_start)}")
 
     collection_outputs: list[Path] = []
     scene_outputs: list[Path] = []
@@ -713,7 +741,7 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         description = scene_description(
             scene_objects, mesh_outputs_by_name,
             material_outputs_by_name, asset_path,
-            lightmap_placements, skybox_outputs,
+            lightmap_placements, skybox_outputs, physics_outputs_by_name,
             resolve_asset_path=lambda value: Path(
                 blender.path.abspath(value)).absolute())
         description = type(description)(description.entities, blender_scene_settings(blender),
@@ -741,6 +769,7 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         + [mesh.output for mesh in mesh_outputs]
         + [skeleton.output for skeleton in skeleton_outputs]
         + [animation.output for animation in animation_outputs]
+        + [physics.output for physics in physics_outputs]
 		+ lightmap_outputs,
         log,
         source_hash,
@@ -771,6 +800,7 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         len(mesh_outputs),
         len(animation_outputs),
         len(scene_outputs),
+        len(physics_outputs),
     )
     log(f"Export finished: {export_summary(result, root)} in {elapsed(export_start)}")
     return result
@@ -794,5 +824,6 @@ def export_summary(result: ExportResult, output_root: Path | None) -> str:
     return (
         f"Exported {result.scenes} .cscene, {result.collections} .casset, {result.meshes} .cmesh, "
         f"{result.materials} .cmat, {result.skeletons} .cskel, "
-        f"{result.animations} .canim, and {result.textures} .dds assets{destination}"
+        f"{result.animations} .canim, {result.physics} .cphys, and "
+        f"{result.textures} .dds assets{destination}"
     )

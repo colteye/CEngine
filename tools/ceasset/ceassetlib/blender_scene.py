@@ -7,12 +7,13 @@ from typing import Callable, Iterable
 
 from .collection_export import blender_to_engine_matrix_rows, object_role
 from .formats import AssetType, asset_type_for_name
-from .game_schema import GameSchema, SchemaEntity, load_bundled_game
+from .game_schema import (
+    GameSchema, SchemaEntity, load_bundled_game, make_schema_entity,
+)
 from .ids import guid_from_stable_name
 from .scene_export import (
     AssetReference, EntityDescription,
-    LightEntity, Prop, SceneDescription,
-    SceneSettings, SkyboxEntity, Transform,
+    SceneDescription, SceneSettings, Transform,
 )
 
 
@@ -96,6 +97,7 @@ def schema_entity(
     transform: Transform,
     asset_path: Callable[[Path], str] | None = None,
     resolve_asset_path: Callable[[str], Path] | None = None,
+    entity_indices: dict[str, int] | None = None,
 ) -> SchemaEntity:
     values: dict[str, object] = {}
     for field in schema["fields"]:
@@ -122,6 +124,13 @@ def schema_entity(
             value = float(value)
         elif field_type in ("u32",):
             value = int(value)
+        elif field_type == "entity":
+            reference = str(value or "")
+            if entity_indices is None or reference not in entity_indices:
+                raise ValueError(
+                    f"{schema['classname']}.{name} references no physics "
+                    f"entity named {reference!r}")
+            value = entity_indices[reference]
         elif field_type == "bool":
             value = bool(value)
         elif field_type in ("vec2", "vec3"):
@@ -217,32 +226,63 @@ def scene_description(
     asset_path: Callable[[Path], str],
     lightmaps: dict[str, LightmapPlacement] | None = None,
     skybox_outputs: dict[str, Path] | None = None,
+    physics_outputs: dict[str, Path] | None = None,
     game_schema: GameSchema | None = None,
     resolve_asset_path: Callable[[str], Path] | None = None,
 ) -> SceneDescription:
+    objects = tuple(objects)
     entities: list[EntityDescription] = []
     schemas = game_schema or load_bundled_game()
+    deferred_constraints: list[object] = []
+    physics_entity_indices: dict[str, int] = {}
+    collision_helper_names = {
+        str(_property(obj, "ce_collision_object", "") or "")
+        for obj in objects
+        if str(_property(obj, "ce_collision_object", "") or "")
+    }
     for obj in sorted(objects, key=lambda value: str(getattr(value, "name", ""))):
         name = str(getattr(obj, "name", ""))
         obj_type = str(getattr(obj, "type", ""))
         transform = object_transform(obj)
         classname = str(_property(obj, "ce_classname", "") or "")
+        if classname == "physics_constraint":
+            if obj_type != "EMPTY":
+                raise ValueError(
+                    f"physics constraint must be a Blender empty: {name}")
+            deferred_constraints.append(obj)
+            continue
 
         if obj_type == "MESH":
+            if bool(_property(obj, "ce_collision_helper", False)) or \
+                    name in collision_helper_names:
+                continue
             outputs = mesh_outputs.get(name, ())
             if not outputs:
                 raise ValueError(f"mesh entity has no generated .cmesh: {name}")
             if classname not in ("", "prop"):
                 raise ValueError(f"unsupported mesh entity classname: {classname}")
-            dynamic = bool(_property(obj, "ce_dynamic", False))
+            motion_field = next(
+                field for field in schemas.entity("prop")["fields"]
+                if field["name"] == "motion")
+            authored_motion = _property(
+                obj, "ce_physics_motion", "None")
+            motion = _enum_value(motion_field, authored_motion)
+            collision_output = (physics_outputs or {}).get(name)
+            if (collision_output is None) != (motion == 0):
+                raise ValueError(
+                    f"physics motion and cooked collision disagree: {name}")
+            if motion in (2, 3) and len(outputs) != 1:
+                raise ValueError(
+                    f"movable prop requires one material section: {name}")
             placement = lightmaps.get(name) if lightmaps is not None else None
-            if placement is not None and dynamic:
-                raise ValueError(f"only a static prop may have a baked lightmap: {name}")
-            for output, material_name in outputs:
+            if placement is not None and motion in (2, 3):
+                raise ValueError(f"a movable prop may not have a baked lightmap: {name}")
+            for section_index, (output, material_name) in enumerate(outputs):
                 material_output = material_outputs.get(material_name)
                 if material_output is None:
                     raise ValueError(f"mesh entity has no generated .cmat for {material_name}: {name}")
-                data = Prop(
+                data = make_schema_entity(
+                    schemas, "prop",
                     mesh=_reference(AssetType.MESH, output, asset_path),
                     transform=transform,
                     materials=(_reference(AssetType.MATERIAL, material_output, asset_path),),
@@ -250,17 +290,47 @@ def scene_description(
                     lightmap_scale=placement.scale if placement else (1.0, 1.0),
                     lightmap_offset=placement.offset if placement else (0.0, 0.0),
                     lightmap_rgbm_range=placement.rgbm_range if placement else 8.0,
+                    collision=_reference(
+                        AssetType.PHYSICS, collision_output, asset_path
+                    ) if collision_output is not None and section_index == 0 else None,
+                    motion=motion if section_index == 0 else 0,
+                    mass=float(_property(obj, "ce_mass", 1.0)),
+                    friction=float(_property(obj, "ce_friction", 0.6)),
+                    restitution=float(_property(obj, "ce_restitution", 0.05)),
+                    linear_damping=float(_property(
+                        obj, "ce_linear_damping", 0.05)),
+                    angular_damping=float(_property(
+                        obj, "ce_angular_damping", 0.05)),
+                    gravity_factor=float(_property(
+                        obj, "ce_gravity_factor", 1.0)),
+                    collision_layer=int(_property(
+                        obj, "ce_collision_layer", 0)),
+                    initial_linear_velocity=tuple(float(value) for value in _property(
+                        obj, "ce_initial_linear_velocity", (0.0, 0.0, 0.0))),
+                    initial_angular_velocity=tuple(float(value) for value in _property(
+                        obj, "ce_initial_angular_velocity", (0.0, 0.0, 0.0))),
                     visible=not bool(getattr(obj, "hide_render", False)),
-                    dynamic=dynamic,
                     shadow_only=bool(_property(
                         obj, "ce_shadow_only", object_role(obj) == "occluder")),
-                    collision_enabled=bool(_property(obj, "ce_collision",
-                        _property(obj, "ce_physics", False))),
-                    collision_half_extents=tuple(float(value) for value in _property(
-                        obj, "ce_collision_half_extents", (0.5, 0.5, 0.5))),
-                    mass=float(_property(obj, "ce_mass", 1.0)),
+                    sensor=bool(_property(obj, "ce_sensor", False)),
+                    continuous=bool(_property(obj, "ce_continuous", False)),
+                    allow_sleeping=bool(_property(obj, "ce_allow_sleeping", True)),
+                    lock_translation_x=bool(_property(
+                        obj, "ce_lock_translation_x", False)),
+                    lock_translation_y=bool(_property(
+                        obj, "ce_lock_translation_y", False)),
+                    lock_translation_z=bool(_property(
+                        obj, "ce_lock_translation_z", False)),
+                    lock_rotation_x=bool(_property(
+                        obj, "ce_lock_rotation_x", False)),
+                    lock_rotation_y=bool(_property(
+                        obj, "ce_lock_rotation_y", False)),
+                    lock_rotation_z=bool(_property(
+                        obj, "ce_lock_rotation_z", False)),
                 )
                 entity_name = name if len(outputs) == 1 else f"{name}:{material_name}"
+                if section_index == 0 and motion != 0:
+                    physics_entity_indices[name] = len(entities)
                 entities.append(EntityDescription(data, entity_name))
             continue
         elif obj_type == "LIGHT":
@@ -275,11 +345,15 @@ def scene_description(
             color = tuple(float(value) for value in getattr(light, "color", (1.0, 1.0, 1.0)))
             spot_size = float(getattr(light, "spot_size", 0.7853982))
             spot_blend = float(getattr(light, "spot_blend", 0.0))
-            data = LightEntity(transform, light_type, mode, color,
-                float(getattr(light, "energy", 1.0)),
-                float(getattr(light, "cutoff_distance", 10.0)),
-                spot_size * max(0.0, 1.0 - spot_blend), spot_size,
-                (float(getattr(light, "size", 1.0)), float(getattr(light, "size_y", 1.0))),
+            data = make_schema_entity(
+                schemas, "light",
+                transform=transform, type=light_type, mode=mode, color=color,
+                intensity=float(getattr(light, "energy", 1.0)),
+                range=float(getattr(light, "cutoff_distance", 10.0)),
+                inner_angle_radians=spot_size * max(0.0, 1.0 - spot_blend),
+                outer_angle_radians=spot_size,
+                area_size=(float(getattr(light, "size", 1.0)),
+                    float(getattr(light, "size_y", 1.0))),
                 enabled=not bool(getattr(obj, "hide_render", False)),
                 casts_shadows=bool(getattr(light, "use_shadow", True)))
         elif obj_type == "EMPTY" and getattr(obj, "instance_collection", None) is not None:
@@ -293,11 +367,15 @@ def scene_description(
                 output = (skybox_outputs or {}).get(name)
                 if output is None:
                     raise ValueError(f"skybox has no generated HDR panorama: {name}")
-                data = SkyboxEntity(
-                    _reference(AssetType.TEXTURE, output, asset_path), transform,
-                    float(_property(obj, "ce_intensity", 1.0)),
-                    float(_property(obj, "ce_rotation_radians", 0.0)),
-                    bool(_property(obj, "ce_enabled", True)))
+                data = make_schema_entity(
+                    schemas, "skybox",
+                    panorama=_reference(
+                        AssetType.TEXTURE, output, asset_path),
+                    transform=transform,
+                    intensity=float(_property(obj, "ce_intensity", 1.0)),
+                    rotation_radians=float(_property(
+                        obj, "ce_rotation_radians", 0.0)),
+                    enabled=bool(_property(obj, "ce_enabled", True)))
             else:
                 schema = schemas.entity(classname)
                 if schema is None:
@@ -306,6 +384,19 @@ def scene_description(
                     obj, schema, transform, asset_path, resolve_asset_path)
         else:
             continue
+        entities.append(EntityDescription(data, name))
+
+    constraint_schema = schemas.entity("physics_constraint")
+    for obj in deferred_constraints:
+        if constraint_schema is None:
+            raise ValueError("game schema does not define physics constraints")
+        name = str(getattr(obj, "name", ""))
+        data = schema_entity(
+            obj, constraint_schema, object_transform(obj),
+            asset_path, resolve_asset_path, physics_entity_indices)
+        if data.values["first_entity"] == data.values["second_entity"]:
+            raise ValueError(
+                f"physics constraint must reference two different props: {name}")
         entities.append(EntityDescription(data, name))
     if not entities:
         raise ValueError("scene contains no exportable entities")

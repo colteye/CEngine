@@ -226,9 +226,11 @@ def mesh_buffers(
 
     packed_vertices = bytearray()
     packed_indices = bytearray()
+    vertex_indices: dict[bytes, int] = {}
     bounds_min = [float("inf"), float("inf"), float("inf")]
     bounds_max = [float("-inf"), float("-inf"), float("-inf")]
     vertex_count = 0
+    index_count = 0
     bone_lookup = bone_indices(armature)
     skinned = armature is not None
     vertex_stride = SKINNED_VERTEX.size if skinned else VERTEX.size
@@ -251,12 +253,20 @@ def mesh_buffers(
 
                 if skinned:
                     skin_indices, skin_weights = skin_influences(obj, vertex, bone_lookup)
-                    packed_vertices.extend(SKINNED_VERTEX.pack(
-                        *position, *normal, *uv, *uv1, *skin_indices, *skin_weights))
+                    packed_vertex = SKINNED_VERTEX.pack(
+                        *position, *normal, *uv, *uv1,
+                        *skin_indices, *skin_weights)
                 else:
-                    packed_vertices.extend(VERTEX.pack(*position, *normal, *uv, *uv1))
-                packed_indices.extend(INDEX.pack(vertex_count))
-                vertex_count += 1
+                    packed_vertex = VERTEX.pack(
+                        *position, *normal, *uv, *uv1)
+                vertex_index = vertex_indices.get(packed_vertex)
+                if vertex_index is None:
+                    vertex_index = vertex_count
+                    vertex_indices[packed_vertex] = vertex_index
+                    packed_vertices.extend(packed_vertex)
+                    vertex_count += 1
+                packed_indices.extend(INDEX.pack(vertex_index))
+                index_count += 1
 
     if vertex_count == 0:
         bounds = (0.0, 0.0, 0.0)
@@ -265,7 +275,7 @@ def mesh_buffers(
 
     return MeshBuffers(
         vertex_count,
-        vertex_count,
+        index_count,
         tuple(bounds_min),
         tuple(bounds_max),
         vertex_stride,

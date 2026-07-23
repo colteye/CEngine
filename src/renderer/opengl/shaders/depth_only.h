@@ -6,32 +6,30 @@
 
 #include <glm/glm.hpp>
 
-namespace CEngine::Renderer {
+namespace CEngine::Renderer
+{
 
 class DepthOnly
 {
-public:
-	DepthOnly();
+  public:
+    DepthOnly();
 
-	void Use() const;
-	void UpdateFrame(
-		const glm::mat4& view, const glm::mat4& projection);
-	void UpdateObject(const glm::mat4& model,
-		const Material& material, GLuint albedo_texture);
+    void Use() const;
+    void UpdateFrame(const glm::mat4 &view, const glm::mat4 &projection) const;
+    void UpdateObject(const glm::mat4 &model, const Material &material, GLuint albedo_texture) const;
 
-private:
-	void InitializeParameters();
+  private:
+    void InitializeParameters();
 
-	ShaderProgram shader_program;
-	GLint model_id = -1;
-	GLint view_id = -1;
-	GLint projection_id = -1;
-	GLint albedo_id = -1;
-	GLint base_color_factor_id = -1;
-	GLint alpha_cutoff_id = -1;
-	GLint alpha_test_id = -1;
+    ShaderProgram shader_program_;
+    GLint model_id_ = -1;
+    GLint view_id_ = -1;
+    GLint projection_id_ = -1;
+    GLint albedo_id_ = -1;
+    GLint base_color_factor_id_ = -1;
+    GLint alpha_cutoff_id_ = -1;
+    GLint alpha_test_id_ = -1;
 };
-
 
 } // namespace CEngine::Renderer
 #endif

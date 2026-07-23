@@ -9,18 +9,21 @@
 #include <string>
 #include <string_view>
 
-namespace CEngine::Assets {
+namespace CEngine::Assets
+{
 
 constexpr std::array<char, 4> CAssetPayloadMagic = {'C', 'E', 'C', 'A'};
 constexpr std::uint16_t CAssetPayloadVersion = 2;
 
-enum class CAssetCompositionType : std::uint32_t {
+enum class CAssetCompositionType : std::uint32_t
+{
     Unknown = 0,
     Prefab = 1,
     Scene = 2,
 };
 
-enum class CAssetComponentKind : std::uint32_t {
+enum class CAssetComponentKind : std::uint32_t
+{
     Unknown = 0,
     Mesh = 1,
     Material = 2,
@@ -29,7 +32,8 @@ enum class CAssetComponentKind : std::uint32_t {
 };
 
 #pragma pack(push, 1)
-struct DiskCAssetHeader {
+struct DiskCAssetHeader
+{
     std::array<char, 4> magic = CAssetPayloadMagic;
     std::uint16_t version = CAssetPayloadVersion;
     std::uint16_t header_size = 0;
@@ -46,7 +50,8 @@ struct DiskCAssetHeader {
     std::uint32_t collection_name_size = 0;
 };
 
-struct DiskCAssetObject {
+struct DiskCAssetObject
+{
     std::uint32_t name_offset = 0;
     std::uint32_t name_size = 0;
     std::uint32_t role = 0;
@@ -58,7 +63,8 @@ struct DiskCAssetObject {
     float world_from_local[16] = {};
 };
 
-struct DiskCAssetComponent {
+struct DiskCAssetComponent
+{
     std::uint32_t kind = 0;
     std::uint32_t path_offset = 0;
     std::uint32_t path_size = 0;
@@ -69,7 +75,8 @@ static_assert(sizeof(DiskCAssetHeader) == 52, "DiskCAssetHeader must stay packed
 static_assert(sizeof(DiskCAssetObject) == 96, "DiskCAssetObject must stay packed and stable.");
 static_assert(sizeof(DiskCAssetComponent) == 12, "DiskCAssetComponent must stay packed and stable.");
 
-struct CAssetObject {
+struct CAssetObject
+{
     std::string_view name;
     std::uint32_t role = 0;
     std::uint32_t object_type = 0;
@@ -81,37 +88,45 @@ struct CAssetObject {
 
 constexpr std::uint32_t CAssetObjectRoleOccluder = 13;
 
-struct CAssetComponent {
+struct CAssetComponent
+{
     CAssetComponentKind kind = CAssetComponentKind::Unknown;
     std::string_view path;
 };
 
-class CAsset {
-public:
-    bool Load(const std::filesystem::path& path);
+class CAsset
+{
+  public:
+    bool Load(const std::filesystem::path &path);
 
-    CAssetCompositionType CompositionType() const
+    [[nodiscard]] CAssetCompositionType CompositionType() const
     {
-        return static_cast<CAssetCompositionType>(header.composition_type);
+        return static_cast<CAssetCompositionType>(header_.composition_type);
     }
-    std::uint32_t ObjectCount() const { return header.object_count; }
-    std::uint32_t ComponentCount() const { return header.component_count; }
-    std::string_view SourcePath() const;
-    std::string_view CollectionName() const;
+    [[nodiscard]] std::uint32_t ObjectCount() const
+    {
+        return header_.object_count;
+    }
+    [[nodiscard]] std::uint32_t ComponentCount() const
+    {
+        return header_.component_count;
+    }
+    [[nodiscard]] std::string_view SourcePath() const;
+    [[nodiscard]] std::string_view CollectionName() const;
 
-    bool Object(std::uint32_t index, CAssetObject& object) const;
-    bool Component(std::uint32_t index, CAssetComponent& component) const;
-    bool Component(const CAssetObject& object, std::uint32_t local_index, CAssetComponent& component) const;
+    bool Object(std::uint32_t index, CAssetObject &object) const;
+    bool Component(std::uint32_t index, CAssetComponent &component) const;
+    bool Component(const CAssetObject &object, std::uint32_t local_index, CAssetComponent &component) const;
 
-private:
+  private:
     bool Parse();
-    bool StringViewAt(std::uint32_t offset, std::uint32_t size, std::string_view& view) const;
+    bool StringViewAt(std::uint32_t offset, std::uint32_t size, std::string_view &view) const;
 
-    AssetFile file;
-    DiskCAssetHeader header;
-    ByteView object_table;
-    ByteView component_table;
-    ByteView string_table;
+    AssetFile file_;
+    DiskCAssetHeader header_;
+    ByteView object_table_;
+    ByteView component_table_;
+    ByteView string_table_;
 };
 
 } // namespace CEngine::Assets

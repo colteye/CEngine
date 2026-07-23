@@ -5,10 +5,10 @@
 
 #include <filesystem>
 
-namespace CEngine::Assets {
+namespace CEngine::Assets
+{
 
-bool LoadMaterialAsset(const std::filesystem::path& path,
-    CEngine::Renderer::Material& material);
+bool LoadMaterialAsset(const std::filesystem::path &path, CEngine::Renderer::Material &material);
 
 } // namespace CEngine::Assets
 

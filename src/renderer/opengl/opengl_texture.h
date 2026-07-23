@@ -5,13 +5,14 @@
 
 #include <glad/glad.h>
 
-namespace CEngine::Renderer {
+namespace CEngine::Renderer
+{
 
 class OpenGLTexture
 {
-public:
-	static GLuint Load(const Texture& texture);
-	static GLuint CreateSolid(GLubyte red, GLubyte green, GLubyte blue, GLubyte alpha = 255);
+  public:
+    static GLuint Load(const Texture &source);
+    static GLuint CreateSolid(GLubyte red, GLubyte green, GLubyte blue, GLubyte alpha = 255);
 };
 
 } // namespace CEngine::Renderer

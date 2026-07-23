@@ -14,6 +14,7 @@ LIGHTMAP_SCALE_PROPERTY = "ce_lightmap_scale"
 LIGHTMAP_OFFSET_PROPERTY = "ce_lightmap_offset"
 LIGHTMAP_RANGE_PROPERTY = "ce_lightmap_rgbm_range"
 LIGHTMAP_UV_NAME = "Lightmap"
+COLLIDER_PROPERTY = "ce_collider"
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,10 @@ def initialize_entity_properties(
 ) -> None:
     if overwrite_classname:
         obj[CLASSNAME_PROPERTY] = str(schema["classname"])
+    if schema["classname"] == "prop" and COLLIDER_PROPERTY not in obj:
+        obj[COLLIDER_PROPERTY] = "Box"
+    if schema["classname"] == "prop" and "ce_collision_object" not in obj:
+        obj["ce_collision_object"] = ""
     for field, member in iter_property_fields(schema):
         descriptor = member or field
         key = property_name(descriptor)
@@ -103,7 +108,7 @@ def initialize_entity_properties(
             default = field["default"]
         elif field.get("optional", False):
             default = ""
-        elif field["type"] in ("asset", "asset_list"):
+        elif field["type"] in ("asset", "asset_list", "entity"):
             default = ""
         else:
             continue
@@ -151,10 +156,20 @@ def validate_entities(
     objects: Iterable[object],
     game_schema: GameSchema,
 ) -> tuple[EntityIssue, ...]:
+    objects = tuple(objects)
     issues: list[EntityIssue] = []
     enabled_skyboxes = 0
     enabled_fog = 0
     enabled_post_process = 0
+    physics_names = {
+        str(getattr(obj, "name", ""))
+        for obj in objects
+        if entity_classname(obj) == "prop" and
+        str(_get_property(obj, "ce_physics_motion", "None")).lower() != "none"
+    }
+    objects_by_name = {
+        str(getattr(obj, "name", "")): obj for obj in objects
+    }
     for obj in objects:
         name = str(getattr(obj, "name", "<unnamed>"))
         classname = entity_classname(obj)
@@ -189,6 +204,78 @@ def validate_entities(
             panorama = getter("ce_panorama", "") if callable(getter) else ""
             if not panorama:
                 issues.append(EntityIssue(name, "Panorama is required"))
+        if classname == "physics_constraint":
+            getter = getattr(obj, "get", None)
+            first = str(getter(
+                "ce_first_entity", "") if callable(getter) else "")
+            second = str(getter(
+                "ce_second_entity", "") if callable(getter) else "")
+            if not first or not second:
+                issues.append(EntityIssue(
+                    name, "First Entity and Second Entity are required"))
+            elif first == second:
+                issues.append(EntityIssue(
+                    name, "Constraint entities must be different"))
+            else:
+                for label, reference in (
+                    ("First Entity", first), ("Second Entity", second)
+                ):
+                    if reference not in physics_names:
+                        issues.append(EntityIssue(
+                            name,
+                            f"{label} must name a prop with physics enabled"))
+            constraint_type = str(
+                getter("ce_type", "Fixed")
+                if callable(getter) else "Fixed").lower()
+            motor = str(
+                getter("ce_motor", "Off")
+                if callable(getter) else "Off").lower()
+            if motor != "off" and constraint_type not in {"hinge", "slider"}:
+                issues.append(EntityIssue(
+                    name, "Only hinge and slider constraints support motors"))
+            if motor != "off" and float(
+                    getter("ce_motor_force_limit", 0.0)
+                    if callable(getter) else 0.0) <= 0.0:
+                issues.append(EntityIssue(
+                    name, "Motor Force Limit must be positive"))
+        if classname == "prop":
+            motion = str(
+                getter("ce_physics_motion", "None")
+                if callable(getter) else "None"
+            ).lower()
+            collider = str(
+                getter(COLLIDER_PROPERTY, "Box")
+                if callable(getter) else "Box"
+            ).lower()
+            if motion not in {"none", "static", "dynamic", "kinematic"}:
+                issues.append(EntityIssue(name, "Physics Motion is invalid"))
+            if collider not in {
+                "box", "sphere", "capsule", "cylinder",
+                "convex_hull", "triangle_mesh", "height_field",
+                "compound", "plane",
+            }:
+                issues.append(EntityIssue(name, "Collider is invalid"))
+            if motion in {"dynamic", "kinematic"} and \
+                    collider in {"triangle_mesh", "height_field", "plane"}:
+                issues.append(EntityIssue(
+                    name,
+                    "movable props require convex or compound collision, "
+                    "not a triangle mesh, height field, or plane",
+                ))
+            collision_name = str(
+                getter("ce_collision_object", "")
+                if callable(getter) else "")
+            if collision_name:
+                collision_source = objects_by_name.get(collision_name)
+                if collision_source is None:
+                    issues.append(EntityIssue(
+                        name, "Collision Object does not exist"))
+                elif getattr(collision_source, "type", "") != "MESH":
+                    issues.append(EntityIssue(
+                        name, "Collision Object must be a mesh"))
+                elif getattr(collision_source, "parent", None) is not obj:
+                    issues.append(EntityIssue(
+                        name, "Collision Object must be parented to this prop"))
         getter = getattr(obj, "get", None)
         enabled = bool(getter("ce_enabled", True) if callable(getter) else True)
         if enabled and classname == "skybox":
@@ -306,7 +393,9 @@ def load_lightmap_bindings(
             str(getattr(obj, "name", ""))
             for obj in object_list
             if getattr(obj, "type", "") == "MESH"
-            and not bool(_get_property(obj, "ce_dynamic", False))
+            and str(_get_property(
+                obj, "ce_physics_motion", "None")).lower()
+                not in {"dynamic", "kinematic"}
             and str(_get_property(obj, "ce_role", "")).lower() != "occluder"
             and str(getattr(obj, "name", "")) not in placements
         ]

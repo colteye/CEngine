@@ -13,10 +13,8 @@ from ceassetlib.scene_export import (
     AssetReference,
     EntityConnection,
     EntityDescription,
-    LightEntity,
     SceneDescription,
     SceneSettings,
-    Prop,
     Transform,
     build_scene_payload,
 )
@@ -38,6 +36,9 @@ class SceneExportTests(unittest.TestCase):
     def player(self):
         return make_schema_entity(self.game, "player", transform=Transform())
 
+    def entity(self, classname: str, **values):
+        return make_schema_entity(self.game, classname, **values)
+
     def make_scene(self) -> SceneDescription:
         mesh = AssetReference(AssetType.MESH, "assets/compiled/props/crate.cmesh", guid(1))
         material = AssetReference(AssetType.MATERIAL, "assets/compiled/props/crate.cmat", guid(2))
@@ -45,11 +46,16 @@ class SceneExportTests(unittest.TestCase):
         return SceneDescription(
             entities=(
                 EntityDescription(
-                    data=LightEntity(Transform(position=(1.0, 2.0, 3.0)), intensity=4.0),
+                    data=self.entity(
+                        "light",
+                        transform=Transform(position=(1.0, 2.0, 3.0)),
+                        intensity=4.0),
                     name="KeyLight",
                 ),
                 EntityDescription(
-                    data=Prop(mesh, materials=(material,), lightmap=lightmap),
+                    data=self.entity(
+                        "prop", transform=Transform(), mesh=mesh,
+                        materials=(material,), lightmap=lightmap),
                     name="CrateA",
                 ),
                 EntityDescription(
@@ -89,15 +95,18 @@ class SceneExportTests(unittest.TestCase):
     def test_invalid_descriptions_fail_before_writing(self) -> None:
         with self.assertRaisesRegex(ValueError, "project-relative"):
             build_scene_payload(SceneDescription((EntityDescription(
-                Prop(AssetReference(
-                    AssetType.MESH, "../bad.cmesh", guid(9)))),)))
+                self.entity(
+                    "prop", transform=Transform(),
+                    mesh=AssetReference(
+                        AssetType.MESH, "../bad.cmesh", guid(9)))),)))
         with self.assertRaisesRegex(ValueError, "active player entity index"):
             build_scene_payload(SceneDescription(
                 (EntityDescription(self.player()),),
                 SceneSettings(active_player_entity=4)))
         with self.assertRaisesRegex(ValueError, "must reference a player"):
             build_scene_payload(SceneDescription(
-                (EntityDescription(LightEntity()),),
+                (EntityDescription(self.entity(
+                    "light", transform=Transform())),),
                 SceneSettings(active_player_entity=0)))
         with self.assertRaisesRegex(ValueError, "connection entity index"):
             build_scene_payload(SceneDescription(
@@ -105,12 +114,23 @@ class SceneExportTests(unittest.TestCase):
                 connections=(EntityConnection(0, "OnReady", 2, "Enable"),)))
         mesh = AssetReference(AssetType.MESH, "assets/compiled/prop.cmesh", guid(10))
         lightmap = AssetReference(AssetType.TEXTURE, "assets/compiled/lightmap.dds", guid(11))
-        with self.assertRaisesRegex(ValueError, "only a static prop"):
+        collision = AssetReference(
+            AssetType.PHYSICS, "assets/compiled/prop.cphys", guid(12))
+        with self.assertRaisesRegex(ValueError, "movable prop"):
             build_scene_payload(SceneDescription((EntityDescription(
-                Prop(mesh, lightmap=lightmap, dynamic=True)),)))
-        with self.assertRaisesRegex(ValueError, "dynamic prop mass"):
+                self.entity(
+                    "prop", transform=Transform(), mesh=mesh,
+                    lightmap=lightmap, collision=collision, motion=2)),)))
+        with self.assertRaisesRegex(ValueError, "below its minimum"):
             build_scene_payload(SceneDescription((EntityDescription(
-                Prop(mesh, dynamic=True, collision_enabled=True, mass=0.0)),)))
+                self.entity(
+                    "prop", transform=Transform(), mesh=mesh,
+                    collision=collision, motion=2, mass=0.0)),)))
+        with self.assertRaisesRegex(ValueError, "both be set"):
+            build_scene_payload(SceneDescription((EntityDescription(
+                self.entity(
+                    "prop", transform=Transform(), mesh=mesh,
+                    collision=collision)),)))
         with self.assertRaisesRegex(ValueError, "below its minimum"):
             build_scene_payload(SceneDescription((EntityDescription(
                 make_schema_entity(self.game, "post_process", exposure=-1.0)),)))
@@ -118,6 +138,14 @@ class SceneExportTests(unittest.TestCase):
             build_scene_payload(SceneDescription((
                 EntityDescription(make_schema_entity(self.game, "post_process")),
                 EntityDescription(make_schema_entity(self.game, "post_process")),
+            )))
+        with self.assertRaisesRegex(ValueError, "entity reference is invalid"):
+            build_scene_payload(SceneDescription((
+                EntityDescription(self.entity(
+                    "physics_constraint",
+                    transform=Transform(),
+                    first_entity=0,
+                    second_entity=3)),
             )))
 
 

@@ -1,94 +1,153 @@
 #include "entity/prop_entity.h"
 
-#include "assets/asset_database.h"
+#include "assets/asset_store.h"
 #include "engine_context.h"
 #include "physics/physics_system.h"
 #include "renderer/render_system.h"
 #include "scene/scene.h"
 
 #include <stdexcept>
+#include <utility>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-namespace CEngine::Entities {
+namespace CEngine::Entities
+{
 
-std::string_view PropEntity::Classname() const { return "prop"; }
+std::string_view PropEntity::Classname() const
+{
+    return "prop";
+}
 
-void PropEntity::Initialize(EngineContext& context)
+namespace
+{
+PhysicsMotionType RuntimeMotion(Generated::EngineEntities::PhysicsMotion motion)
+{
+    switch (motion)
+    {
+    case Generated::EngineEntities::PhysicsMotion::Static:
+        return PhysicsMotionType::Static;
+    case Generated::EngineEntities::PhysicsMotion::Dynamic:
+        return PhysicsMotionType::Dynamic;
+    case Generated::EngineEntities::PhysicsMotion::Kinematic:
+        return PhysicsMotionType::Kinematic;
+    case Generated::EngineEntities::PhysicsMotion::None:
+        break;
+    }
+    return PhysicsMotionType::Static;
+}
+
+glm::vec3 Vector(const Generated::EngineEntities::Vec3 &value)
+{
+    return {value.x, value.y, value.z};
+}
+} // namespace
+
+void PropEntity::Initialize(EngineContext &context)
 {
     try
     {
         if (context.rendering != nullptr)
         {
             if (context.assets == nullptr || context.scene == nullptr)
+            {
                 throw std::runtime_error("prop rendering requires scene assets");
-            const Assets::AssetHandle mesh_asset =
-                context.scene->AssetReference(mesh.index);
-            if (!mesh_asset ||
-                context.assets->Type(mesh_asset) != Assets::AssetType::Mesh)
+            }
+            const Assets::AssetReference *mesh_asset = context.scene->AssetReference(mesh.index);
+            if (mesh_asset == nullptr || mesh_asset->type != Assets::AssetType::Mesh)
+            {
                 throw std::runtime_error("prop mesh reference is invalid");
+            }
 
             if (materials.count != 1)
-                throw std::runtime_error(
-                    "prop requires exactly one material in this phase");
-            const Assets::AssetHandle material_asset =
-                context.scene->AuxiliaryAsset(materials.first);
-            if (!material_asset ||
-                context.assets->Type(material_asset) !=
-                    Assets::AssetType::Material)
-                throw std::runtime_error(
-                    "prop material reference is invalid");
+            {
+                throw std::runtime_error("prop requires exactly one material in this phase");
+            }
+            const Assets::AssetReference *material_asset = context.scene->AuxiliaryAsset(materials.first);
+            if (material_asset == nullptr || material_asset->type != Assets::AssetType::Material)
+            {
+                throw std::runtime_error("prop material reference is invalid");
+            }
 
-            Assets::AssetHandle lightmap_asset;
+            const Assets::AssetReference *lightmap_asset = nullptr;
             if (lightmap)
             {
-                lightmap_asset =
-                    context.scene->AssetReference(lightmap.index);
-                if (!lightmap_asset ||
-                    context.assets->Type(lightmap_asset) !=
-                        Assets::AssetType::Texture)
-                    throw std::runtime_error(
-                        "prop lightmap reference is invalid");
+                lightmap_asset = context.scene->AssetReference(lightmap.index);
+                if (lightmap_asset == nullptr || lightmap_asset->type != Assets::AssetType::Texture)
+                {
+                    throw std::runtime_error("prop lightmap reference is invalid");
+                }
             }
 
-            if (!context.assets->Load(material_asset, renderer_material_))
-                throw std::runtime_error("could not load prop material");
-            if (!context.rendering->RegisterMaterial(&renderer_material_))
-                throw std::runtime_error("renderer rejected prop material");
-            material_registered_ = true;
-
-            if (lightmap_asset)
+            std::shared_ptr<const Renderer::Material> renderer_material = context.assets->LoadMaterial(*material_asset);
+            if (!renderer_material)
             {
-                renderer_lightmap_ =
-                    context.assets->LoadTexture(lightmap_asset, false);
-                if (!renderer_lightmap_)
-                    throw std::runtime_error("could not load prop lightmap");
-                if (!context.rendering->RegisterLightmap(renderer_lightmap_.get()))
-                    throw std::runtime_error("renderer rejected prop lightmap");
-                lightmap_registered_ = true;
+                throw std::runtime_error("could not load prop material");
             }
 
-            if (!context.assets->Load(mesh_asset,
-                    {&renderer_material_}, renderer_mesh_))
+            std::shared_ptr<const Renderer::Texture> renderer_lightmap;
+            if (lightmap_asset != nullptr)
+            {
+                renderer_lightmap = context.assets->LoadTexture(*lightmap_asset, false);
+                if (!renderer_lightmap)
+                {
+                    throw std::runtime_error("could not load prop lightmap");
+                }
+            }
+
+            std::shared_ptr<const Renderer::Mesh> renderer_mesh = context.assets->LoadMesh(*mesh_asset);
+            if (!renderer_mesh)
+            {
                 throw std::runtime_error("could not load prop mesh");
-            RegisterRenderable(context);
+            }
+            RegisterMeshInstance(context, std::move(renderer_mesh), std::move(renderer_material),
+                                 std::move(renderer_lightmap));
         }
 
-        if (context.physics != nullptr && collision_enabled)
+        if (context.physics != nullptr && motion != Generated::EngineEntities::PhysicsMotion::None)
         {
+            if (context.assets == nullptr || context.scene == nullptr)
+            {
+                throw std::runtime_error("prop physics requires scene assets");
+            }
+            const Assets::AssetReference *collision_asset = context.scene->AssetReference(collision.index);
+            if (collision_asset == nullptr || collision_asset->type != Assets::AssetType::Physics)
+            {
+                throw std::runtime_error("prop collision reference is invalid");
+            }
+            const std::shared_ptr<const PhysicsShape> shape = context.assets->LoadPhysics(*collision_asset);
+            if (!shape)
+            {
+                throw std::runtime_error("could not load prop collision geometry");
+            }
+
             PhysicsBodyDesc desc;
-            desc.motion_type = dynamic ? PhysicsMotionType::Dynamic : PhysicsMotionType::Static;
-            desc.shape_type = PhysicsShapeType::Box;
+            desc.motion_type = RuntimeMotion(motion);
             desc.position = GetTransform().position;
             desc.rotation = GetTransform().rotation;
-            desc.box_half_extents = glm::abs(GetTransform().scale) *
-                glm::vec3(collision_half_extents.x, collision_half_extents.y,
-                    collision_half_extents.z);
             desc.mass = mass;
-            physics_body_ = context.physics->CreateBody(desc);
-            if (physics_body_ == kInvalidPhysicsBodyHandle)
+            desc.friction = friction;
+            desc.restitution = restitution;
+            desc.linear_velocity = Vector(initial_linear_velocity);
+            desc.angular_velocity = Vector(initial_angular_velocity);
+            desc.linear_damping = linear_damping;
+            desc.angular_damping = angular_damping;
+            desc.gravity_factor = gravity_factor;
+            desc.collision_layer = static_cast<std::uint8_t>(collision_layer);
+            desc.sensor = sensor;
+            desc.continuous = continuous;
+            desc.allow_sleeping = allow_sleeping;
+            desc.locked_axes =
+                (lock_translation_x ? PhysicsLockTranslationX : 0u) |
+                (lock_translation_y ? PhysicsLockTranslationY : 0u) |
+                (lock_translation_z ? PhysicsLockTranslationZ : 0u) | (lock_rotation_x ? PhysicsLockRotationX : 0u) |
+                (lock_rotation_y ? PhysicsLockRotationY : 0u) | (lock_rotation_z ? PhysicsLockRotationZ : 0u);
+            physics_body_ = context.physics->CreateBody(desc, *shape);
+            if (!physics_body_)
+            {
                 throw std::runtime_error("physics rejected prop body");
+            }
         }
     }
     catch (...)
@@ -98,83 +157,95 @@ void PropEntity::Initialize(EngineContext& context)
     }
 }
 
-std::uint32_t PropEntity::RenderableFlags() const
+std::uint32_t PropEntity::BuildMeshInstanceFlags() const
 {
-    std::uint32_t flags =
-        Renderer::RenderableFlagCastsShadow |
-        Renderer::RenderableFlagReceivesShadow |
-        (dynamic ? Renderer::RenderableFlagDynamic :
-            Renderer::RenderableFlagStatic);
-    if (Enabled() && visible) flags |= Renderer::RenderableFlagVisible;
+    std::uint32_t flags = Renderer::MeshInstanceFlagCastsShadow;
+    if (Enabled() && visible)
+    {
+        flags |= Renderer::MeshInstanceFlagVisible;
+    }
     if (shadow_only)
     {
-        flags &= ~Renderer::RenderableFlagReceivesShadow;
-        flags |= Renderer::RenderableFlagShadowOnly;
+        flags |= Renderer::MeshInstanceFlagShadowOnly;
     }
     return flags;
 }
 
-void PropEntity::RegisterRenderable(EngineContext& context)
+void PropEntity::RegisterMeshInstance(EngineContext &context, std::shared_ptr<const Renderer::Mesh> mesh,
+                                      std::shared_ptr<const Renderer::Material> material,
+                                      std::shared_ptr<const Renderer::Texture> lightmap_texture)
 {
-    Renderer::Renderable renderable;
-    renderable.mesh = &renderer_mesh_;
-    renderable.material = &renderer_material_;
-    renderable.transform = GetTransform().world_matrix;
-    renderable.local_bounds = renderer_mesh_.GetLocalBounds();
-    renderable.flags = RenderableFlags();
-    if (renderer_lightmap_ && !shadow_only)
+    Renderer::MeshInstance mesh_instance;
+    mesh_instance.mesh = std::move(mesh);
+    mesh_instance.material = std::move(material);
+    mesh_instance.transform = GetTransform().world_matrix;
+    mesh_instance.flags = BuildMeshInstanceFlags();
+    if (lightmap_texture && !shadow_only)
     {
-        for (const auto& batch : renderer_mesh_.GetMaterialMeshData())
-            if (!batch.second.has_lightmap_uv)
-                throw std::runtime_error("lightmapped mesh has no UV1");
-        renderable.lightmap = renderer_lightmap_.get();
-        renderable.lightmap_scale =
-            {lightmap_scale.x, lightmap_scale.y};
-        renderable.lightmap_offset =
-            {lightmap_offset.x, lightmap_offset.y};
-        renderable.lightmap_rgbm_range = lightmap_rgbm_range;
+        if (!mesh_instance.mesh->has_lightmap_uv)
+        {
+            throw std::runtime_error("lightmapped mesh has no UV1");
+        }
+        mesh_instance.lightmap = std::move(lightmap_texture);
+        mesh_instance.lightmap_scale = {lightmap_scale.x, lightmap_scale.y};
+        mesh_instance.lightmap_offset = {lightmap_offset.x, lightmap_offset.y};
+        mesh_instance.lightmap_rgbm_range = lightmap_rgbm_range;
     }
-    renderer_renderable_ = context.rendering->RegisterRenderable(renderable);
-    if (!renderer_renderable_)
+    renderer_mesh_instance_ = context.rendering->RegisterMeshInstance(mesh_instance);
+    if (!renderer_mesh_instance_)
+    {
         throw std::runtime_error("renderer rejected prop entity");
+    }
 }
 
-void PropEntity::LateUpdate(EngineContext& context, float)
+void PropEntity::Update(EngineContext &context, float delta_seconds)
 {
-    if (context.physics != nullptr && dynamic && physics_body_ != kInvalidPhysicsBodyHandle)
+    if (context.physics == nullptr || !physics_body_ || motion != Generated::EngineEntities::PhysicsMotion::Kinematic ||
+        delta_seconds <= 0.0f)
     {
-        const glm::mat4 world = context.physics->GetBodyTransform(physics_body_);
-        GetTransform().position = glm::vec3(world[3]);
-        GetTransform().rotation = glm::quat_cast(world);
-        GetTransform().world_matrix =
-            world * glm::scale(glm::mat4(1.0f), GetTransform().scale);
-        GetTransform().dirty = false;
+        return;
+    }
+    context.physics->MoveKinematic(physics_body_, GetTransform().position, GetTransform().rotation, delta_seconds);
+}
+
+void PropEntity::LateUpdate(EngineContext &context, float /*unused*/)
+{
+    if (context.physics != nullptr && motion == Generated::EngineEntities::PhysicsMotion::Dynamic && physics_body_)
+    {
+        PhysicsBodyState state;
+        if (context.physics->GetBodyState(physics_body_, state))
+        {
+            GetTransform().position = state.position;
+            GetTransform().rotation = state.rotation;
+            const glm::mat4 world = glm::translate(glm::mat4(1.0f), state.position) * glm::mat4_cast(state.rotation);
+            GetTransform().world_matrix = world * glm::scale(glm::mat4(1.0f), GetTransform().scale);
+            GetTransform().dirty = false;
+        }
     }
 
-    if (context.rendering == nullptr || !renderer_renderable_) return;
-    context.rendering->UpdateRenderable(
-        renderer_renderable_, GetTransform().world_matrix,
-        RenderableFlags());
+    if (context.rendering == nullptr || !renderer_mesh_instance_)
+    {
+        return;
+    }
+    context.rendering->UpdateMeshInstance(renderer_mesh_instance_, GetTransform().world_matrix,
+                                          BuildMeshInstanceFlags());
 }
 
-void PropEntity::Shutdown(EngineContext& context)
+void PropEntity::Shutdown(EngineContext &context)
 {
-    if (context.physics != nullptr && physics_body_ != kInvalidPhysicsBodyHandle)
+    if (context.physics != nullptr && physics_body_)
+    {
         context.physics->DestroyBody(physics_body_);
-    physics_body_ = kInvalidPhysicsBodyHandle;
+    }
+    physics_body_ = {};
     if (context.rendering != nullptr)
     {
-        if (renderer_renderable_)
-            context.rendering->RemoveRenderable(renderer_renderable_);
-        if (lightmap_registered_)
-            context.rendering->RemoveLightmap(renderer_lightmap_.get());
-        if (material_registered_)
-            context.rendering->RemoveMaterial(&renderer_material_);
+        if (renderer_mesh_instance_)
+        {
+            context.rendering->RemoveMeshInstance(renderer_mesh_instance_);
+        }
     }
-    renderer_renderable_ = {};
-    renderer_lightmap_.reset();
-    lightmap_registered_ = false;
-    material_registered_ = false;
+    renderer_mesh_instance_ = {};
 }
 
 } // namespace CEngine::Entities

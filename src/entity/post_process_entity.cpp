@@ -3,13 +3,20 @@
 #include "engine_context.h"
 #include "renderer/render_system.h"
 
-namespace CEngine::Entities {
-
-std::string_view PostProcessEntity::Classname() const { return "post_process"; }
-
-void PostProcessEntity::Update(EngineContext& context, float)
+namespace CEngine::Entities
 {
-    if (context.rendering == nullptr || !Enabled()) return;
+
+std::string_view PostProcessEntity::Classname() const
+{
+    return "post_process";
+}
+
+void PostProcessEntity::Update(EngineContext &context, float /*unused*/)
+{
+    if (context.rendering == nullptr || !Enabled())
+    {
+        return;
+    }
 
     Renderer::PostProcessSettings post_process;
     post_process.bloom_enabled = bloom_enabled;
@@ -38,9 +45,12 @@ void PostProcessEntity::Update(EngineContext& context, float)
     context.rendering->SetSSAOSettings(ssao);
 }
 
-void PostProcessEntity::Shutdown(EngineContext& context)
+void PostProcessEntity::Shutdown(EngineContext &context)
 {
-    if (context.rendering == nullptr) return;
+    if (context.rendering == nullptr)
+    {
+        return;
+    }
     context.rendering->SetPostProcessSettings(Renderer::PostProcessSettings{});
     context.rendering->SetSSAOSettings(Renderer::SSAOSettings{});
 }

@@ -5,7 +5,8 @@
 
 #include <string_view>
 
-namespace CEngine::Assets {
+namespace CEngine::Assets
+{
 
 inline bool AssetError(std::string_view message)
 {

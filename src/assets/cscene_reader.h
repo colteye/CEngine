@@ -8,33 +8,50 @@
 #include <string>
 #include <vector>
 
-namespace CEngine::Assets {
+namespace CEngine::Assets
+{
 
-template <typename T> struct DiskView {
-    const T* data = nullptr;
+template <typename T> struct DiskView
+{
+    const T *data = nullptr;
     std::size_t size = 0;
-    const T* begin() const { return data; }
-    const T* end() const { return size == 0 ? data : data + size; }
-    const T& operator[](std::size_t index) const { return data[index]; }
-    bool Empty() const { return size == 0; }
+    [[nodiscard]] const T *Begin() const
+    {
+        return data;
+    }
+    [[nodiscard]] const T *End() const
+    {
+        return size == 0 ? data : data + size;
+    }
+    const T &operator[](std::size_t index) const
+    {
+        return data[index];
+    }
 };
 
-class CSceneFile {
-public:
-    bool Load(const std::filesystem::path& path);
-    const CSceneFormat::DiskSceneSettings& Settings() const { return settings_; }
-    DiskView<CSceneFormat::DiskAssetReference> AssetReferences() const;
-    DiskView<CSceneFormat::DiskSceneEntity> Entities() const;
-    DiskView<CSceneFormat::DiskEntityClassBlock> ClassBlocks() const;
-    DiskView<CSceneFormat::DiskEntityConnection> Connections() const;
-    DiskView<std::uint32_t> ClassEntities(const CSceneFormat::DiskEntityClassBlock& block) const;
-    ByteView ClassRecords(const CSceneFormat::DiskEntityClassBlock& block) const;
-    ByteView ClassAuxiliary(const CSceneFormat::DiskEntityClassBlock& block) const;
-    std::string_view String(std::uint32_t offset, std::uint32_t size) const;
+class CSceneFile
+{
+  public:
+    bool Load(const std::filesystem::path &path);
+    [[nodiscard]] const CSceneFormat::DiskSceneSettings &Settings() const
+    {
+        return settings_;
+    }
+    [[nodiscard]] DiskView<CSceneFormat::DiskAssetReference> AssetReferences() const;
+    [[nodiscard]] DiskView<CSceneFormat::DiskSceneEntity> Entities() const;
+    [[nodiscard]] DiskView<CSceneFormat::DiskEntityClassBlock> ClassBlocks() const;
+    [[nodiscard]] DiskView<CSceneFormat::DiskEntityConnection> Connections() const;
+    [[nodiscard]] DiskView<std::uint32_t> ClassEntities(const CSceneFormat::DiskEntityClassBlock &block) const;
+    [[nodiscard]] ByteView ClassRecords(const CSceneFormat::DiskEntityClassBlock &block) const;
+    [[nodiscard]] ByteView ClassAuxiliary(const CSceneFormat::DiskEntityClassBlock &block) const;
+    [[nodiscard]] std::string_view String(std::uint32_t offset, std::uint32_t size) const;
 
-private:
+  private:
     bool Validate();
-    const std::uint8_t* At(std::uint64_t offset) const { return payload_.data + offset; }
+    [[nodiscard]] const std::uint8_t *At(std::uint64_t offset) const
+    {
+        return payload_.data + offset;
+    }
 
     AssetFile asset_;
     ByteView payload_;

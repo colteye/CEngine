@@ -5,16 +5,15 @@ import math
 import struct
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Union
 
 from .assetfile import align_up, make_asset_desc, write_binary_asset
 from .formats import AssetType
 from .game_schema import SchemaEntity, entity_struct
 from .scene_format import (
     ASSET_REFERENCE, ENTITY_CLASS_BLOCK,
-    ENTITY_CLASS_VERSION, ENTITY_CONNECTION, EntityClassBlockFlags, LIGHT_ENTITY, LightFlags,
-    PROP, PropFlags, SCENE_ENTITY, SCENE_HEADER, SCENE_MAGIC,
-    SCENE_SETTINGS, SCENE_VERSION, SKYBOX_ENTITY, TRANSFORM, INVALID_INDEX,
+    ENTITY_CONNECTION, ENTITY_CLASS_BLOCK_REQUIRED,
+    SCENE_ENTITY, SCENE_HEADER, SCENE_MAGIC,
+    SCENE_SETTINGS, SCENE_VERSION, INVALID_INDEX,
 )
 
 TABLE_ALIGNMENT = 16
@@ -49,52 +48,8 @@ class Transform:
 
 
 @dataclass(frozen=True)
-class Prop:
-    mesh: AssetReference
-    transform: Transform = field(default_factory=Transform)
-    materials: tuple[AssetReference, ...] = ()
-    lightmap: AssetReference | None = None
-    lightmap_scale: tuple[float, float] = (1.0, 1.0)
-    lightmap_offset: tuple[float, float] = (0.0, 0.0)
-    lightmap_rgbm_range: float = 8.0
-    dynamic: bool = False
-    visible: bool = True
-    shadow_only: bool = False
-    collision_enabled: bool = False
-    collision_half_extents: tuple[float, float, float] = (0.5, 0.5, 0.5)
-    mass: float = 1.0
-
-
-@dataclass(frozen=True)
-class LightEntity:
-    transform: Transform = field(default_factory=Transform)
-    light_type: int = 0
-    mode: int = 0
-    color: tuple[float, float, float] = (1.0, 1.0, 1.0)
-    intensity: float = 1.0
-    range: float = 10.0
-    inner_angle_radians: float = 0.0
-    outer_angle_radians: float = 0.7853982
-    area_size: tuple[float, float] = (1.0, 1.0)
-    enabled: bool = True
-    casts_shadows: bool = True
-
-
-@dataclass(frozen=True)
-class SkyboxEntity:
-    panorama: AssetReference
-    transform: Transform = field(default_factory=Transform)
-    intensity: float = 1.0
-    rotation_radians: float = 0.0
-    enabled: bool = True
-
-
-EntityData = Union[Prop, LightEntity, SkyboxEntity, SchemaEntity]
-
-
-@dataclass(frozen=True)
 class EntityDescription:
-    data: EntityData
+    data: SchemaEntity
     name: str = ""
     flags: int = 1
 
@@ -123,20 +78,10 @@ class SceneDescription:
     connections: tuple[EntityConnection, ...] = ()
 
 
-CLASS_INFO = {
-    Prop: ("prop", PROP),
-    LightEntity: ("light", LIGHT_ENTITY),
-    SkyboxEntity: ("skybox", SKYBOX_ENTITY),
-}
-
-
-def _class_info(value: EntityData) -> tuple[str, struct.Struct]:
-    if isinstance(value, SchemaEntity):
-        return value.classname, entity_struct(value.schema)
-    try:
-        return CLASS_INFO[type(value)]
-    except KeyError as error:
-        raise TypeError(f"unsupported entity class: {type(value).__name__}") from error
+def _class_info(value: SchemaEntity) -> tuple[str, struct.Struct]:
+    if not isinstance(value, SchemaEntity):
+        raise TypeError(f"unsupported entity class: {type(value).__name__}")
+    return value.classname, entity_struct(value.schema)
 
 
 class StringTable:
@@ -165,26 +110,17 @@ def _append_aligned(output: bytearray, data: bytes) -> int:
     return offset
 
 
-def _references(value: EntityData) -> tuple[AssetReference, ...]:
-    if isinstance(value, SchemaEntity):
-        result: list[AssetReference] = []
-        for field in value.schema["fields"]:
-            field_type = field["type"]
-            if field_type == "asset":
-                reference = value.values.get(field["name"])
-                if reference is not None:
-                    result.append(reference)
-            elif field_type == "asset_list":
-                result.extend(value.values.get(field["name"], ()))
-        return tuple(result)
-    if isinstance(value, Prop):
-        result = (value.mesh, *value.materials)
-        if value.lightmap is not None:
-            result += (value.lightmap,)
-        return result
-    if isinstance(value, SkyboxEntity):
-        return (value.panorama,)
-    return ()
+def _references(value: SchemaEntity) -> tuple[AssetReference, ...]:
+    result: list[AssetReference] = []
+    for field in value.schema["fields"]:
+        field_type = field["type"]
+        if field_type == "asset":
+            reference = value.values.get(field["name"])
+            if reference is not None:
+                result.append(reference)
+        elif field_type == "asset_list":
+            result.extend(value.values.get(field["name"], ()))
+    return tuple(result)
 
 
 def _collect_assets(entities: list[EntityDescription]) -> tuple[list[AssetReference], dict[AssetReference, int]]:
@@ -236,7 +172,9 @@ def _pack_schema_entity(
     value: SchemaEntity,
     assets: dict[AssetReference, int],
     auxiliary_assets: list[int],
+    entity_count: int,
 ) -> bytes:
+    _validate_entity_semantics(value)
     packed: list[object] = []
     values = value.values
     for field in value.schema["fields"]:
@@ -249,7 +187,18 @@ def _pack_schema_entity(
             _validate_schema_scalar(field, scalar, values)
             packed.append(scalar)
         elif field_type == "u32":
-            packed.append(int(values[name]))
+            scalar = int(values[name])
+            if "min" in field and scalar < int(field["min"]):
+                raise ValueError(f"{value.classname}.{name} is below its minimum")
+            if "max" in field and scalar > int(field["max"]):
+                raise ValueError(f"{value.classname}.{name} is above its maximum")
+            packed.append(scalar)
+        elif field_type == "entity":
+            index = int(values[name])
+            if not 0 <= index < entity_count:
+                raise ValueError(
+                    f"{value.classname}.{name} entity reference is invalid")
+            packed.append(index)
         elif field_type == "bool":
             packed.append(int(bool(values[name])))
         elif field_type == "enum":
@@ -289,53 +238,46 @@ def _pack_schema_entity(
             raise ValueError(f"{value.classname}.{name} has an unsupported type")
     return entity_struct(value.schema).pack(*packed)
 
-
-def _pack_entity(value: EntityData, assets: dict[AssetReference, int],
-                 materials: list[int]) -> bytes:
-    if isinstance(value, SchemaEntity):
-        return _pack_schema_entity(value, assets, materials)
-    transform = _transform_values(value.transform)
-    if isinstance(value, SkyboxEntity):
-        if value.intensity < 0.0 or not math.isfinite(value.intensity) or \
-                not math.isfinite(value.rotation_radians):
-            raise ValueError("skybox intensity and rotation must be finite and intensity nonnegative")
-        return SKYBOX_ENTITY.pack(*transform, _asset_index(value.panorama, assets),
-                                  value.intensity, value.rotation_radians, int(value.enabled))
-    if isinstance(value, Prop):
-        first = len(materials) if value.materials else INVALID_INDEX
-        materials.extend(_asset_index(item, assets) for item in value.materials)
-        lightmap = INVALID_INDEX if value.lightmap is None else _asset_index(value.lightmap, assets)
-        if value.lightmap is not None and value.dynamic:
-            raise ValueError("only a static prop may have a baked lightmap")
-        if value.lightmap_rgbm_range <= 0.0:
-            raise ValueError("lightmap RGBM range must be positive")
-        if value.lightmap is not None and not _valid_lightmap_binding(
-                value.lightmap_scale, value.lightmap_offset, value.lightmap_rgbm_range):
-            raise ValueError("lightmap atlas transform must stay inside zero-to-one UV space")
-        if value.collision_enabled and any(size <= 0.0 for size in value.collision_half_extents):
-            raise ValueError("prop collision dimensions must be positive")
-        if value.dynamic and value.collision_enabled and value.mass <= 0.0:
-            raise ValueError("dynamic prop mass must be positive")
-        flags = (PropFlags.VISIBLE if value.visible else PropFlags(0))
-        if value.collision_enabled:
-            flags |= PropFlags.COLLISION_ENABLED
-        if value.dynamic:
-            flags |= PropFlags.DYNAMIC
-        if value.shadow_only:
-            flags |= PropFlags.SHADOW_ONLY
-        return PROP.pack(*transform, _asset_index(value.mesh, assets), first, len(value.materials),
-                         lightmap, *value.lightmap_scale, *value.lightmap_offset,
-                         value.lightmap_rgbm_range, int(flags),
-                         *value.collision_half_extents, value.mass)
-    if isinstance(value, LightEntity):
-        if value.intensity < 0.0 or value.range < 0.0:
-            raise ValueError("light intensity and range must be nonnegative")
-        flags = (int(LightFlags.ENABLED) if value.enabled else 0) | \
-            (int(LightFlags.CASTS_SHADOW) if value.casts_shadows else 0)
-        return LIGHT_ENTITY.pack(*transform, value.light_type, value.mode, *value.color,
-                                 value.intensity, value.range, value.inner_angle_radians,
-                                 value.outer_angle_radians, *value.area_size, flags)
-    raise TypeError(f"unsupported entity class: {type(value).__name__}")
+def _validate_entity_semantics(value: SchemaEntity) -> None:
+    if value.classname == "physics_constraint":
+        fields = value.values
+        constraint_type = int(fields["type"])
+        motor = int(fields["motor"])
+        minimum = float(fields["minimum"])
+        maximum = float(fields["maximum"])
+        if minimum > maximum:
+            raise ValueError(
+                "physics constraint minimum must not exceed maximum")
+        if motor and constraint_type not in (2, 3):
+            raise ValueError(
+                "only hinge and slider constraints support motors")
+        if motor and float(fields["motor_force_limit"]) <= 0.0:
+            raise ValueError(
+                "an enabled constraint motor requires a positive force limit")
+        return
+    if value.classname != "prop":
+        return
+    fields = value.values
+    lightmap = fields.get("lightmap")
+    collision = fields.get("collision")
+    motion = int(fields.get("motion", 0))
+    if (collision is None) != (motion == 0):
+        raise ValueError(
+            "prop collision and motion must either both be set or both be absent")
+    if lightmap is not None and motion in (2, 3):
+        raise ValueError("a movable prop may not have a baked lightmap")
+    if lightmap is not None and not _valid_lightmap_binding(
+            tuple(fields["lightmap_scale"]),
+            tuple(fields["lightmap_offset"]),
+            float(fields["lightmap_rgbm_range"])):
+        raise ValueError(
+            "lightmap atlas transform must stay inside zero-to-one UV space")
+    lock_names = (
+        "lock_translation_x", "lock_translation_y", "lock_translation_z",
+        "lock_rotation_x", "lock_rotation_y", "lock_rotation_z",
+    )
+    if motion == 2 and all(bool(fields.get(name, False)) for name in lock_names):
+        raise ValueError("a dynamic prop may not lock every degree of freedom")
 
 
 def build_scene_payload(scene: SceneDescription) -> bytes:
@@ -347,16 +289,15 @@ def build_scene_payload(scene: SceneDescription) -> bytes:
             _class_info(entity.data)
         except TypeError:
             raise ValueError("scene contains an unsupported entity class")
-    if sum(isinstance(entity.data, SkyboxEntity) and entity.data.enabled and bool(entity.flags & 1)
+    if sum(entity.data.classname == "skybox" and
+           bool(entity.data.values.get("enabled", True)) and bool(entity.flags & 1)
            for entity in entities) > 1:
         raise ValueError("scene may contain at most one enabled skybox")
-    if sum(isinstance(entity.data, SchemaEntity) and
-           entity.data.classname == "exponential_height_fog" and
+    if sum(entity.data.classname == "exponential_height_fog" and
            bool(entity.data.values.get("enabled", True)) and bool(entity.flags & 1)
            for entity in entities) > 1:
         raise ValueError("scene may contain at most one enabled exponential height fog")
-    if sum(isinstance(entity.data, SchemaEntity) and
-           entity.data.classname == "post_process" and bool(entity.flags & 1)
+    if sum(entity.data.classname == "post_process" and bool(entity.flags & 1)
            for entity in entities) > 1:
         raise ValueError("scene may contain at most one enabled post-process entity")
 
@@ -405,13 +346,15 @@ def build_scene_payload(scene: SceneDescription) -> bytes:
         indices = struct.pack(f"<{len(rows)}I", *(row[0] for row in rows))
         indices_offset = _append_aligned(output, indices)
         materials: list[int] = []
-        records = b"".join(_pack_entity(
-            row[1].data, asset_indices, materials) for row in rows)
+        records = b"".join(_pack_schema_entity(
+            row[1].data, asset_indices, materials, len(entities))
+            for row in rows)
         records_offset = _append_aligned(output, records)
         auxiliary = struct.pack(f"<{len(materials)}I", *materials) if materials else b""
         auxiliary_offset = _append_aligned(output, auxiliary) if auxiliary else 0
         class_rows.extend(ENTITY_CLASS_BLOCK.pack(classname_offset, classname_size,
-            ENTITY_CLASS_VERSION, int(EntityClassBlockFlags.REQUIRED), len(rows), record_struct.size,
+            int(rows[0][1].data.schema["version"]),
+            ENTITY_CLASS_BLOCK_REQUIRED, len(rows), record_struct.size,
             indices_offset, records_offset, auxiliary_offset, len(auxiliary)))
     output[class_offset:class_offset + len(class_rows)] = class_rows
 

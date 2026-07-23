@@ -1,36 +1,32 @@
 #ifndef CENGINE_ENTITY_ENTITY_H
 #define CENGINE_ENTITY_ENTITY_H
 
+#include "foundation/slot_handle.h"
+
 #include <cstdint>
-#include <limits>
 #include <string>
 #include <string_view>
 
-#include <glm/mat4x4.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
-namespace CEngine { struct EngineContext; }
-namespace CEngine::Scene {
+namespace CEngine
+{
+struct EngineContext;
+}
+namespace CEngine::Scene
+{
 
 class Scene;
 
-struct EntityId {
-    static constexpr std::uint32_t InvalidIndex = std::numeric_limits<std::uint32_t>::max();
-    std::uint32_t index = InvalidIndex;
-    std::uint32_t generation = 0;
-    constexpr explicit operator bool() const { return index != InvalidIndex; }
-};
+struct EntitySlotTag;
+using EntityId = SlotHandle<EntitySlotTag>;
 
-constexpr bool operator==(EntityId left, EntityId right)
-{ return left.index == right.index && left.generation == right.generation; }
-constexpr bool operator!=(EntityId left, EntityId right) { return !(left == right); }
+inline constexpr std::uint32_t EntityEnabled = 1u << 0u;
 
-enum EntityFlags : std::uint32_t {
-    EntityEnabled = 1u << 0u,
-};
-
-struct Transform {
+struct Transform
+{
     glm::vec3 position = glm::vec3(0.0f);
     glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
     glm::vec3 scale = glm::vec3(1.0f);
@@ -40,28 +36,60 @@ struct Transform {
     void UpdateWorldMatrix();
 };
 
-class Entity {
-public:
+class Entity
+{
+  public:
     virtual ~Entity() = default;
-    virtual std::string_view Classname() const = 0;
+    [[nodiscard]] virtual std::string_view Classname() const = 0;
 
-    virtual void Initialize(EngineContext&) {}
-    virtual void Update(EngineContext&, float) {}
-    virtual void LateUpdate(EngineContext&, float) {}
-    virtual void Shutdown(EngineContext&) {}
+    virtual void Initialize(EngineContext & /*unused*/)
+    {
+    }
+    virtual void Update(EngineContext & /*unused*/, float /*unused*/)
+    {
+    }
+    virtual void LateUpdate(EngineContext & /*unused*/, float /*unused*/)
+    {
+    }
+    virtual void Shutdown(EngineContext & /*unused*/)
+    {
+    }
 
-    EntityId Id() const { return id_; }
-    const std::string& Name() const { return name_; }
-    std::uint32_t Flags() const { return flags_; }
-    void SetFlags(std::uint32_t flags) { flags_ = flags; }
-    bool Enabled() const { return (flags_ & EntityEnabled) != 0; }
-    Transform& GetTransform() { return transform_; }
-    const Transform& GetTransform() const { return transform_; }
+    [[nodiscard]] EntityId Id() const
+    {
+        return id_;
+    }
+    [[nodiscard]] const std::string &Name() const
+    {
+        return name_;
+    }
+    [[nodiscard]] std::uint32_t Flags() const
+    {
+        return flags_;
+    }
+    void SetFlags(std::uint32_t flags)
+    {
+        flags_ = flags;
+    }
+    [[nodiscard]] bool Enabled() const
+    {
+        return (flags_ & EntityEnabled) != 0;
+    }
+    Transform &GetTransform()
+    {
+        return transform_;
+    }
+    [[nodiscard]] const Transform &GetTransform() const
+    {
+        return transform_;
+    }
 
-protected:
-    explicit Entity(std::uint32_t flags = EntityEnabled) : flags_(flags) {}
+  protected:
+    explicit Entity(std::uint32_t flags = EntityEnabled) : flags_(flags)
+    {
+    }
 
-private:
+  private:
     friend class Scene;
     EntityId id_;
     std::string name_;

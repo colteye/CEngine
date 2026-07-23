@@ -112,6 +112,7 @@ def _new_entity_object(context, classname: str):
             "skybox": "SPHERE",
             "exponential_height_fog": "CUBE",
             "post_process": "CIRCLE",
+            "physics_constraint": "ARROWS",
         }.get(classname, "PLAIN_AXES")
         obj.empty_display_size = 1.0
         _select_only(context, obj)
@@ -168,10 +169,36 @@ def _draw_asset(layout, obj, field: dict[str, object]) -> None:
     operator.asset_type = str(field.get("asset_type", "asset"))
 
 
+def _draw_object_reference(
+    layout, obj, key: str, label: str
+) -> None:
+    if key not in obj:
+        row = layout.row()
+        row.alert = True
+        row.label(text=f"{label}: not initialized", icon="ERROR")
+        return
+    layout.prop_search(
+        obj, f'["{key}"]', bpy.data, "objects",
+        text=label)
+
+
 def _draw_entity_fields(layout, obj, schema: dict[str, object]) -> None:
     classname = str(schema["classname"])
     if classname == "prop":
         layout.prop(obj, "hide_render", text="Hidden in Engine")
+        row = layout.row(align=True)
+        row.label(text="Collider")
+        collider = str(obj.get("ce_collider", "Box"))
+        row.label(text=display_name(collider))
+        operator = row.operator(
+            CENGINE_OT_set_enum_value.bl_idname,
+            text="", icon="DOWNARROW_HLT")
+        operator.property_key = "ce_collider"
+        _draw_object_reference(
+            layout, obj, "ce_collision_object", "Collision Object")
+        layout.operator(
+            CENGINE_OT_preview_collider.bl_idname,
+            text="Toggle Collider Preview", icon="SHADING_WIRE")
     elif classname == "light":
         layout.prop(obj.data, "type")
         layout.prop(obj.data, "color")
@@ -226,6 +253,10 @@ def _draw_entity_fields(layout, obj, schema: dict[str, object]) -> None:
             _draw_enum(layout, obj, field)
         elif field_type in ("asset", "asset_list"):
             _draw_asset(layout, obj, field)
+        elif field_type == "entity":
+            _draw_object_reference(
+                layout, obj, property_name(field),
+                display_name(str(field["name"])))
         else:
             _draw_id_property(
                 layout, obj, property_name(field),
@@ -233,6 +264,15 @@ def _draw_entity_fields(layout, obj, schema: dict[str, object]) -> None:
 
 
 def _enum_value_items(operator, context):
+    if operator.property_key == "ce_collider":
+        return tuple(
+            (value, display_name(value), f"Cook a {display_name(value)} collider")
+            for value in (
+                "Box", "Sphere", "Capsule", "Cylinder",
+                "Convex_Hull", "Triangle_Mesh", "Height_Field",
+                "Compound", "Plane",
+            )
+        )
     obj = getattr(context, "active_object", None)
     if obj is None:
         return ()
@@ -584,6 +624,41 @@ if bpy is not None:
             return {"FINISHED"}
 
 
+    class CENGINE_OT_preview_collider(bpy.types.Operator):
+        bl_idname = "cengine.preview_collider"
+        bl_label = "Toggle Collider Preview"
+        bl_options = {"REGISTER", "UNDO"}
+
+        def execute(self, context):
+            obj = context.active_object
+            if obj is None or entity_classname(obj) != "prop":
+                return {"CANCELLED"}
+            collision_name = str(
+                obj.get("ce_collision_object", "") or "")
+            preview = bpy.data.objects.get(collision_name) \
+                if collision_name else obj
+            if preview is None or preview.type != "MESH":
+                self.report({"ERROR"}, "Collision Object must name a mesh")
+                return {"CANCELLED"}
+            enabled = not bool(getattr(preview, "show_wire", False))
+            preview.show_wire = enabled
+            preview.show_all_edges = enabled
+            collider = str(obj.get("ce_collider", "Box")).lower()
+            if collider in {"box", "sphere", "capsule", "cylinder"}:
+                preview.show_bounds = enabled
+                preview.display_bounds_type = {
+                    "box": "BOX",
+                    "sphere": "SPHERE",
+                    "capsule": "CAPSULE",
+                    "cylinder": "CYLINDER",
+                }[collider]
+            self.report(
+                {"INFO"},
+                "Collider preview enabled" if enabled
+                else "Collider preview disabled")
+            return {"FINISHED"}
+
+
     class CENGINE_OT_preview_entity(bpy.types.Operator):
         bl_idname = "cengine.preview_entity"
         bl_label = "Preview in Blender"
@@ -816,6 +891,7 @@ if bpy is not None:
         CENGINE_OT_bake_lightmaps,
         CENGINE_OT_clear_lightmaps,
         CENGINE_OT_validate_asset,
+        CENGINE_OT_preview_collider,
         CENGINE_OT_preview_entity,
         CENGINE_PT_asset_workspace,
         CENGINE_PT_lightmaps,

@@ -5,6 +5,7 @@ import time
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Callable, Iterable
 
 from ceassetlib.assetfile import make_asset_desc, write_binary_asset
@@ -80,14 +81,6 @@ class MaterialFactors:
 class MaterialSurface:
     render_mode: int
     alpha_cutoff: float
-
-
-@dataclass(frozen=True)
-class DefaultMaterial:
-    name: str
-
-    def get(self, _key: str, default: object = None) -> object:
-        return default
 
 
 def elapsed(start: float) -> str:
@@ -372,7 +365,7 @@ def object_materials(objects: Iterable[object]) -> list[object]:
             default_name = default_material_name_for_object(obj)
             if default_name not in seen_default_names:
                 seen_default_names.add(default_name)
-                materials.append(DefaultMaterial(default_name))
+                materials.append(SimpleNamespace(name=default_name))
             continue
 
         for material in slot_materials:

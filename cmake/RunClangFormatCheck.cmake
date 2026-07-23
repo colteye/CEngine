@@ -1,8 +1,10 @@
 file(GLOB_RECURSE FORMAT_FILES
     "${SOURCE_DIR}/src/*.cpp"
     "${SOURCE_DIR}/samples/viewer/*.cpp"
+    "${SOURCE_DIR}/tests/*.cpp"
     "${SOURCE_DIR}/src/*.h"
     "${SOURCE_DIR}/samples/viewer/*.h"
+    "${SOURCE_DIR}/tests/*.h"
 )
 
 set(FAILED_FILES "")

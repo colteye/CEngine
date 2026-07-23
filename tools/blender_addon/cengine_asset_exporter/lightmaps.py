@@ -161,7 +161,9 @@ def _static_meshes(objects: Iterable[object]) -> list[object]:
     return sorted((obj for obj in objects
                    if getattr(obj, "type", "") == "MESH"
                    and object_role(obj) != "occluder"
-                   and not bool(getattr(obj, "get", lambda *_: False)("ce_dynamic", False))),
+                   and str(getattr(obj, "get", lambda *_: "None")(
+                       "ce_physics_motion", "None")).lower()
+                       not in {"dynamic", "kinematic"}),
                   key=lambda obj: obj.name)
 
 
@@ -457,7 +459,9 @@ def _bake_targets(objects: Iterable[object],
     for obj in sorted(objects, key=lambda value: str(getattr(value, "name", ""))):
         if (getattr(obj, "type", "") == "MESH" and
                 object_role(obj) != "occluder" and
-                not bool(getattr(obj, "get", lambda *_: False)("ce_dynamic", False))):
+                str(getattr(obj, "get", lambda *_: "None")(
+                    "ce_physics_motion", "None")).lower()
+                    not in {"dynamic", "kinematic"}):
             targets.append(BakeTarget(f"prop:{obj.name}", obj, obj.matrix_world, prop_name=obj.name))
             continue
         sources = prefab_objects.get(str(getattr(obj, "name", "")))
@@ -466,7 +470,9 @@ def _bake_targets(objects: Iterable[object],
         for object_index, source in enumerate(sorted(sources, key=lambda value: value.name)):
             if (getattr(source, "type", "") != "MESH" or
                     object_role(source) == "occluder" or
-                    bool(getattr(source, "get", lambda *_: False)("ce_dynamic", False))):
+                    str(getattr(source, "get", lambda *_: "None")(
+                        "ce_physics_motion", "None")).lower()
+                        in {"dynamic", "kinematic"}):
                 continue
             targets.append(BakeTarget(
                 f"prefab:{obj.name}:{object_index}:{source.name}", source,

@@ -3,19 +3,25 @@
 
 #include "input/action.h"
 
-namespace CEngine::Input { class InputSystem; }
+namespace CEngine::Input
+{
+class InputSystem;
+}
 
-namespace Viewer {
+namespace Viewer
+{
 
-struct Actions {
+struct Actions
+{
     CEngine::Input::ActionId move_forward;
     CEngine::Input::ActionId move_right;
     CEngine::Input::ActionId look_yaw;
     CEngine::Input::ActionId look_pitch;
     CEngine::Input::ActionId sprint;
+    CEngine::Input::ActionId jump;
 };
 
-Actions RegisterActions(CEngine::Input::InputSystem& input);
+Actions RegisterActions(CEngine::Input::InputSystem &input);
 
 } // namespace Viewer
 

@@ -11,49 +11,74 @@
 #include <unordered_map>
 #include <vector>
 
-namespace CEngine::Input {
+namespace CEngine::Input
+{
 
-class InputSystem {
-public:
-    explicit InputSystem(std::unique_ptr<IInputBackend> backend = {})
-        : backend_(std::move(backend)) {}
+class InputSystem
+{
+  public:
+    explicit InputSystem(std::unique_ptr<IInputBackend> backend = {}) : backend_(std::move(backend))
+    {
+    }
 
     void BeginFrame()
     {
-        if (backend_ != nullptr) backend_->BeginFrame();
+        if (backend_ != nullptr)
+        {
+            backend_->BeginFrame();
+        }
         std::fill(values_.begin(), values_.end(), 0.0f);
-        if (backend_ == nullptr) return;
-        for (const KeyBinding& binding : key_bindings_)
+        if (backend_ == nullptr)
+        {
+            return;
+        }
+        for (const KeyBinding &binding : key_bindings_)
+        {
             if (backend_->IsDown(binding.key))
+            {
                 values_[binding.action.index] += binding.scale;
+            }
+        }
         const glm::vec2 pointer_delta = backend_->PointerDelta();
-        for (const PointerBinding& binding : pointer_bindings_)
+        for (const PointerBinding &binding : pointer_bindings_)
+        {
             values_[binding.action.index] +=
-                (binding.axis == PointerAxis::X ? pointer_delta.x : pointer_delta.y) *
-                binding.scale;
+                (binding.axis == PointerAxis::X ? pointer_delta.x : pointer_delta.y) * binding.scale;
+        }
     }
-    bool IsDown(Key key) const
-    { return backend_ != nullptr && backend_->IsDown(key); }
-    glm::vec2 PointerDelta() const
-    { return backend_ != nullptr ? backend_->PointerDelta() : glm::vec2(0.0f); }
+    [[nodiscard]] bool IsDown(Key key) const
+    {
+        return backend_ != nullptr && backend_->IsDown(key);
+    }
+    [[nodiscard]] glm::vec2 PointerDelta() const
+    {
+        return backend_ != nullptr ? backend_->PointerDelta() : glm::vec2(0.0f);
+    }
     void SetPointerCaptured(bool captured)
-    { if (backend_ != nullptr) backend_->SetPointerCaptured(captured); }
+    {
+        if (backend_ != nullptr)
+        {
+            backend_->SetPointerCaptured(captured);
+        }
+    }
     ActionId RegisterAction(std::string name);
     bool BindKey(ActionId action, Key key, float scale = 1.0f);
     bool BindPointerAxis(ActionId action, PointerAxis axis, float scale = 1.0f);
     void Set(ActionId action, float value);
-    float Value(ActionId action) const;
+    [[nodiscard]] float Value(ActionId action) const;
 
-private:
-    struct KeyBinding {
+  private:
+    struct KeyBinding
+    {
         ActionId action;
         Key key;
-        float scale;
+        float scale{};
     };
-    struct PointerBinding {
+    struct PointerBinding
+    {
         ActionId action;
         PointerAxis axis;
-        float scale;
+        float scale{};
     };
 
     std::unique_ptr<IInputBackend> backend_;

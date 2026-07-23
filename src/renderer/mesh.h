@@ -1,43 +1,42 @@
 #ifndef MESH_H
 #define MESH_H
 
+#include <cstdint>
 #include <string>
 #include <vector>
-#include <unordered_map>
 
 #include <glm/glm.hpp>
-#include "renderer/material.h"
 
-namespace CEngine::Renderer {
-
-struct Bounds {
-	glm::vec3 min = glm::vec3(0.0f);
-	glm::vec3 max = glm::vec3(0.0f);
-	bool valid = false;
-};
-
-struct MeshData {
-	std::vector<glm::vec3> vertices;
-	std::vector<glm::vec2> uvs;
-	std::vector<glm::vec2> lightmap_uvs;
-	std::vector<glm::vec3> normals;
-	std::vector<glm::vec3> tangents;
-	bool has_lightmap_uv = false;
-	Bounds local_bounds;
-};
-
-class Mesh
+namespace CEngine::Renderer
 {
-public:
-	std::string mesh_name;
-	void AddMaterialMeshData(Material* material, MeshData mesh_data);
 
-	const std::unordered_map<Material*, MeshData>& GetMaterialMeshData() const { return material_mesh_data; };
-	const Bounds& GetLocalBounds() const { return local_bounds; };
+struct Bounds
+{
+    glm::vec3 min = glm::vec3(0.0f);
+    glm::vec3 max = glm::vec3(0.0f);
+    bool valid = false;
+};
 
-private:
-	std::unordered_map<Material*, MeshData> material_mesh_data;
-	Bounds local_bounds;
+struct MeshVertex
+{
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec3 normal = glm::vec3(0.0f, 0.0f, 1.0f);
+    glm::vec2 uv = glm::vec2(0.0f);
+    glm::vec2 lightmap_uv = glm::vec2(0.0f);
+    glm::vec3 tangent = glm::vec3(1.0f, 0.0f, 0.0f);
+};
+
+struct Mesh
+{
+    std::string name;
+    std::vector<MeshVertex> vertices;
+    std::vector<std::uint32_t> indices;
+    bool has_lightmap_uv = false;
+    Bounds local_bounds;
+    [[nodiscard]] bool Empty() const
+    {
+        return vertices.empty() || indices.empty();
+    }
 };
 
 } // namespace CEngine::Renderer

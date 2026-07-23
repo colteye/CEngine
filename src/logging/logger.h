@@ -5,11 +5,13 @@
 #include <mutex>
 #include <string_view>
 
-namespace CEngine::Logging {
+namespace CEngine::Logging
+{
 
-class Logger final {
-public:
-    static Logger& Get()
+class Logger final
+{
+  public:
+    static Logger &Get()
     {
         static Logger logger;
         return logger;
@@ -30,13 +32,12 @@ public:
         Write(std::cerr, "error", category, message);
     }
 
-private:
+  private:
     Logger() = default;
 
-    void Write(std::ostream& stream, std::string_view severity,
-        std::string_view category, std::string_view message)
+    void Write(std::ostream &stream, std::string_view severity, std::string_view category, std::string_view message)
     {
-        const std::lock_guard<std::mutex> lock(mutex_);
+        const std::scoped_lock lock(mutex_);
         stream << '[' << severity << "][" << category << "] " << message << '\n';
     }
 

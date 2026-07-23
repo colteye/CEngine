@@ -203,14 +203,14 @@ if(CENGINE_ENABLE_OPENGL)
 endif()
 
 set(CENGINE_ASSET_SOURCES
-    src/assets/asset_database.cpp
-    src/assets/asset_database_load.cpp
-    src/assets/asset_format.cpp
+    src/assets/asset_store.cpp
+    src/assets/asset_store_load.cpp
     src/assets/asset_io.cpp
     src/assets/casset_loader.cpp
     src/assets/cscene_reader.cpp
     src/assets/material_loader.cpp
     src/assets/mesh_loader.cpp
+    src/assets/physics_loader.cpp
     src/assets/skeleton_loader.cpp
     src/assets/texture_loader.cpp
 )
@@ -224,6 +224,7 @@ add_library(CEngineScene STATIC
     src/entity/entity.cpp
     src/entity/entity_factory.cpp
     src/entity/light_entity.cpp
+    src/entity/physics_constraint_entity.cpp
     src/entity/post_process_entity.cpp
     src/entity/prop_entity.cpp
     src/entity/skybox_entity.cpp
@@ -268,8 +269,7 @@ if(CENGINE_BUILD_TESTS)
     endif()
     add_test(NAME scene_entities COMMAND CEngineSceneTests)
     add_executable(CEngineAssetTests
-        src/renderer/mesh.cpp
-        src/renderer/renderable.cpp
+        src/renderer/mesh_instance.cpp
         tests/assets/asset_runtime_tests.cpp
     )
     target_link_libraries(CEngineAssetTests PRIVATE CEngineAssets)
@@ -283,14 +283,14 @@ if(CENGINE_BUILD_TESTS)
         target_compile_options(CEngineAssetTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME asset_runtime COMMAND CEngineAssetTests)
-    add_executable(CEngineAssetDatabaseTests tests/assets/asset_database_tests.cpp)
-    target_link_libraries(CEngineAssetDatabaseTests PRIVATE CEngineAssets)
+    add_executable(CEngineAssetStoreTests tests/assets/asset_store_tests.cpp)
+    target_link_libraries(CEngineAssetStoreTests PRIVATE CEngineAssets)
     if(MSVC)
-        target_compile_options(CEngineAssetDatabaseTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+        target_compile_options(CEngineAssetStoreTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
     else()
-        target_compile_options(CEngineAssetDatabaseTests PRIVATE -Wall -Wextra -Wpedantic)
+        target_compile_options(CEngineAssetStoreTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
-    add_test(NAME asset_database COMMAND CEngineAssetDatabaseTests)
+    add_test(NAME asset_store COMMAND CEngineAssetStoreTests)
     add_executable(CEngineCSceneReaderTests tests/assets/cscene_reader_tests.cpp)
     target_link_libraries(CEngineCSceneReaderTests PRIVATE CEngineAssets)
     if(MSVC)
@@ -335,15 +335,13 @@ set(CENGINE_CORE_SOURCES
     src/renderer/camera.cpp
     src/input/glfw/glfw_input_backend.cpp
     src/input/input_system.cpp
-    src/renderer/mesh.cpp
-    src/physics/physics_system.cpp
-    src/renderer/renderable.cpp
+    src/renderer/mesh_instance.cpp
     src/renderer/render_system.cpp
 )
 
 if(CENGINE_ENABLE_JOLT_PHYSICS)
     list(APPEND CENGINE_CORE_SOURCES
-        src/physics/jolt/jolt_physics_backend.cpp
+        src/physics/jolt/jolt_physics_system.cpp
     )
 endif()
 
@@ -425,7 +423,7 @@ if(MSVC)
         list(APPEND CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/glad/src/glad.c)
     endif()
     if(CENGINE_ENABLE_JOLT_PHYSICS)
-        set_source_files_properties(src/physics/jolt/jolt_physics_backend.cpp PROPERTIES COMPILE_OPTIONS /wd4003)
+        set_source_files_properties(src/physics/jolt/jolt_physics_system.cpp PROPERTIES COMPILE_OPTIONS /wd4003)
     endif()
     if(CENGINE_SILENCED_THIRD_PARTY_SOURCES)
         set_source_files_properties(${CENGINE_SILENCED_THIRD_PARTY_SOURCES} PROPERTIES COMPILE_OPTIONS /W0)
@@ -436,7 +434,7 @@ else()
         list(APPEND CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/glad/src/glad.c)
     endif()
     if(CENGINE_ENABLE_JOLT_PHYSICS)
-        set_source_files_properties(src/physics/jolt/jolt_physics_backend.cpp PROPERTIES COMPILE_OPTIONS -Wno-pedantic)
+        set_source_files_properties(src/physics/jolt/jolt_physics_system.cpp PROPERTIES COMPILE_OPTIONS -Wno-pedantic)
     endif()
     if(CENGINE_SILENCED_THIRD_PARTY_SOURCES)
         set_source_files_properties(${CENGINE_SILENCED_THIRD_PARTY_SOURCES} PROPERTIES COMPILE_OPTIONS -w)

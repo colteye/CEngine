@@ -10,10 +10,6 @@ sys.path.insert(0, str(ROOT))
 
 from ceassetlib.blender_scene import LightmapPlacement, object_transform, scene_description
 from ceassetlib.game_schema import GameSchema, SchemaEntity
-from ceassetlib.scene_export import (
-    LightEntity, Prop,
-    SkyboxEntity,
-)
 
 
 class FakeObject:
@@ -63,14 +59,17 @@ class BlenderSceneTests(unittest.TestCase):
             lambda path: path.as_posix(),
         )
 
-        self.assertEqual([type(entity.data) for entity in scene.entities], [
-            LightEntity, Prop, SchemaEntity,
-        ])
+        self.assertTrue(all(
+            isinstance(entity.data, SchemaEntity) for entity in scene.entities))
+        self.assertEqual(
+            [entity.data.classname for entity in scene.entities],
+            ["light", "prop", "player"])
         prop = scene.entities[1].data
-        self.assertEqual(prop.mesh.path, "compiled/Mesh.cmesh")
-        self.assertEqual(prop.materials[0].path, "compiled/Brick.cmat")
+        self.assertEqual(prop.values["mesh"].path, "compiled/Mesh.cmesh")
+        self.assertEqual(
+            prop.values["materials"][0].path, "compiled/Brick.cmat")
         light = scene.entities[0].data
-        self.assertTrue(light.casts_shadows)
+        self.assertTrue(light.values["casts_shadows"])
 
     def test_static_mesh_receives_external_lightmap_atlas_binding(self) -> None:
         obj = FakeObject("Floor", "MESH")
@@ -84,11 +83,12 @@ class BlenderSceneTests(unittest.TestCase):
         )
 
         prop = scene.entities[0].data
-        self.assertIsInstance(prop, Prop)
-        self.assertEqual(prop.lightmap.path, "compiled/lightmap_0.dds")
-        self.assertEqual(prop.lightmap_scale, (0.5, 0.5))
-        self.assertEqual(prop.lightmap_offset, (0.5, 0.0))
-        self.assertEqual(prop.lightmap_rgbm_range, 12.0)
+        self.assertIsInstance(prop, SchemaEntity)
+        self.assertEqual(
+            prop.values["lightmap"].path, "compiled/lightmap_0.dds")
+        self.assertEqual(prop.values["lightmap_scale"], (0.5, 0.5))
+        self.assertEqual(prop.values["lightmap_offset"], (0.5, 0.0))
+        self.assertEqual(prop.values["lightmap_rgbm_range"], 12.0)
 
     def test_scene_occluder_becomes_shadow_only_prop_without_lightmap(self) -> None:
         obj = FakeObject("OCC_SunBlocker", "MESH", props={"ce_role": "occluder"})
@@ -100,9 +100,9 @@ class BlenderSceneTests(unittest.TestCase):
         )
 
         prop = scene.entities[0].data
-        self.assertIsInstance(prop, Prop)
-        self.assertTrue(prop.shadow_only)
-        self.assertIsNone(prop.lightmap)
+        self.assertIsInstance(prop, SchemaEntity)
+        self.assertTrue(prop.values["shadow_only"])
+        self.assertIsNone(prop.values["lightmap"])
 
     def test_missing_generated_mesh_fails_with_object_name(self) -> None:
         with self.assertRaisesRegex(ValueError, "Missing"):
@@ -111,18 +111,77 @@ class BlenderSceneTests(unittest.TestCase):
     def test_explicit_gameplay_classnames_select_fixed_entity_types(self) -> None:
         objects = (
             FakeObject("Mover", "MESH", props={
-                "ce_classname": "prop", "ce_dynamic": True, "ce_collision": True}),
+                "ce_classname": "prop",
+                "ce_physics_motion": "Dynamic",
+                "ce_collider": "box"}),
         )
 
         scene = scene_description(
             objects,
             {"Mover": [(Path("Mover.cmesh"), "MoverMaterial")]},
             {"MoverMaterial": Path("Mover.cmat")},
-            lambda path: path.as_posix())
+            lambda path: path.as_posix(),
+            physics_outputs={"Mover": Path("Mover.cphys")})
 
-        self.assertIsInstance(scene.entities[0].data, Prop)
-        self.assertTrue(scene.entities[0].data.dynamic)
-        self.assertTrue(scene.entities[0].data.collision_enabled)
+        prop = scene.entities[0].data
+        self.assertIsInstance(prop, SchemaEntity)
+        self.assertEqual(prop.values["motion"], 2)
+        self.assertEqual(prop.values["collision"].path, "Mover.cphys")
+
+    def test_constraints_resolve_physics_props_and_export_last(self) -> None:
+        objects = (
+            FakeObject("Joint", "EMPTY", props={
+                "ce_classname": "physics_constraint",
+                "ce_first_entity": "BodyA",
+                "ce_second_entity": "BodyB",
+                "ce_type": "Hinge",
+                "ce_axis": (0.0, 0.0, 1.0),
+                "ce_normal": (1.0, 0.0, 0.0),
+            }),
+            FakeObject("BodyB", "MESH", props={
+                "ce_physics_motion": "Static"}),
+            FakeObject("BodyA", "MESH", props={
+                "ce_physics_motion": "Dynamic"}),
+        )
+        scene = scene_description(
+            objects,
+            {
+                "BodyA": [(Path("BodyA.cmesh"), "BodyA")],
+                "BodyB": [(Path("BodyB.cmesh"), "BodyB")],
+            },
+            {
+                "BodyA": Path("BodyA.cmat"),
+                "BodyB": Path("BodyB.cmat"),
+            },
+            lambda path: path.as_posix(),
+            physics_outputs={
+                "BodyA": Path("BodyA.cphys"),
+                "BodyB": Path("BodyB.cphys"),
+            })
+
+        self.assertEqual(
+            [entity.data.classname for entity in scene.entities],
+            ["prop", "prop", "physics_constraint"])
+        constraint = scene.entities[-1].data
+        self.assertEqual(constraint.values["first_entity"], 0)
+        self.assertEqual(constraint.values["second_entity"], 1)
+        self.assertEqual(constraint.values["type"], 2)
+
+    def test_constraint_rejects_non_physics_reference(self) -> None:
+        objects = (
+            FakeObject("Body", "MESH"),
+            FakeObject("Joint", "EMPTY", props={
+                "ce_classname": "physics_constraint",
+                "ce_first_entity": "Body",
+                "ce_second_entity": "Missing",
+            }),
+        )
+        with self.assertRaisesRegex(ValueError, "references no physics entity"):
+            scene_description(
+                objects,
+                {"Body": [(Path("Body.cmesh"), "Body")]},
+                {"Body": Path("Body.cmat")},
+                lambda path: path.as_posix())
 
     def test_player_uses_native_blender_camera_settings(self) -> None:
         camera = types.SimpleNamespace(
@@ -195,9 +254,10 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertIsInstance(post_process, SchemaEntity)
         self.assertEqual(post_process.values["exposure"], 1.25)
         self.assertEqual(post_process.values["ssao_radius"], 0.8)
-        self.assertIsInstance(sky, SkyboxEntity)
-        self.assertEqual(sky.panorama.path, "environments/test.dds")
-        self.assertEqual(sky.intensity, 1.5)
+        self.assertIsInstance(sky, SchemaEntity)
+        self.assertEqual(
+            sky.values["panorama"].path, "environments/test.dds")
+        self.assertEqual(sky.values["intensity"], 1.5)
 
 
 if __name__ == "__main__":

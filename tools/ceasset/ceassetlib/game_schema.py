@@ -72,6 +72,7 @@ def make_schema_entity(
 WIRE_FORMATS = {
     "f32": "f",
     "u32": "I",
+    "entity": "I",
     "bool": "I",
     "enum": "I",
     "vec2": "2f",

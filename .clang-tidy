@@ -12,7 +12,31 @@ Checks: >
   -cppcoreguidelines-pro-type-vararg,
   -modernize-use-trailing-return-type,
   -readability-function-cognitive-complexity,
-  -readability-magic-numbers
-HeaderFilterRegex: '(.*/)?CEngine/src/engine/.*'
-WarningsAsErrors: ''
+  -readability-identifier-length,
+  -readability-magic-numbers,
+  -readability-uppercase-literal-suffix
+HeaderFilterRegex: '(^|.*/)(src|samples/viewer|tests)/.*'
+ExcludeHeaderFilterRegex: '(^|.*/)(third_party|build)/.*'
+WarningsAsErrors: '*'
 FormatStyle: file
+CheckOptions:
+  readability-identifier-naming.NamespaceCase: CamelCase
+  readability-identifier-naming.ClassCase: CamelCase
+  readability-identifier-naming.StructCase: CamelCase
+  readability-identifier-naming.UnionCase: CamelCase
+  readability-identifier-naming.EnumCase: CamelCase
+  readability-identifier-naming.EnumConstantCase: CamelCase
+  readability-identifier-naming.TypeAliasCase: CamelCase
+  readability-identifier-naming.TypedefCase: CamelCase
+  readability-identifier-naming.TypeTemplateParameterCase: CamelCase
+  readability-identifier-naming.ValueTemplateParameterCase: CamelCase
+  readability-identifier-naming.FunctionCase: CamelCase
+  readability-identifier-naming.FunctionIgnoredRegexp: '^(main)$'
+  readability-identifier-naming.VariableCase: lower_case
+  readability-identifier-naming.MemberCase: lower_case
+  readability-identifier-naming.PrivateMemberSuffix: '_'
+  readability-identifier-naming.ProtectedMemberSuffix: '_'
+  readability-identifier-naming.GlobalConstantCase: CamelCase
+  readability-identifier-naming.StaticConstantCase: CamelCase
+  readability-identifier-naming.ConstexprVariableCase: CamelCase
+  readability-identifier-naming.MacroDefinitionCase: UPPER_CASE

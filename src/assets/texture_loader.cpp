@@ -11,15 +11,15 @@
 #include <utility>
 #include <vector>
 
-namespace CEngine::Assets {
-namespace {
+namespace CEngine::Assets
+{
+namespace
+{
 
 constexpr std::uint32_t MakeFourCc(char a, char b, char c, char d)
 {
-    return static_cast<std::uint32_t>(a) |
-        (static_cast<std::uint32_t>(b) << 8u) |
-        (static_cast<std::uint32_t>(c) << 16u) |
-        (static_cast<std::uint32_t>(d) << 24u);
+    return static_cast<std::uint32_t>(a) | (static_cast<std::uint32_t>(b) << 8u) |
+           (static_cast<std::uint32_t>(c) << 16u) | (static_cast<std::uint32_t>(d) << 24u);
 }
 
 constexpr std::uint32_t DdsMagic = MakeFourCc('D', 'D', 'S', ' ');
@@ -29,48 +29,61 @@ constexpr std::uint32_t Dxt5 = MakeFourCc('D', 'X', 'T', '5');
 constexpr std::uint32_t Rgbe = MakeFourCc('R', 'G', 'B', 'E');
 constexpr std::size_t DdsHeaderSize = 128;
 
-bool ReadU32At(ByteView bytes, std::size_t offset, std::uint32_t& value)
+bool ReadU32At(ByteView bytes, std::size_t offset, std::uint32_t &value)
 {
     return ReadU32LE(bytes, offset, value);
 }
 
-void ReverseBytes(std::uint8_t* bytes, std::uint32_t count)
-{
-    for (std::uint32_t first = 0, last = count - 1; first < last; ++first, --last)
-        std::swap(bytes[first], bytes[last]);
-}
-
-void ReversePairs(std::uint8_t* bytes, std::uint32_t count)
+void ReverseBytes(std::uint8_t *bytes, std::uint32_t count)
 {
     for (std::uint32_t first = 0, last = count - 1; first < last; ++first, --last)
     {
-        std::swap(bytes[first * 2], bytes[last * 2]);
-        std::swap(bytes[first * 2 + 1], bytes[last * 2 + 1]);
+        std::swap(bytes[first], bytes[last]);
     }
 }
 
-void FlipDxt5Alpha(std::uint8_t* block, std::uint32_t row_count)
+void ReversePairs(std::uint8_t *bytes, std::uint32_t count)
+{
+    for (std::uint32_t first = 0, last = count - 1; first < last; ++first, --last)
+    {
+        std::swap(bytes[static_cast<size_t>(first * 2)], bytes[static_cast<size_t>(last * 2)]);
+        std::swap(bytes[(first * 2) + 1], bytes[(last * 2) + 1]);
+    }
+}
+
+void FlipDxt5Alpha(std::uint8_t *block, std::uint32_t row_count)
 {
     std::array<std::uint8_t, 16> indices{};
     std::uint64_t packed = 0;
     for (std::uint32_t byte = 0; byte < 6; ++byte)
+    {
         packed |= static_cast<std::uint64_t>(block[2 + byte]) << (byte * 8u);
+    }
     for (std::uint32_t index = 0; index < indices.size(); ++index)
+    {
         indices[index] = static_cast<std::uint8_t>((packed >> (index * 3u)) & 7u);
+    }
 
     for (std::uint32_t first = 0, last = row_count - 1; first < last; ++first, --last)
+    {
         for (std::uint32_t column = 0; column < 4; ++column)
-            std::swap(indices[first * 4 + column], indices[last * 4 + column]);
+        {
+            std::swap(indices[(first * 4) + column], indices[(last * 4) + column]);
+        }
+    }
 
     packed = 0;
     for (std::uint32_t index = 0; index < indices.size(); ++index)
+    {
         packed |= static_cast<std::uint64_t>(indices[index]) << (index * 3u);
+    }
     for (std::uint32_t byte = 0; byte < 6; ++byte)
+    {
         block[2 + byte] = static_cast<std::uint8_t>(packed >> (byte * 8u));
+    }
 }
 
-void FlipBlock(std::uint8_t* block, Renderer::TextureFormat format,
-    std::uint32_t row_count)
+void FlipBlock(std::uint8_t *block, Renderer::TextureFormat format, std::uint32_t row_count)
 {
     if (format == Renderer::TextureFormat::Dxt1)
     {
@@ -79,39 +92,43 @@ void FlipBlock(std::uint8_t* block, Renderer::TextureFormat format,
     }
 
     if (format == Renderer::TextureFormat::Dxt3)
+    {
         ReversePairs(block, row_count);
+    }
     else
+    {
         FlipDxt5Alpha(block, row_count);
+    }
     ReverseBytes(block + 12, row_count);
 }
 
-bool FlipDxt(Renderer::TextureMip& mip, Renderer::TextureFormat format)
+bool FlipDxt(Renderer::TextureMip &mip, Renderer::TextureFormat format)
 {
     if (mip.height > 4 && mip.height % 4 != 0)
+    {
         return AssetError("vertically flipped DDS height must be a multiple of four");
+    }
 
-    const std::uint32_t block_size =
-        format == Renderer::TextureFormat::Dxt1 ? 8u : 16u;
+    const std::uint32_t block_size = format == Renderer::TextureFormat::Dxt1 ? 8u : 16u;
     const std::uint32_t blocks_wide = (mip.width + 3u) / 4u;
     const std::uint32_t blocks_high = (mip.height + 3u) / 4u;
-    const std::size_t row_size =
-        static_cast<std::size_t>(blocks_wide) * block_size;
+    const std::size_t row_size = static_cast<std::size_t>(blocks_wide) * block_size;
 
     for (std::uint32_t block_y = 0; block_y < blocks_high; ++block_y)
     {
-        const std::uint32_t rows =
-            std::min(4u, mip.height - block_y * 4u);
+        const std::uint32_t rows = std::min(4u, mip.height - (block_y * 4u));
         for (std::uint32_t block_x = 0; block_x < blocks_wide; ++block_x)
-            FlipBlock(mip.data.data() + block_y * row_size +
-                static_cast<std::size_t>(block_x) * block_size, format, rows);
+        {
+            FlipBlock(mip.data.data() + (block_y * row_size) + (static_cast<std::size_t>(block_x) * block_size), format,
+                      rows);
+        }
     }
 
     std::vector<std::uint8_t> row(row_size);
-    for (std::uint32_t top = 0, bottom = blocks_high - 1;
-         top < bottom; ++top, --bottom)
+    for (std::uint32_t top = 0, bottom = blocks_high - 1; top < bottom; ++top, --bottom)
     {
-        std::uint8_t* top_data = mip.data.data() + top * row_size;
-        std::uint8_t* bottom_data = mip.data.data() + bottom * row_size;
+        std::uint8_t *top_data = mip.data.data() + (top * row_size);
+        std::uint8_t *bottom_data = mip.data.data() + (bottom * row_size);
         std::copy_n(top_data, row_size, row.data());
         std::copy_n(bottom_data, row_size, top_data);
         std::copy_n(row.data(), row_size, bottom_data);
@@ -119,15 +136,14 @@ bool FlipDxt(Renderer::TextureMip& mip, Renderer::TextureFormat format)
     return true;
 }
 
-void FlipRgbe(Renderer::TextureMip& mip)
+void FlipRgbe(Renderer::TextureMip &mip)
 {
     const std::size_t row_size = static_cast<std::size_t>(mip.width) * 4u;
     std::vector<std::uint8_t> row(row_size);
-    for (std::uint32_t top = 0, bottom = mip.height - 1;
-         top < bottom; ++top, --bottom)
+    for (std::uint32_t top = 0, bottom = mip.height - 1; top < bottom; ++top, --bottom)
     {
-        std::uint8_t* top_data = mip.data.data() + top * row_size;
-        std::uint8_t* bottom_data = mip.data.data() + bottom * row_size;
+        std::uint8_t *top_data = mip.data.data() + (top * row_size);
+        std::uint8_t *bottom_data = mip.data.data() + (bottom * row_size);
         std::copy_n(top_data, row_size, row.data());
         std::copy_n(bottom_data, row_size, top_data);
         std::copy_n(row.data(), row_size, bottom_data);
@@ -136,24 +152,28 @@ void FlipRgbe(Renderer::TextureMip& mip)
 
 } // namespace
 
-bool LoadTextureAsset(const std::filesystem::path& path,
-    Renderer::Texture& texture, bool flip_vertical)
+bool LoadTextureAsset(const std::filesystem::path &path, Renderer::Texture &texture, bool flip_vertical)
 {
     std::vector<std::uint8_t> bytes;
-    if (!LoadFileBytes(path, bytes)) return false;
+    if (!LoadFileBytes(path, bytes))
+    {
+        return false;
+    }
     if (bytes.size() < DdsHeaderSize)
+    {
         return AssetError("texture is smaller than a DDS header");
+    }
 
     const ByteView view{bytes.data(), bytes.size()};
     std::size_t offset = 0;
     std::uint32_t magic = 0;
     std::uint32_t header_size = 0;
     std::uint32_t pixel_header_size = 0;
-    if (!ReadU32LE(view, offset, magic) ||
-        !ReadU32LE(view, offset, header_size) ||
-        !ReadU32At(view, 76, pixel_header_size) ||
-        magic != DdsMagic || header_size != 124 || pixel_header_size != 32)
+    if (!ReadU32LE(view, offset, magic) || !ReadU32LE(view, offset, header_size) ||
+        !ReadU32At(view, 76, pixel_header_size) || magic != DdsMagic || header_size != 124 || pixel_header_size != 32)
+    {
         return AssetError("DDS header signature or size is invalid");
+    }
 
     std::uint32_t height = 0;
     std::uint32_t width = 0;
@@ -161,24 +181,26 @@ bool LoadTextureAsset(const std::filesystem::path& path,
     std::uint32_t declared_mips = 0;
     std::uint32_t four_cc = 0;
     std::uint32_t caps2 = 0;
-    if (!ReadU32At(view, 12, height) ||
-        !ReadU32At(view, 16, width) ||
-        !ReadU32At(view, 24, depth) ||
-        !ReadU32At(view, 28, declared_mips) ||
-        !ReadU32At(view, 84, four_cc) ||
-        !ReadU32At(view, 112, caps2))
+    if (!ReadU32At(view, 12, height) || !ReadU32At(view, 16, width) || !ReadU32At(view, 24, depth) ||
+        !ReadU32At(view, 28, declared_mips) || !ReadU32At(view, 84, four_cc) || !ReadU32At(view, 112, caps2))
+    {
         return AssetError("DDS header is truncated");
-    if (width == 0 || height == 0 || width > 16384 || height > 16384 ||
-        depth > 1 || caps2 != 0)
+    }
+    if (width == 0 || height == 0 || width > 16384 || height > 16384 || depth > 1 || caps2 != 0)
+    {
         return AssetError("only bounded 2D DDS textures are supported");
+    }
 
     std::uint32_t max_mips = 1;
-    for (std::uint32_t dimension = std::max(width, height);
-         dimension > 1; dimension >>= 1u)
+    for (std::uint32_t dimension = std::max(width, height); dimension > 1; dimension >>= 1u)
+    {
         ++max_mips;
+    }
     const std::uint32_t mip_count = declared_mips == 0 ? 1 : declared_mips;
     if (mip_count > max_mips)
+    {
         return AssetError("DDS mip count exceeds its complete mip chain");
+    }
 
     Renderer::Texture loaded;
     std::uint32_t block_size = 0;
@@ -198,10 +220,13 @@ bool LoadTextureAsset(const std::filesystem::path& path,
         block_size = 16;
     }
     else if (four_cc == Rgbe && mip_count == 1)
+    {
         loaded.format = Renderer::TextureFormat::Rgbe8;
+    }
     else
-        return AssetError(
-            "only DXT1, DXT3, DXT5, and single-level RGBExp32 DDS textures are supported");
+    {
+        return AssetError("only DXT1, DXT3, DXT5, and single-level RGBExp32 DDS textures are supported");
+    }
 
     std::size_t payload_offset = DdsHeaderSize;
     std::uint32_t mip_width = width;
@@ -209,25 +234,30 @@ bool LoadTextureAsset(const std::filesystem::path& path,
     loaded.mips.reserve(mip_count);
     for (std::uint32_t mip_index = 0; mip_index < mip_count; ++mip_index)
     {
-        const std::uint64_t data_size = block_size == 0
-            ? static_cast<std::uint64_t>(mip_width) * mip_height * 4u
-            : static_cast<std::uint64_t>((mip_width + 3u) / 4u) *
-                ((mip_height + 3u) / 4u) * block_size;
+        const std::uint64_t data_size =
+            block_size == 0 ? static_cast<std::uint64_t>(mip_width) * mip_height * 4u
+                            : static_cast<std::uint64_t>((mip_width + 3u) / 4u) * ((mip_height + 3u) / 4u) * block_size;
         if (data_size > bytes.size() - std::min(payload_offset, bytes.size()))
+        {
             return AssetError("DDS payload is truncated");
+        }
 
         Renderer::TextureMip mip;
         mip.width = mip_width;
         mip.height = mip_height;
         mip.data.assign(bytes.begin() + static_cast<std::ptrdiff_t>(payload_offset),
-            bytes.begin() + static_cast<std::ptrdiff_t>(
-                payload_offset + static_cast<std::size_t>(data_size)));
+                        bytes.begin() +
+                            static_cast<std::ptrdiff_t>(payload_offset + static_cast<std::size_t>(data_size)));
         if (flip_vertical)
         {
             if (loaded.format == Renderer::TextureFormat::Rgbe8)
+            {
                 FlipRgbe(mip);
+            }
             else if (!FlipDxt(mip, loaded.format))
+            {
                 return false;
+            }
         }
         loaded.mips.push_back(std::move(mip));
         payload_offset += static_cast<std::size_t>(data_size);

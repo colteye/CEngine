@@ -273,8 +273,12 @@ class BlenderMeshesTests(unittest.TestCase):
     def test_mesh_buffers_triangulates_quads(self) -> None:
         buffers = mesh_buffers(FakeMesh([FakePolygon([0, 1, 3, 2])], include_quad_vertex=True))
 
-        self.assertEqual(buffers.vertex_count, 6)
+        self.assertEqual(buffers.vertex_count, 4)
         self.assertEqual(buffers.index_count, 6)
+        self.assertEqual(
+            struct.unpack_from(
+                "<6I", buffers.data, buffers.vertex_count * VERTEX.size),
+            (0, 1, 2, 0, 2, 3))
         self.assertEqual(buffers.bounds_min, (0.0, -1.0, 0.0))
         self.assertEqual(buffers.bounds_max, (2.0, -0.0, 0.0))
 

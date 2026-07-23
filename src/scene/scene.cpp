@@ -1,41 +1,55 @@
 #include "scene/scene.h"
 
-#include "assets/asset_database.h"
 #include "engine_context.h"
 #include "physics/physics_system.h"
 
 #include <algorithm>
 #include <stdexcept>
 
-namespace CEngine::Scene {
+namespace CEngine::Scene
+{
 
 Scene::~Scene()
 {
     Stop();
-    if (asset_database_ != nullptr)
-        for (Assets::AssetHandle handle : asset_references_) asset_database_->Release(handle);
 }
 
-void Scene::Activate(EngineContext& context)
+void Scene::Activate(EngineContext &context)
 {
-    if (active_) return;
+    if (active_)
+    {
+        return;
+    }
     context.scene = this;
-    active_context_ = &context;
+    active_context_ = context;
     try
     {
         started_entities_.clear();
         started_entities_.reserve(live_count_);
-        for (const auto& entity : entities_)
+        for (const auto &entity : entities_)
         {
-            if (entity == nullptr) continue;
+            if (entity == nullptr)
+            {
+                continue;
+            }
             entity->Initialize(context);
             started_entities_.push_back(entity.get());
         }
         active_ = true;
-        for (const auto& entity : entities_)
-            if (entity != nullptr && entity->Enabled()) entity->Update(context, 0.0f);
-        for (const auto& entity : entities_)
-            if (entity != nullptr && entity->Enabled()) entity->LateUpdate(context, 0.0f);
+        for (const auto &entity : entities_)
+        {
+            if (entity != nullptr && entity->Enabled())
+            {
+                entity->Update(context, 0.0f);
+            }
+        }
+        for (const auto &entity : entities_)
+        {
+            if (entity != nullptr && entity->Enabled())
+            {
+                entity->LateUpdate(context, 0.0f);
+            }
+        }
     }
     catch (...)
     {
@@ -45,27 +59,51 @@ void Scene::Activate(EngineContext& context)
     }
 }
 
-void Scene::Update(EngineContext& context, float delta_seconds)
+void Scene::Update(EngineContext &context, float delta_seconds)
 {
-    if (!active_) return;
-    for (const auto& entity : entities_)
-        if (entity != nullptr && entity->Enabled()) entity->Update(context, delta_seconds);
-    if (context.physics != nullptr) context.physics->Step(delta_seconds);
-    for (const auto& entity : entities_)
-        if (entity != nullptr && entity->Enabled()) entity->LateUpdate(context, delta_seconds);
+    if (!active_)
+    {
+        return;
+    }
+    for (const auto &entity : entities_)
+    {
+        if (entity != nullptr && entity->Enabled())
+        {
+            entity->Update(context, delta_seconds);
+        }
+    }
+    if (context.physics != nullptr)
+    {
+        context.physics->Step(delta_seconds);
+    }
+    for (const auto &entity : entities_)
+    {
+        if (entity != nullptr && entity->Enabled())
+        {
+            entity->LateUpdate(context, delta_seconds);
+        }
+    }
 }
 
 void Scene::Stop() noexcept
 {
-    if (!active_) return;
+    if (!active_)
+    {
+        return;
+    }
     for (auto entity = started_entities_.rbegin(); entity != started_entities_.rend(); ++entity)
     {
-        try { (*entity)->Shutdown(*active_context_); }
-        catch (...) {}
+        try
+        {
+            (*entity)->Shutdown(active_context_);
+        }
+        catch (...)
+        {
+        }
     }
     started_entities_.clear();
     active_ = false;
-    active_context_ = nullptr;
+    active_context_ = {};
 }
 
 void Scene::Reserve(std::size_t entity_count)
@@ -77,16 +115,23 @@ void Scene::Reserve(std::size_t entity_count)
 void Scene::AddConnection(EntityConnection connection)
 {
     if (!IsAlive(connection.source) || !IsAlive(connection.target))
+    {
         throw std::invalid_argument("connection references an invalid entity");
+    }
     if (connection.event.empty() || connection.action.empty() || connection.delay_seconds < 0.0f)
+    {
         throw std::invalid_argument("connection is invalid");
+    }
     connections_.push_back(std::move(connection));
 }
 
-Entity& Scene::AddEntity(std::unique_ptr<Entity> entity, std::string_view name)
+Entity &Scene::AddEntity(std::unique_ptr<Entity> entity, std::string_view name)
 {
-    if (entity == nullptr) throw std::invalid_argument("entity must not be null");
-    std::uint32_t index;
+    if (entity == nullptr)
+    {
+        throw std::invalid_argument("entity must not be null");
+    }
+    std::uint32_t index = 0;
     if (free_slots_.empty())
     {
         index = static_cast<std::uint32_t>(entities_.size());
@@ -100,7 +145,7 @@ Entity& Scene::AddEntity(std::unique_ptr<Entity> entity, std::string_view name)
     }
     entity->id_ = {index, generations_[index]};
     entity->name_.assign(name);
-    Entity& result = *entity;
+    Entity &result = *entity;
     entities_[index] = std::move(entity);
     ++live_count_;
     return result;
@@ -108,21 +153,31 @@ Entity& Scene::AddEntity(std::unique_ptr<Entity> entity, std::string_view name)
 
 bool Scene::DestroyEntity(EntityId entity)
 {
-    if (!IsAlive(entity)) return false;
+    if (!IsAlive(entity))
+    {
+        return false;
+    }
     if (active_)
     {
-        if (active_context_ != nullptr)
-            entities_[entity.index]->Shutdown(*active_context_);
-        const auto started = std::find(started_entities_.begin(), started_entities_.end(), entities_[entity.index].get());
-        if (started != started_entities_.end()) started_entities_.erase(started);
+        entities_[entity.index]->Shutdown(active_context_);
+        const auto started =
+            std::find(started_entities_.begin(), started_entities_.end(), entities_[entity.index].get());
+        if (started != started_entities_.end())
+        {
+            started_entities_.erase(started);
+        }
     }
     connections_.erase(std::remove_if(connections_.begin(), connections_.end(),
-        [entity](const EntityConnection& connection) {
-            return connection.source == entity || connection.target == entity;
-        }), connections_.end());
+                                      [entity](const EntityConnection &connection) {
+                                          return connection.source == entity || connection.target == entity;
+                                      }),
+                       connections_.end());
     entities_[entity.index].reset();
     ++generations_[entity.index];
-    if (generations_[entity.index] == 0) ++generations_[entity.index];
+    if (generations_[entity.index] == 0)
+    {
+        ++generations_[entity.index];
+    }
     free_slots_.push_back(entity.index);
     --live_count_;
     return true;
@@ -131,46 +186,36 @@ bool Scene::DestroyEntity(EntityId entity)
 bool Scene::IsAlive(EntityId entity) const
 {
     return entity.index < entities_.size() && entities_[entity.index] != nullptr &&
-        generations_[entity.index] == entity.generation;
+           generations_[entity.index] == entity.generation;
 }
 
-Entity* Scene::GetEntity(EntityId entity)
-{ return IsAlive(entity) ? entities_[entity.index].get() : nullptr; }
-const Entity* Scene::GetEntity(EntityId entity) const
-{ return IsAlive(entity) ? entities_[entity.index].get() : nullptr; }
-
-void Scene::AdoptAssetReferences(Assets::AssetDatabase& database,
-    std::vector<Assets::AssetHandle> handles)
+Entity *Scene::GetEntity(EntityId entity)
 {
-    asset_database_ = &database;
-    asset_references_ = std::move(handles);
+    return IsAlive(entity) ? entities_[entity.index].get() : nullptr;
 }
-
-void Scene::AppendAssetReference(Assets::AssetHandle handle)
+const Entity *Scene::GetEntity(EntityId entity) const
 {
-    if (asset_database_ == nullptr || !handle)
-        throw std::invalid_argument("scene asset reference is invalid");
-    asset_references_.push_back(handle);
+    return IsAlive(entity) ? entities_[entity.index].get() : nullptr;
 }
 
-Assets::AssetHandle Scene::AssetReference(std::uint32_t index) const
-{ return index < asset_references_.size() ? asset_references_[index] : Assets::AssetHandle{}; }
-
-Assets::AssetType Scene::ReferencedAssetType(std::uint32_t index) const
+void Scene::SetAssetReferences(std::vector<Assets::AssetReference> references)
 {
-    return asset_database_ != nullptr && index < asset_references_.size() ?
-        asset_database_->Type(asset_references_[index]) : Assets::AssetType::Unknown;
+    asset_references_ = std::move(references);
 }
 
-void Scene::AppendAuxiliaryAsset(Assets::AssetHandle asset)
+const Assets::AssetReference *Scene::AssetReference(std::uint32_t index) const
+{
+    return index < asset_references_.size() ? &asset_references_[index] : nullptr;
+}
+
+void Scene::AppendAuxiliaryAsset(const Assets::AssetReference &asset)
 {
     auxiliary_assets_.push_back(asset);
 }
 
-Assets::AssetHandle Scene::AuxiliaryAsset(std::uint32_t index) const
+const Assets::AssetReference *Scene::AuxiliaryAsset(std::uint32_t index) const
 {
-    return index < auxiliary_assets_.size() ?
-        auxiliary_assets_[index] : Assets::AssetHandle{};
+    return index < auxiliary_assets_.size() ? &auxiliary_assets_[index] : nullptr;
 }
 
 } // namespace CEngine::Scene

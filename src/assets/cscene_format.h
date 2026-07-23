@@ -7,7 +7,8 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace CEngine::Assets::CSceneFormat {
+namespace CEngine::Assets::CSceneFormat
+{
 
 constexpr std::array<char, 4> SceneMagic = {'C', 'S', 'C', 'N'};
 constexpr std::uint16_t SceneContainerVersion = 4;
@@ -15,16 +16,12 @@ constexpr std::uint16_t SceneEntityClassVersion = 1;
 constexpr std::uint32_t InvalidEntityIndex = 0xffffffffu;
 constexpr std::uint32_t InvalidAssetIndex = 0xffffffffu;
 
-enum EntityFlags : std::uint32_t {
-    EntityEnabled = 1u << 0u,
-};
-
-enum EntityClassBlockFlags : std::uint32_t {
-    EntityClassBlockRequired = 1u << 0u,
-};
+inline constexpr std::uint32_t EntityEnabled = 1u << 0u;
+inline constexpr std::uint32_t EntityClassBlockRequired = 1u << 0u;
 
 #pragma pack(push, 1)
-struct DiskSceneHeader {
+struct DiskSceneHeader
+{
     std::array<char, 4> magic = SceneMagic;
     std::uint16_t version = SceneContainerVersion;
     std::uint16_t header_size = 0;
@@ -45,7 +42,8 @@ struct DiskSceneHeader {
     std::uint64_t string_table_size = 0;
 };
 
-struct DiskSceneSettings {
+struct DiskSceneSettings
+{
     float ambient_color[3] = {};
     float exposure = 1.0f;
     float gravity[3] = {0.0f, 0.0f, -9.81f};
@@ -53,7 +51,8 @@ struct DiskSceneSettings {
     std::uint32_t reserved[4] = {};
 };
 
-struct DiskAssetReference {
+struct DiskAssetReference
+{
     Guid guid = {};
     std::uint32_t type = 0;
     std::uint32_t flags = 0;
@@ -61,7 +60,8 @@ struct DiskAssetReference {
     std::uint32_t path_size = 0;
 };
 
-struct DiskSceneEntity {
+struct DiskSceneEntity
+{
     std::uint32_t classname_offset = 0;
     std::uint32_t classname_size = 0;
     std::uint32_t name_offset = 0;
@@ -69,7 +69,8 @@ struct DiskSceneEntity {
     std::uint32_t flags = EntityEnabled;
 };
 
-struct DiskEntityClassBlock {
+struct DiskEntityClassBlock
+{
     std::uint32_t classname_offset = 0;
     std::uint32_t classname_size = 0;
     std::uint16_t version = SceneEntityClassVersion;
@@ -82,7 +83,8 @@ struct DiskEntityClassBlock {
     std::uint64_t auxiliary_size = 0;
 };
 
-struct DiskEntityConnection {
+struct DiskEntityConnection
+{
     std::uint32_t source_entity = InvalidEntityIndex;
     std::uint32_t target_entity = InvalidEntityIndex;
     std::uint32_t event_offset = 0;
@@ -92,7 +94,8 @@ struct DiskEntityConnection {
     float delay_seconds = 0.0f;
 };
 
-struct DiskTransform {
+struct DiskTransform
+{
     float position[3] = {};
     float rotation[4] = {0.0f, 0.0f, 0.0f, 1.0f};
     float scale[3] = {1.0f, 1.0f, 1.0f};

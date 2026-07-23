@@ -1,71 +1,195 @@
 #ifndef PHYSICS_TYPES_H
 #define PHYSICS_TYPES_H
 
-#include <cstdint>
-#include <limits>
+#include "foundation/slot_handle.h"
 
+#include <cstdint>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <vector>
 
-struct PhysicsBodyHandle
-{
-	std::uint32_t index = std::numeric_limits<std::uint32_t>::max();
-	std::uint32_t generation = 0;
-
-	constexpr explicit operator bool() const
-	{
-		return index != std::numeric_limits<std::uint32_t>::max();
-	}
-};
-
-constexpr bool operator==(PhysicsBodyHandle left, PhysicsBodyHandle right)
-{
-	return left.index == right.index && left.generation == right.generation;
-}
-
-constexpr bool operator!=(PhysicsBodyHandle left, PhysicsBodyHandle right)
-{
-	return !(left == right);
-}
-
-constexpr PhysicsBodyHandle kInvalidPhysicsBodyHandle;
+struct PhysicsBodySlotTag;
+using PhysicsBodyHandle = CEngine::SlotHandle<PhysicsBodySlotTag>;
+struct PhysicsConstraintSlotTag;
+using PhysicsConstraintHandle = CEngine::SlotHandle<PhysicsConstraintSlotTag>;
+struct PhysicsCharacterSlotTag;
+using PhysicsCharacterHandle = CEngine::SlotHandle<PhysicsCharacterSlotTag>;
 
 enum class PhysicsMotionType
 {
-	Static,
-	Dynamic,
-	Kinematic
+    Static,
+    Dynamic,
+    Kinematic
 };
 
 enum class PhysicsShapeType
 {
-	Box,
-	Sphere
+    Box,
+    Sphere,
+    Capsule,
+    Cylinder,
+    ConvexHull,
+    TriangleMesh,
+    HeightField,
+    Compound,
+    Plane
+};
+
+// Engine-neutral collision geometry. The same value is produced by the asset
+// loader and consumed by PhysicsSystem; no Jolt object crosses this boundary.
+struct PhysicsShape
+{
+    PhysicsShapeType type = PhysicsShapeType::Box;
+    glm::vec3 local_position = glm::vec3(0.0f);
+    glm::quat local_rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+    glm::vec3 half_extents = glm::vec3(0.5f);
+    float radius = 0.5f;
+    float half_height = 0.5f;
+    std::vector<glm::vec3> vertices;
+    std::vector<std::uint32_t> indices;
+    std::vector<float> heights;
+    std::uint32_t samples_per_side = 0;
+    glm::vec3 height_field_offset = glm::vec3(0.0f);
+    glm::vec3 height_field_scale = glm::vec3(1.0f);
+    std::vector<PhysicsShape> children;
+};
+
+enum : std::uint8_t
+{
+    PhysicsLockTranslationX = 1u << 0u,
+    PhysicsLockTranslationY = 1u << 1u,
+    PhysicsLockTranslationZ = 1u << 2u,
+    PhysicsLockRotationX = 1u << 3u,
+    PhysicsLockRotationY = 1u << 4u,
+    PhysicsLockRotationZ = 1u << 5u,
 };
 
 struct PhysicsSystemDesc
 {
-	glm::vec3 gravity = glm::vec3(0.0f, 0.0f, -9.81f);
-	float fixed_time_step = 1.0f / 60.0f;
-	uint32_t max_sub_steps = 4;
-	uint32_t max_bodies = 65536;
-	uint32_t max_body_pairs = 65536;
-	uint32_t max_contact_constraints = 10240;
+    glm::vec3 gravity = glm::vec3(0.0f, 0.0f, -9.81f);
+    uint32_t max_bodies = 65536;
+    uint32_t max_body_pairs = 65536;
+    uint32_t max_contact_constraints = 10240;
+    uint32_t max_contact_events = 4096;
 };
 
 struct PhysicsBodyDesc
 {
-	PhysicsMotionType motion_type = PhysicsMotionType::Static;
-	PhysicsShapeType shape_type = PhysicsShapeType::Box;
-	glm::vec3 position = glm::vec3(0.0f);
-	glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-	glm::vec3 box_half_extents = glm::vec3(0.5f);
-	float sphere_radius = 0.5f;
-	float mass = 1.0f;
-	float friction = 0.6f;
-	float restitution = 0.05f;
-	glm::vec3 linear_velocity = glm::vec3(0.0f);
-	glm::vec3 angular_velocity = glm::vec3(0.0f);
+    PhysicsMotionType motion_type = PhysicsMotionType::Static;
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+    float mass = 1.0f;
+    float friction = 0.6f;
+    float restitution = 0.05f;
+    glm::vec3 linear_velocity = glm::vec3(0.0f);
+    glm::vec3 angular_velocity = glm::vec3(0.0f);
+    float linear_damping = 0.05f;
+    float angular_damping = 0.05f;
+    float gravity_factor = 1.0f;
+    std::uint8_t locked_axes = 0;
+    std::uint8_t collision_layer = 0;
+    bool sensor = false;
+    bool continuous = false;
+    bool allow_sleeping = true;
+};
+
+struct PhysicsBodyState
+{
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+    glm::vec3 linear_velocity = glm::vec3(0.0f);
+    glm::vec3 angular_velocity = glm::vec3(0.0f);
+    bool active = false;
+};
+
+struct PhysicsQueryHit
+{
+    PhysicsBodyHandle body;
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec3 normal = glm::vec3(0.0f);
+    float fraction = 0.0f;
+    std::uint32_t sub_shape = 0;
+};
+
+enum class PhysicsContactType : std::uint8_t
+{
+    Begin,
+    Persist,
+    End
+};
+
+struct PhysicsContactEvent
+{
+    PhysicsContactType type = PhysicsContactType::Begin;
+    PhysicsBodyHandle first;
+    PhysicsBodyHandle second;
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec3 normal = glm::vec3(0.0f);
+    bool sensor = false;
+};
+
+enum class PhysicsConstraintType : std::uint8_t
+{
+    Fixed,
+    Point,
+    Hinge,
+    Slider,
+    Distance,
+    Cone
+};
+
+enum class PhysicsMotorMode : std::uint8_t
+{
+    Off,
+    Velocity,
+    Position
+};
+
+struct PhysicsConstraintDesc
+{
+    PhysicsConstraintType type = PhysicsConstraintType::Fixed;
+    PhysicsBodyHandle first;
+    PhysicsBodyHandle second;
+    glm::vec3 first_anchor = glm::vec3(0.0f);
+    glm::vec3 second_anchor = glm::vec3(0.0f);
+    glm::vec3 axis = glm::vec3(0.0f, 0.0f, 1.0f);
+    glm::vec3 normal = glm::vec3(1.0f, 0.0f, 0.0f);
+    float minimum = 0.0f;
+    float maximum = 0.0f;
+    float spring_frequency = 0.0f;
+    float spring_damping = 0.0f;
+    PhysicsMotorMode motor = PhysicsMotorMode::Off;
+    float motor_target = 0.0f;
+    float motor_force_limit = 0.0f;
+    float motor_frequency = 2.0f;
+    float motor_damping = 1.0f;
+    bool enabled = true;
+};
+
+struct PhysicsCharacterDesc
+{
+    glm::vec3 position = glm::vec3(0.0f);
+    float radius = 0.4f;
+    float height = 1.8f;
+    float mass = 70.0f;
+    float max_strength = 100.0f;
+    float max_slope_radians = 0.7853982f;
+    float step_height = 0.4f;
+    float stick_to_floor_distance = 0.5f;
+    float padding = 0.02f;
+    float penetration_recovery = 1.0f;
+    std::uint8_t collision_layer = 0;
+};
+
+struct PhysicsCharacterState
+{
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec3 velocity = glm::vec3(0.0f);
+    glm::vec3 ground_normal = glm::vec3(0.0f);
+    glm::vec3 ground_velocity = glm::vec3(0.0f);
+    PhysicsBodyHandle ground_body;
+    bool grounded = false;
+    bool slope_too_steep = false;
 };
 
 #endif

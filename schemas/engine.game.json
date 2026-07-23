@@ -18,7 +18,7 @@
   "entities": [
     {
       "classname": "prop",
-      "version": 1,
+      "version": 2,
       "fields": [
         {"name": "transform", "type": "transform"},
         {"name": "mesh", "type": "asset", "asset_type": "mesh"},
@@ -47,26 +47,23 @@
           "min_exclusive": true
         },
         {
-          "name": "flags",
-          "type": "flags",
-          "members": [
-            {"name": "visible", "bit": 0, "default": true},
-            {
-              "name": "collision_enabled",
-              "bit": 1,
-              "default": false,
-              "blender_property": "ce_collision"
-            },
-            {"name": "dynamic", "bit": 2, "default": false},
-            {"name": "shadow_only", "bit": 3, "default": false}
-          ]
+          "name": "collision",
+          "type": "asset",
+          "asset_type": "physics",
+          "optional": true
         },
         {
-          "name": "collision_half_extents",
-          "type": "vec3",
-          "default": [0.5, 0.5, 0.5],
-          "min": 0.0,
-          "min_exclusive": true
+          "name": "motion",
+          "type": "enum",
+          "enum": "PhysicsMotion",
+          "default": 0,
+          "blender_property": "ce_physics_motion",
+          "values": {
+            "None": 0,
+            "Static": 1,
+            "Dynamic": 2,
+            "Kinematic": 3
+          }
         },
         {
           "name": "mass",
@@ -74,6 +71,190 @@
           "default": 1.0,
           "min": 0.0,
           "min_exclusive": true
+        },
+        {
+          "name": "friction",
+          "type": "f32",
+          "default": 0.6,
+          "min": 0.0
+        },
+        {
+          "name": "restitution",
+          "type": "f32",
+          "default": 0.05,
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "name": "linear_damping",
+          "type": "f32",
+          "default": 0.05,
+          "min": 0.0
+        },
+        {
+          "name": "angular_damping",
+          "type": "f32",
+          "default": 0.05,
+          "min": 0.0
+        },
+        {
+          "name": "gravity_factor",
+          "type": "f32",
+          "default": 1.0
+        },
+        {
+          "name": "collision_layer",
+          "type": "u32",
+          "default": 0,
+          "min": 0,
+          "max": 31
+        },
+        {
+          "name": "initial_linear_velocity",
+          "type": "vec3",
+          "default": [0.0, 0.0, 0.0]
+        },
+        {
+          "name": "initial_angular_velocity",
+          "type": "vec3",
+          "default": [0.0, 0.0, 0.0]
+        },
+        {
+          "name": "flags",
+          "type": "flags",
+          "members": [
+            {"name": "visible", "bit": 0, "default": true},
+            {"name": "shadow_only", "bit": 1, "default": false},
+            {"name": "sensor", "bit": 2, "default": false},
+            {"name": "continuous", "bit": 3, "default": false},
+            {"name": "allow_sleeping", "bit": 4, "default": true},
+            {"name": "lock_translation_x", "bit": 5, "default": false},
+            {"name": "lock_translation_y", "bit": 6, "default": false},
+            {"name": "lock_translation_z", "bit": 7, "default": false},
+            {"name": "lock_rotation_x", "bit": 8, "default": false},
+            {"name": "lock_rotation_y", "bit": 9, "default": false},
+            {"name": "lock_rotation_z", "bit": 10, "default": false}
+          ]
+        }
+      ]
+    },
+    {
+      "classname": "physics_constraint",
+      "version": 1,
+      "fields": [
+        {
+          "name": "transform",
+          "type": "transform"
+        },
+        {
+          "name": "first_entity",
+          "type": "entity"
+        },
+        {
+          "name": "second_entity",
+          "type": "entity"
+        },
+        {
+          "name": "type",
+          "type": "enum",
+          "enum": "PhysicsConstraintKind",
+          "default": 0,
+          "values": {
+            "Fixed": 0,
+            "Point": 1,
+            "Hinge": 2,
+            "Slider": 3,
+            "Distance": 4,
+            "Cone": 5
+          }
+        },
+        {
+          "name": "second_anchor",
+          "type": "vec3",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "axis",
+          "type": "vec3",
+          "default": [
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "name": "normal",
+          "type": "vec3",
+          "default": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "minimum",
+          "type": "f32",
+          "default": 0.0
+        },
+        {
+          "name": "maximum",
+          "type": "f32",
+          "default": 0.0
+        },
+        {
+          "name": "spring_frequency",
+          "type": "f32",
+          "default": 0.0,
+          "min": 0.0
+        },
+        {
+          "name": "spring_damping",
+          "type": "f32",
+          "default": 0.0,
+          "min": 0.0
+        },
+        {
+          "name": "motor",
+          "type": "enum",
+          "enum": "PhysicsMotorKind",
+          "default": 0,
+          "values": {
+            "Off": 0,
+            "Velocity": 1,
+            "Position": 2
+          }
+        },
+        {
+          "name": "motor_target",
+          "type": "f32",
+          "default": 0.0
+        },
+        {
+          "name": "motor_force_limit",
+          "type": "f32",
+          "default": 0.0,
+          "min": 0.0
+        },
+        {
+          "name": "motor_frequency",
+          "type": "f32",
+          "default": 2.0,
+          "min": 0.0
+        },
+        {
+          "name": "motor_damping",
+          "type": "f32",
+          "default": 1.0,
+          "min": 0.0
+        },
+        {
+          "name": "enabled",
+          "type": "bool",
+          "default": true
         }
       ]
     },

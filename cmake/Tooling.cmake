@@ -1,13 +1,16 @@
 file(GLOB_RECURSE CENGINE_FORMAT_FILES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/src/*.cpp"
     "${CMAKE_SOURCE_DIR}/samples/viewer/*.cpp"
+    "${CMAKE_SOURCE_DIR}/tests/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/*.h"
     "${CMAKE_SOURCE_DIR}/samples/viewer/*.h"
+    "${CMAKE_SOURCE_DIR}/tests/*.h"
 )
 
 file(GLOB_RECURSE CENGINE_TIDY_FILES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/src/*.cpp"
     "${CMAKE_SOURCE_DIR}/samples/viewer/*.cpp"
+    "${CMAKE_SOURCE_DIR}/tests/*.cpp"
 )
 
 find_program(CLANG_FORMAT_EXE NAMES
@@ -58,10 +61,50 @@ else()
     )
 endif()
 
-find_program(CLANG_TIDY_EXE NAMES clang-tidy)
+find_program(CLANG_TIDY_EXE NAMES
+    clang-tidy
+    clang-tidy-21
+    clang-tidy-20
+    clang-tidy-19
+    clang-tidy-18
+    clang-tidy-17
+    clang-tidy.exe
+    HINTS
+        "/opt/homebrew/opt/llvm/bin"
+        "/usr/local/opt/llvm/bin"
+        "/mnt/c/Program Files/LLVM/bin"
+        "/mnt/c/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/bin"
+        "/mnt/c/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/bin"
+        "/mnt/c/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/x64/bin"
+        "/mnt/c/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/bin"
+        "C:/Program Files/LLVM/bin"
+        "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/bin"
+        "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/bin"
+        "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/x64/bin"
+        "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/bin"
+)
 if(CLANG_TIDY_EXE)
+    set(CENGINE_TIDY_ARGS
+        -p "${CMAKE_BINARY_DIR}"
+        --quiet
+    )
+    if(APPLE)
+        execute_process(
+            COMMAND xcrun --show-sdk-path
+            RESULT_VARIABLE CENGINE_SDK_RESULT
+            OUTPUT_VARIABLE CENGINE_SDK_PATH
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        if(CENGINE_SDK_RESULT EQUAL 0 AND CENGINE_SDK_PATH)
+            list(APPEND CENGINE_TIDY_ARGS
+                "--extra-arg=-isysroot"
+                "--extra-arg=${CENGINE_SDK_PATH}"
+            )
+        endif()
+    endif()
+
     add_custom_target(tidy
-        COMMAND "${CLANG_TIDY_EXE}" -p "${CMAKE_BINARY_DIR}" ${CENGINE_TIDY_FILES}
+        COMMAND "${CLANG_TIDY_EXE}" ${CENGINE_TIDY_ARGS} ${CENGINE_TIDY_FILES}
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         COMMENT "Running clang-tidy static analysis"
         VERBATIM

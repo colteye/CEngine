@@ -3,15 +3,21 @@
 #include "engine_context.h"
 #include "renderer/render_system.h"
 
-namespace CEngine::Entities {
-std::string_view FogEntity::Classname() const { return "exponential_height_fog"; }
-
-void FogEntity::Update(EngineContext& context, float)
+namespace CEngine::Entities
 {
-    if (context.rendering == nullptr) return;
+std::string_view FogEntity::Classname() const
+{
+    return "exponential_height_fog";
+}
+
+void FogEntity::Update(EngineContext &context, float /*unused*/)
+{
+    if (context.rendering == nullptr)
+    {
+        return;
+    }
     Renderer::ExponentialHeightFog fog;
-    fog.inscattering_color = {
-        inscattering_color.x, inscattering_color.y, inscattering_color.z};
+    fog.inscattering_color = {inscattering_color.x, inscattering_color.y, inscattering_color.z};
     fog.density = density;
     fog.height_falloff = height_falloff;
     fog.base_height = GetTransform().position.z;
@@ -22,9 +28,11 @@ void FogEntity::Update(EngineContext& context, float)
     context.rendering->SetExponentialHeightFog(fog);
 }
 
-void FogEntity::Shutdown(EngineContext& context)
+void FogEntity::Shutdown(EngineContext &context)
 {
     if (context.rendering != nullptr)
+    {
         context.rendering->SetExponentialHeightFog(Renderer::ExponentialHeightFog{});
+    }
 }
-}
+} // namespace CEngine::Entities

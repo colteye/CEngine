@@ -4,11 +4,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <string>
-#include <string_view>
-#include <vector>
 
-namespace CEngine::Assets {
+namespace CEngine::Assets
+{
 
 using Guid = std::array<std::uint8_t, 16>;
 
@@ -16,7 +14,8 @@ constexpr std::array<char, 4> AssetMagic = {'C', 'E', 'A', 'F'};
 constexpr std::uint16_t AssetFormatVersion = 1;
 constexpr std::size_t PlatformTargetSize = 16;
 
-enum class AssetType : std::uint32_t {
+enum class AssetType : std::uint32_t
+{
     Unknown = 0,
     Texture,
     Material,
@@ -35,7 +34,8 @@ enum class AssetType : std::uint32_t {
 };
 
 #pragma pack(push, 1)
-struct DiskAssetHeader {
+struct DiskAssetHeader
+{
     std::array<char, 4> magic = AssetMagic;
     std::uint16_t version = AssetFormatVersion;
     std::uint16_t header_size = 0;
@@ -52,28 +52,11 @@ struct DiskAssetHeader {
 
 static_assert(sizeof(DiskAssetHeader) == 76, "DiskAssetHeader must stay packed and stable.");
 
-struct ByteView {
-    const std::uint8_t* data = nullptr;
+struct ByteView
+{
+    const std::uint8_t *data = nullptr;
     std::size_t size = 0;
-
-    bool Empty() const { return size == 0; }
 };
-
-struct AssetWriteDesc {
-    AssetType type = AssetType::Unknown;
-    Guid guid = {};
-    std::uint64_t source_hash = 0;
-    std::string platform_target = "generic";
-    std::vector<std::uint8_t> payload;
-};
-
-const char* ToString(AssetType type);
-const char* RuntimeExtensionFor(AssetType type);
-
-std::uint64_t HashBytes(const void* data, std::size_t size);
-Guid GuidFromStableName(std::string_view name);
-std::string GuidToString(const Guid& guid);
-bool GuidFromString(std::string_view text, Guid& guid);
 
 } // namespace CEngine::Assets
 

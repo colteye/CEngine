@@ -1,120 +1,135 @@
 # Architecture Implementation Status
 
-> **Status: authoritative execution ledger.** Update this file whenever an M0
-> vertical step starts or completes. Architecture documents define contracts;
-> this file says what exists and what an implementation agent should do next.
+> **Status: current implementation inventory, verified 2026-07-23.**
+> Historical M0 step plans are obsolete and are not an implementation
+> checklist.
 
-## Reading path
+## Current initiative result
 
-1. Read this file to see what exists and what happens next.
-2. Open [Implementation architecture](IMPLEMENTATION.md) only when changing the
-   active design or implementing the current step.
-3. Open [Delivery, promotion, and performance](DELIVERY.md) for milestone scope,
-   complexity decisions, or acceptance gates.
-4. Treat [Core](CORE.md), [Systems](SYSTEMS.md), and [Network](NETWORK.md) as
-   searchable references. They are not required front-to-back reading.
+Standard 3D physics is implemented across Jolt, cooked assets, scenes, and the
+Blender add-on. The same change set completed the rendering, asset, input, and
+identity cleanup described below.
 
-## Active work
+## Current implementation
 
-| Field | Value |
-| --- | --- |
-| active milestone | **M0: playable room** |
-| active vertical step | **1: load and render one deterministic cooked room, with authored player placement** |
-| state | in progress |
-| next deliverable | a committed `assets/demo/m0/m0_room.cscene` fixture that loads through the target-asset path and renders its static `prop` entities |
-| next automated gate | a headless fixture test that loads the M0 room and verifies its scene, entity, asset-reference, and static-content counts |
-| explicitly deferred | authoritative tick loop, `UserCommand`, presentation snapshots, door behavior, remote transport, animation, audio, Render Thread; the temporary viewer player controller is not the future authoritative command path |
+### Rendering
 
-An agent should complete the next deliverable and automated gate before starting
-vertical step 2. Existing divergences listed below are not independent cleanup
-projects unless they block that step.
+- `Mesh` is immutable indexed geometry with AoS `MeshVertex` data and local
+  bounds.
+- `MeshInstance` is the only retained mesh placement record. It contains shared
+  immutable mesh/material/texture ownership, transform, lightmap binding, and
+  flags.
+- `Renderable`, `RenderableDesc`, `RenderableUpdate`, `MeshData`, parallel
+  vertex arrays, and the old mesh source file are gone.
+- `RenderSystem` owns instance/light generational slots, derived world bounds,
+  and revisions.
+- OpenGL shares/refcounts GPU mesh, material, and lightmap resources and draws
+  indexed geometry.
+- Particles will be a separate presentation path, not a generic mesh/renderable
+  variant.
+- Vulkan still compiles as an incomplete backend; it does not yet implement the
+  full mesh rendering path.
 
-## Verified baseline
+### Assets and schemas
 
-Verified on 2026-07-23:
+- `AssetStore` replaced `AssetDatabase` and `AssetHandle`.
+- Cooked assets use validated `AssetReference` values and
+  `shared_ptr<const T>` ownership.
+- Typed caches directly hold materials, meshes, texture orientations, and
+  collision shapes; the old variant-like cached record is gone.
+- Scene entity properties are generated from game schemas. Handwritten duplicate
+  prop/light/skybox property records and flag types are gone.
+- Semantic schema fields include assets, asset lists, and scene entity
+  references.
+- Blender mesh cooking deduplicates complete packed vertices and emits a real
+  index buffer.
+
+### Identity and pointers
+
+- Reusable entity, renderer, physics-body, constraint, and character slots use
+  tagged `{index, generation}` handles.
+- Append-only input actions use a tagged integer without a generation.
+- Serialized indices remain plain `uint32_t`.
+- Immutable assets do not have runtime handles.
+- Public mesh instances retain resources with shared ownership. Backend raw
+  pointers are private observations whose owner is the retained record.
+- `EngineContext` pointers are non-owning lifecycle-scoped composition only.
+
+### Physics runtime
+
+- `PhysicsSystem` owns a private Jolt implementation; the old public physics
+  backend interface is gone.
+- The caller owns the fixed-step accumulator; `Step` advances exactly once.
+- Shapes: box, sphere, capsule, cylinder, plane, convex hull, triangle mesh,
+  native height field, and nested compound.
+- Bodies: static, dynamic, kinematic, sensors, mass/material coefficients,
+  damping, gravity factor, velocities, sleep, CCD, locks, and 32 collision
+  layers.
+- Commands: teleport, kinematic target, velocity, force-at-point, torque,
+  impulse-at-point, gravity factor, sensor toggle, and activation.
+- Queries: closest/all ray, convex shape cast, and bounded unique overlap with
+  masks and ignored body.
+- Events: bounded begin/persist/end contact and trigger records with dropped
+  counts.
+- Constraints: fixed, point/ball, hinge, slider, distance/spring, and cone;
+  hinge/slider velocity and position motors.
+- Character: virtual Z-up capsule with slopes, steps, grounding, floor sticking,
+  moving-ground state, penetration recovery, and crouch height.
+- Handles reject stale slots; body destruction removes attached constraints.
+
+### Physics assets, scenes, and Blender
+
+- `.cphys` is a deterministic engine-neutral format with strict envelope,
+  range, finite-value, topology, hierarchy, and shape-specific validation.
+- `prop` schema version 2 carries an optional collision asset, explicit motion,
+  body parameters, collision layer, sensor/CCD/sleep flags, and axis locks.
+- Blender cooks primitives, planes, convex hulls, triangle meshes, height
+  fields, and compounds. Movable concave/infinite geometry is rejected.
+- An explicit collision-only mesh may be parented to a prop; it is cooked with
+  a local transform and excluded from visible mesh export.
+- The add-on exposes schema-driven body settings, collider selection, collision
+  object selection, collider wire/bounds preview, and validation.
+- `physics_constraint` entities resolve Blender object names to semantic scene
+  references and create/destroy Jolt constraints at runtime.
+- The viewer player uses the Jolt character controller and Space jump action.
+
+### Input
+
+- `Key` and the GLFW mapping include punctuation, digits, A-Z, navigation,
+  locks, F1-F25, keypad keys, modifiers, super keys, world keys, and menu.
+
+## Known limits
+
+- Constraint break thresholds are not implemented.
+- Constraint authoring uses world-space anchors; a richer local-frame editing
+  widget is not implemented.
+- Physics diagnostics expose counts and event overflow, but not timing,
+  high-water, active-body, or shape-memory telemetry yet.
+- Collision asset deduplication is path/object based, not content-hash based.
+- Static/dynamic friction and restitution are per body rather than shared
+  physics-material assets.
+- Character crouch exists in the runtime API; the viewer has no crouch action.
+- There is no debug-draw bridge from Jolt into the renderer.
+
+These are explicit limits, not placeholder interfaces.
+
+## Verification
+
+The complete gate passed on 2026-07-23:
 
 ```sh
-cmake --preset mac-debug
 cmake --build --preset mac-debug -j 6
 ctest --test-dir build/mac-debug --output-on-failure
 python3 -m unittest discover tools/ceasset/tests
+git diff --check
 ```
 
-Results:
-
-- CMake configure and build passed;
-- 10 of 10 CTest tests passed, including the cooked Sponza scene with its
-  game-owned player entity;
-- 112 asset-tool tests ran successfully (111 passed, 1 skipped because Pillow is
-  supplied by the packaged Blender add-on rather than the host Python);
-- Markdown links and `git diff --check` passed.
-
-## Current implementation inventory
-
-| Capability | State | Evidence and gap |
-| --- | --- | --- |
-| target asset headers/readers | implemented | `src/assets/asset_format.*`, typed readers, and asset tests exist |
-| asset loading boundary | implemented for active formats | cooked file I/O and decoding live under `src/assets`; entities request typed mesh/material/texture values through `AssetDatabase`, while render backends only upload those values |
-| game/entity schemas | implemented for `.cscene` entities | portable engine/viewer game JSON files generate standard-library-only, explicit little-endian C++ readers plus the flattened schema packaged in the Blender add-on |
-| deterministic Python/Blender cooking paths | partial | exporters and 112 tests exist; no committed M0 room fixture exists |
-| `.cscene` reading and validation | implemented | `src/assets/cscene_reader.*` plus malformed-range/version tests |
-| scene loading and activation | partial | `src/assets/scene_loader.*` constructs an unpublished runtime scene; `src/scene` contains only live scene state/execution, but the committed M0 fixture is missing |
-| generation-checked entity identity | implemented | `EntityId { index, generation }`, stale-handle tests, and reusable slots exist |
-| initial entity storage | implemented | `Scene` stores `std::unique_ptr<Entity>` in generation slots |
-| unified prop model | implemented | one `prop` entity class uses a single `dynamic` flag; static is the default |
-| deferred structural changes | missing | create and destroy are currently immediate |
-| scheduled entity behavior | missing | no authoritative scheduler or fixed-tick simulation root exists |
-| main-thread renderer | implemented | the viewer owns one concrete `RenderSystem` instance and invokes it directly on the main thread; renderer state is instance-owned, each prop owns exactly one retained renderable record, and one backend is selected per build behind the existing `IRenderBackend` boundary |
-| environment presentation | implemented, optional | typed `skybox` and `exponential_height_fog` scene entities drive HDR panorama sky rendering, diffuse/specular IBL, and analytic height fog; this does not change the active M0 gate |
-| generation-checked render handles | implemented | reusable renderable and light slots carry generations and reject stale handles before reaching the backend |
-| scene/render binding | partial/divergent | entity lifecycle methods currently create and update retained renderer records directly through `RenderSystem`; the M0 presentation snapshot remains deferred |
-| basic Jolt bodies and fixed substeps | implemented | prop lifecycle methods create/destroy static or dynamic bodies through `PhysicsSystem`; the four-substep accumulator remains system-owned |
-| M0 deterministic Jolt policy | implemented | Jolt runs through `JobSystemSingleThreaded` for the authoritative M0 step |
-| generation-checked physics handles | implemented | reusable Jolt body slots carry generations and reject stale handles |
-| queries, triggers, contacts, character path | missing | required M0 physics surface is not implemented |
-| action snapshot and `UserCommand` | deferred | `InputSystem` owns a backend-neutral device API with GLFW isolated behind `GlfwInputBackend`; viewer-owned controls populate named frame actions consumed by entity updates, with no tick-addressed command yet |
-| authoritative simulation/tick owner | missing | physics currently owns its own real-delta accumulator |
-| `PresentationSnapshot` and `ClientView` | missing | renderer bindings currently update from live scene entities |
-| player/controller | partial, game-owned | the viewer sample registers its own action IDs, default bindings, and `PlayerEntity`; collision-backed authoritative movement remains deferred |
-| authored player placement and viewer possession | implemented ahead of the original step order | the viewer registers its generated player data with `EntityFactory`; its game-owned `PlayerEntity` publishes pose/lens parameters to the renderer-owned camera. The engine has no built-in player class. |
-| game/add-on extension path | implemented | a temporary custom game/entity test generates and executes standalone C++, loads the same schema in Python, and the viewer build packages its flattened schema into the add-on |
-| interactive door | missing | no door entity or recorded interaction path exists |
-| M0 command capture/state hash | missing | no canonical declared-state capture exists |
-| M0 performance harness | missing | profile targets exist but there is no `CEngineM0Profile` executable or JSON result writer |
-
-## Known divergences that may remain temporarily
-
-- `IPhysicsBackend` and `IRenderBackend` predate the simplified plan and remain
-  owner-private implementation seams. Exactly one render backend is compiled
-  into a build; there is no runtime backend option, enum, or configuration path.
-- Current scene rendering reads entity transforms directly. Vertical step 5
-  replaces that path with `PresentationSnapshot`; do not create a second parallel
-  presentation architecture earlier.
-- Existing PBR, shadows, transparency, lightmaps, SSAO, and Vulkan source may
-  remain. They do not gate M0 and must not expand its public architecture.
-- Existing `.casset` composition remains readable while the cooker/runtime asset
-  boundary is migrated. It does not authorize a new public runtime prefab graph.
-
-## M0 vertical steps
-
-| Step | Exit condition | State |
-| --- | --- | --- |
-| 1. Cooked room | committed M0 fixture loads headlessly and renders its static `prop` entities | **in progress** |
-| 2. Authoritative simulation | one fixed-tick owner and deferred entity changes run headlessly | pending |
-| 3. Physics binding | deterministic single-thread Jolt path, generation handles, static collision, controller queries/triggers | pending |
-| 4. Command path | actions become tick-addressed commands under the M0 sampling policy | pending |
-| 5. Presentation boundary | complete snapshots drive `ClientView`; renderer stops reading entity storage | pending |
-| 6. Playable slice | recorded player approaches and opens the authoritative door | pending |
-| 7. Sign-off | command replay, failure injection, capacity, timing, and soak gates pass | pending |
-
-## Updating this file
-
-When a step completes:
-
-1. link the implementation and tests in the inventory;
-2. mark the completed step;
-3. advance exactly one active step;
-4. name one next deliverable and one automated gate;
-5. record the verification commands and date;
-6. do not mark a capability implemented when only an interface or placeholder
-   exists.
+- `cmake --build --preset mac-debug -j 6`: passed;
+- `ctest --test-dir build/mac-debug --output-on-failure`: 11/11 passed;
+- `python3 -m unittest discover tools/ceasset/tests`: 121 tests passed with one
+  intentional skip;
+- `git diff --check`: passed;
+- both game-schema JSON files parse successfully;
+- all 120 concrete `Key` values have a GLFW mapping;
+- source searches contain no live old renderable, asset-database, public
+  physics-backend, legacy box-physics, or parallel property APIs.

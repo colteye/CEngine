@@ -111,6 +111,7 @@ def _validate_entity_record(
     record: memoryview,
     auxiliary: memoryview,
     assets: list[tuple[AssetType, str]],
+    entity_count: int,
 ) -> None:
     values = CLASS_RECORDS[classname].unpack(record)
     cursor = 0
@@ -134,7 +135,19 @@ def _validate_entity_record(
             decoded[name] = value
             cursor += 1
         elif field_type == "u32":
-            decoded[name] = int(values[cursor])
+            value = int(values[cursor])
+            if "min" in field and value < int(field["min"]):
+                raise ValueError(f"{classname}.{name} is below its minimum")
+            if "max" in field and value > int(field["max"]):
+                raise ValueError(f"{classname}.{name} is above its maximum")
+            decoded[name] = value
+            cursor += 1
+        elif field_type == "entity":
+            index = int(values[cursor])
+            if index >= entity_count:
+                raise ValueError(
+                    f"{classname}.{name} entity reference is invalid")
+            decoded[name] = index
             cursor += 1
         elif field_type == "bool":
             value = int(values[cursor])
@@ -280,7 +293,7 @@ def inspect_scene(path: Path, project_root: Path, validate_assets: bool = False)
             loaded[entity] = True
             record = records[row * record_stride:(row + 1) * record_stride]
             _validate_entity_record(
-                classname, schema, record, auxiliary, assets)
+                classname, schema, record, auxiliary, assets, entity_count)
         classes.append((classname, count))
     if not all(loaded):
         raise ValueError("one or more entities have no class record")

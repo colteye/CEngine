@@ -50,7 +50,7 @@ implemented boundary whose advanced fields or runtime behavior remain deferred.
 | Mesh geometry | `.cmesh` | Current | Store load-ready geometry, bounds, submeshes, material slots, and supported skin streams without runtime interchange parsing. |
 | Skeletons/rig metadata | `.cskel` | Current | Keep shared hierarchy, reference pose, bind data, and current metadata separate from meshes and clips. Advanced sockets, masks, IK, retargeting, and jiggle data are promoted later. |
 | Animation/curves | `.canim` | Partial | Preserve independent clips and curves. Runtime compression, root motion, advanced events, morph/material tracks, and error settings remain deferred. |
-| Physics/simulation | `.cphys` | Candidate | Add only when reusable cooked collision cannot be represented by the active scene/mesh path. The eventual asset remains engine-neutral rather than a serialized Jolt object. |
+| Physics/collision | `.cphys` | Current | Store validated backend-neutral collision geometry separately from render meshes. The runtime builds Jolt shapes from boxes, spheres, capsules, cylinders, planes, convex hulls, triangle meshes, heightfields, and compounds; it never serializes Jolt objects. |
 | Reusable assemblies | current `.casset` | Partial/migrate | The current implementation records reusable composition. The target cooker may flatten authored assemblies into ordinary scene records; `.casset` does not require a public runtime prefab system. |
 | Scenes | `.cscene` | Current | Store scene composition and packed typed entity-class records while heavy payloads remain separate. Schema/layout migration follows `docs/arch/SYSTEMS.md#assets-and-scenes`. |
 | Audio | `.opus`/`.ogg`, optional `.caudio` metadata | Candidate | Use standard payloads first. Add metadata only for required loop, attenuation, subtitle, dialogue, bank, or streaming contracts. |
@@ -97,8 +97,9 @@ updates the compact asset registry/cache. It does not write manifests,
 intermediate assets, debug files, or command-line `.blend` conversion reports.
 The add-on currently writes `.casset` hierarchy/composition payloads, `.cmesh`
 triangle geometry buffers with optional skinning streams, `.cmat` material
-payloads, `.cskel` skeleton metadata, `.canim` action F-curves, and `.dds`
-textures discovered from Blender image datablocks. Runtime pose-track
+payloads, `.cskel` skeleton metadata, `.canim` action F-curves, `.cphys`
+collision geometry, and `.dds` textures discovered from Blender image
+datablocks. Runtime pose-track
 compression and sampling-friendly animation buffers are future explicit
 additions.
 
@@ -161,8 +162,9 @@ vertices are tightly packed as `float3 position, float3 normal, float2 uv0,
 float2 uv1`. Skinned vertices append `uint16x4 bone_indices` and `unorm16x4
 bone_weights`, normalized to 65535. UV1 is the normalized per-mesh lightmap
 unwrap; placement-specific atlas scale/offset stays in `.cscene`. All mesh blobs
-end with `uint32` triangle indices. The exporter fans
-Blender polygon loop data into triangles at write time. `LoadMeshAsset`
+end with `uint32` triangle indices. The exporter triangulates Blender polygons
+and deduplicates complete packed vertex values, including UV and skin data, so
+shared vertices use an actual index stream. `LoadMeshAsset`
 validates the payload and fills the renderer `Mesh` using explicit material
 slots supplied by the caller. Morph deltas, LOD tables, animation tracks, and
 optimized vertex/index reordering are future explicit additions. The loader
@@ -211,12 +213,18 @@ to exactly one class block.
 
 Class record layouts come from the game schema packaged for the executable.
 The current viewer records are `prop`, `player`, `light`, `skybox`,
-`exponential_height_fog`, and `post_process`. `prop` is one class for
-both static and dynamic objects. Its fixed record stores transform, mesh and
-material references, optional lightmap binding, flags, collision half-extents,
-and mass. Prop flag bit `1` is visible, bit `2` enables collision, and bit `4`
-makes the prop dynamic; an unset dynamic bit means static. Only static props may
+`exponential_height_fog`, `post_process`, and `physics_constraint`. `prop` is
+one class for visible mesh instances with optional physics. Its generated v2
+record stores transform; mesh, material, optional lightmap, and optional
+collision-asset references; visibility and shadow flags; lightmap placement;
+and the complete rigid-body settings used by the runtime. Render geometry and
+collision geometry are deliberately independent assets. Only static props may
 carry baked lightmaps.
+
+`physics_constraint` stores semantic references to two scene entities plus the
+settings for fixed, point, hinge, slider, distance, or cone constraints.
+References resolve only after all scene entities have been created. Hinge and
+slider constraints may also configure velocity or position motors.
 
 Blender/Cycles bakes two albedo-independent diffuse passes into the lightmap:
 indirect illumination from `baked` and `mixed` lights, plus direct illumination

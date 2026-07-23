@@ -4,17 +4,23 @@
 #include <filesystem>
 #include <memory>
 
-namespace CEngine::Entities { class EntityFactory; }
-namespace CEngine::Scene { class Scene; }
+namespace CEngine::Entities
+{
+class EntityFactory;
+}
+namespace CEngine::Scene
+{
+class Scene;
+}
 
-namespace CEngine::Assets {
+namespace CEngine::Assets
+{
 
-class AssetDatabase;
+class AssetStore;
 
-std::unique_ptr<Scene::Scene> LoadScene(
-    const std::filesystem::path& path, AssetDatabase& assets);
-std::unique_ptr<Scene::Scene> LoadScene(const std::filesystem::path& path,
-    AssetDatabase& assets, Entities::EntityFactory& entity_factory);
+std::unique_ptr<Scene::Scene> LoadScene(const std::filesystem::path &path, AssetStore &store);
+std::unique_ptr<Scene::Scene> LoadScene(const std::filesystem::path &path, AssetStore &store,
+                                        Entities::EntityFactory &entity_factory);
 
 } // namespace CEngine::Assets
 

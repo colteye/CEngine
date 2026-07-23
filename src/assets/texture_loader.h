@@ -5,10 +5,10 @@
 
 #include <filesystem>
 
-namespace CEngine::Assets {
+namespace CEngine::Assets
+{
 
-bool LoadTextureAsset(const std::filesystem::path& path,
-    Renderer::Texture& texture, bool flip_vertical = true);
+bool LoadTextureAsset(const std::filesystem::path &path, Renderer::Texture &texture, bool flip_vertical = true);
 
 } // namespace CEngine::Assets
 

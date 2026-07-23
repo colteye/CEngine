@@ -6,32 +6,38 @@
 #include <filesystem>
 #include <vector>
 
-namespace CEngine::Assets {
+namespace CEngine::Assets
+{
 
-class AssetFile {
-public:
-    bool Load(const std::filesystem::path& path);
+class AssetFile
+{
+  public:
+    bool Load(const std::filesystem::path &path);
 
-    AssetType Type() const { return static_cast<AssetType>(header.asset_type); }
-    const Guid& GetGuid() const { return header.guid; }
-    std::uint64_t SourceHash() const { return header.source_hash; }
-    std::string_view PlatformTarget() const;
+    [[nodiscard]] AssetType Type() const
+    {
+        return static_cast<AssetType>(header_.asset_type);
+    }
+    [[nodiscard]] const Guid &GetGuid() const
+    {
+        return header_.guid;
+    }
+    [[nodiscard]] std::uint64_t SourceHash() const
+    {
+        return header_.source_hash;
+    }
+    [[nodiscard]] std::string_view PlatformTarget() const;
 
-    ByteView Payload() const;
+    [[nodiscard]] ByteView Payload() const;
 
-private:
+  private:
     bool Validate();
 
-    std::vector<std::uint8_t> bytes;
-    DiskAssetHeader header;
+    std::vector<std::uint8_t> bytes_;
+    DiskAssetHeader header_;
 };
 
-bool LoadFileBytes(const std::filesystem::path& path,
-    std::vector<std::uint8_t>& out_bytes);
-bool WriteBinaryAsset(
-    const std::filesystem::path& path, const AssetWriteDesc& desc);
-bool HashFile(const std::filesystem::path& path, std::uint64_t& hash);
-
+bool LoadFileBytes(const std::filesystem::path &path, std::vector<std::uint8_t> &out_bytes);
 } // namespace CEngine::Assets
 
 #endif

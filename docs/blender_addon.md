@@ -38,6 +38,7 @@ The add-on uses native Blender data whenever it represents the same concept:
 | `skybox` | empty | HDR panorama plus engine settings |
 | `exponential_height_fog` | empty | schema-defined fog settings |
 | `post_process` | empty | schema-defined presentation settings |
+| `physics_constraint` | empty | two physics-enabled prop references, anchors, limits, springs, and optional motor |
 | other game entity | empty | every schema field and transform |
 
 Selecting an entity exposes its engine settings in **Object Properties >
@@ -50,6 +51,24 @@ one path per line or semicolon-separated paths. Visual entities can be inspected
 directly in Material Preview or Rendered mode. **Preview in Blender** makes a
 player camera active, applies a skybox panorama to the Blender world, or maps
 post-process exposure onto Blender's view settings.
+
+## Physics
+
+A `prop` may own a rigid body independently of its visible mesh. Choose a
+primitive collider, static plane, convex hull, triangle mesh, heightfield, or
+compound and author motion type, mass, material response, damping, gravity,
+axis locks, sensor/CCD/sleep settings, and collision layer in the entity panel.
+
+The visible object is the default collision source. For a deliberately simpler
+or invisible collision mesh, assign a mesh object parented to the prop as its
+collision source. The helper is omitted from render export, and its transform is
+cooked relative to the body. **Toggle Collider Preview** shows the authored
+collider without changing the exported asset.
+
+Constraints are ordinary schema-defined scene entities. Their object-reference
+fields select two physics-enabled props; export resolves those object names to
+stable scene entity indices. The add-on rejects missing bodies, self-links,
+invalid motor combinations, and invalid limits before writing the scene.
 
 ## Lightmaps
 
@@ -79,8 +98,8 @@ change that affects static lighting.
 Add the entity to the game's JSON schema and rebuild/package the add-on. Its
 creation menu entry and property UI are generated from that schema. A new
 entity uses an empty unless it is one of the native mappings above. Scalar,
-boolean, enum, vector, flag, asset, and asset-list fields are supported by the
-authoring and `.cscene` paths.
+boolean, enum, vector, flag, asset, asset-list, and scene-entity-reference
+fields are supported by the authoring and `.cscene` paths.
 
 Runtime behavior remains game code. The Blender add-on authors the generated
 property record and never needs to import a game C++ class.

@@ -17,6 +17,7 @@ INVALID_INDEX = 0xFFFFFFFF
 WIRE_SIZES = {
     "f32": 4,
     "u32": 4,
+    "entity": 4,
     "bool": 4,
     "enum": 4,
     "vec2": 8,
@@ -225,6 +226,8 @@ def _field_default(field: dict[str, Any]) -> str:
         return _cpp_float(0.0 if value is None else value)
     if field_type == "u32":
         return f"{int(0 if value is None else value)}u"
+    if field_type == "entity":
+        return "InvalidIndex" if value is None else f"{int(value)}u"
     if field_type == "bool":
         return "true" if bool(value) else "false"
     if field_type == "enum":
@@ -247,6 +250,7 @@ def _field_type(field: dict[str, Any]) -> str:
     return {
         "f32": "float",
         "u32": "std::uint32_t",
+        "entity": "std::uint32_t",
         "bool": "bool",
         "enum": field.get("enum", ""),
         "vec2": "Vec2",
@@ -315,10 +319,19 @@ def _emit_read(lines: list[str], entity: dict[str, Any]) -> None:
                 f"    if (!Detail::ReadF32(bytes, size, offset, {target})) return false;"
             )
             final_checks.extend(_bounds(field, target))
-        elif field_type == "u32":
+        elif field_type in ("u32", "entity"):
             lines.append(
                 f"    if (!Detail::ReadU32(bytes, size, offset, {target})) return false;"
             )
+            if field_type == "entity" and not field.get("optional", False):
+                final_checks.append(f"{target} == InvalidIndex")
+            if field_type == "u32":
+                if "min" in field:
+                    final_checks.append(
+                        f"{target} < {int(field['min'])}u")
+                if "max" in field:
+                    final_checks.append(
+                        f"{target} > {int(field['max'])}u")
         elif field_type == "bool":
             lines.extend(
                 [
