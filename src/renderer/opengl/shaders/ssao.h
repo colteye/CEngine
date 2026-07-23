@@ -1,13 +1,15 @@
-#ifndef SSAO_H
-#define SSAO_H
+#ifndef CENGINE_RENDERER_OPENGL_SHADERS_SSAO_H
+#define CENGINE_RENDERER_OPENGL_SHADERS_SSAO_H
 
 #include "shader.h"
 
 namespace CEngine::Renderer
 {
-
 class RenderSystem;
+}
 
+namespace CEngine::Renderer::OpenGL
+{
 class SSAO
 {
   public:
@@ -48,5 +50,5 @@ class SSAO
     int texture_height_{1};
 };
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL
 #endif

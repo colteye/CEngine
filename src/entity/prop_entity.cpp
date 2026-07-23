@@ -1,7 +1,7 @@
 #include "entity/prop_entity.h"
 
 #include "assets/asset_store.h"
-#include "engine_context.h"
+#include "context.h"
 #include "physics/physics_system.h"
 #include "renderer/render_system.h"
 #include "scene/scene.h"
@@ -44,7 +44,7 @@ glm::vec3 Vector(const Generated::EngineEntities::Vec3 &value)
 }
 } // namespace
 
-void PropEntity::Initialize(EngineContext &context)
+void PropEntity::Initialize(Context &context)
 {
     try
     {
@@ -171,7 +171,7 @@ std::uint32_t PropEntity::BuildMeshInstanceFlags() const
     return flags;
 }
 
-void PropEntity::RegisterMeshInstance(EngineContext &context, std::shared_ptr<const Renderer::Mesh> mesh,
+void PropEntity::RegisterMeshInstance(Context &context, std::shared_ptr<const Renderer::Mesh> mesh,
                                       std::shared_ptr<const Renderer::Material> material,
                                       std::shared_ptr<const Renderer::Texture> lightmap_texture)
 {
@@ -198,7 +198,7 @@ void PropEntity::RegisterMeshInstance(EngineContext &context, std::shared_ptr<co
     }
 }
 
-void PropEntity::Update(EngineContext &context, float delta_seconds)
+void PropEntity::Update(Context &context, float delta_seconds)
 {
     if (context.physics == nullptr || !physics_body_ || motion != Generated::EngineEntities::PhysicsMotion::Kinematic ||
         delta_seconds <= 0.0f)
@@ -208,7 +208,7 @@ void PropEntity::Update(EngineContext &context, float delta_seconds)
     context.physics->MoveKinematic(physics_body_, GetTransform().position, GetTransform().rotation, delta_seconds);
 }
 
-void PropEntity::LateUpdate(EngineContext &context, float /*unused*/)
+void PropEntity::LateUpdate(Context &context, float /*unused*/)
 {
     if (context.physics != nullptr && motion == Generated::EngineEntities::PhysicsMotion::Dynamic && physics_body_)
     {
@@ -231,7 +231,7 @@ void PropEntity::LateUpdate(EngineContext &context, float /*unused*/)
                                           BuildMeshInstanceFlags());
 }
 
-void PropEntity::Shutdown(EngineContext &context)
+void PropEntity::Shutdown(Context &context)
 {
     if (context.physics != nullptr && physics_body_)
     {

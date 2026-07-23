@@ -25,6 +25,8 @@ identity cleanup described below.
   and revisions.
 - OpenGL shares/refcounts GPU mesh, material, and lightmap resources and draws
   indexed geometry.
+- OpenGL implementation types live under `Renderer::OpenGL`; cascade fitting
+  and shadow resource management are consolidated in `ShadowSystem`.
 - Particles will be a separate presentation path, not a generic mesh/renderable
   variant.
 - Vulkan still compiles as an incomplete backend; it does not yet implement the
@@ -47,18 +49,20 @@ identity cleanup described below.
 ### Identity and pointers
 
 - Reusable entity, renderer, physics-body, constraint, and character slots use
-  tagged `{index, generation}` handles.
-- Append-only input actions use a tagged integer without a generation.
+  tagged 64-bit handles packing a 32-bit index and 32-bit generation.
+- Append-only input actions use the shared tagged handle representation with a
+  fixed generation.
 - Serialized indices remain plain `uint32_t`.
 - Immutable assets do not have runtime handles.
 - Public mesh instances retain resources with shared ownership. Backend raw
   pointers are private observations whose owner is the retained record.
-- `EngineContext` pointers are non-owning lifecycle-scoped composition only.
+- `Context` pointers are non-owning lifecycle-scoped composition only.
 
 ### Physics runtime
 
-- `PhysicsSystem` owns a private Jolt implementation; the old public physics
-  backend interface is gone.
+- `PhysicsSystem` owns one compile-selected `IPhysicsBackend`. Jolt is the
+  current concrete backend; its classes and opaque IDs stay inside
+  `JoltPhysicsBackend`.
 - The caller owns the fixed-step accumulator; `Step` advances exactly once.
 - Shapes: box, sphere, capsule, cylinder, plane, convex hull, triangle mesh,
   native height field, and nested compound.

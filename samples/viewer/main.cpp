@@ -1,6 +1,6 @@
 #include "assets/asset_store.h"
 #include "assets/scene_loader.h"
-#include "engine_context.h"
+#include "context.h"
 #include "entity/entity_factory.h"
 #include "entity/player_entity.h"
 #include "input/actions.h"
@@ -340,16 +340,16 @@ int RunScene(GLFWwindow *window, const std::filesystem::path &scene_path, const 
     }
 #endif
 
-    CEngine::EngineContext engine_context;
-    engine_context.assets = &assets;
-    engine_context.rendering = &renderer;
-    engine_context.input = &input;
+    CEngine::Context context;
+    context.assets = &assets;
+    context.rendering = &renderer;
+    context.input = &input;
 #ifdef CENGINE_ENABLE_JOLT_PHYSICS
-    engine_context.physics = &physics;
+    context.physics = &physics;
 #endif
     try
     {
-        scene->Activate(engine_context);
+        scene->Activate(context);
     }
     catch (const std::exception &exception)
     {
@@ -448,7 +448,7 @@ int RunScene(GLFWwindow *window, const std::filesystem::path &scene_path, const 
         int simulation_steps = 0;
         while (simulation_accumulator >= FixedDelta && simulation_steps < MaxStepsPerFrame)
         {
-            scene->Update(engine_context, static_cast<float>(FixedDelta));
+            scene->Update(context, static_cast<float>(FixedDelta));
             simulation_accumulator -= FixedDelta;
             ++simulation_steps;
         }

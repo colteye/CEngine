@@ -1,6 +1,6 @@
 #include "entity/light_entity.h"
 
-#include "engine_context.h"
+#include "context.h"
 #include "renderer/render_system.h"
 
 #include <cmath>
@@ -36,7 +36,7 @@ Renderer::Light LightEntity::RenderLight() const
     return light;
 }
 
-void LightEntity::Initialize(EngineContext &context)
+void LightEntity::Initialize(Context &context)
 {
     if (context.rendering == nullptr)
     {
@@ -49,7 +49,7 @@ void LightEntity::Initialize(EngineContext &context)
     }
 }
 
-void LightEntity::Update(EngineContext &context, float /*unused*/)
+void LightEntity::Update(Context &context, float /*unused*/)
 {
     if (context.rendering == nullptr || !renderer_light_)
     {
@@ -58,7 +58,7 @@ void LightEntity::Update(EngineContext &context, float /*unused*/)
     context.rendering->UpdateLight(renderer_light_, RenderLight());
 }
 
-void LightEntity::Shutdown(EngineContext &context)
+void LightEntity::Shutdown(Context &context)
 {
     if (context.rendering != nullptr && renderer_light_)
     {

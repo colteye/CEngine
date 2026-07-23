@@ -2,7 +2,7 @@
 #define CENGINE_SCENE_SCENE_H
 
 #include "assets/asset_store.h"
-#include "engine_context.h"
+#include "context.h"
 #include "entity/entity.h"
 
 #include <memory>
@@ -20,8 +20,8 @@ namespace CEngine::Scene
 
 struct EntityConnection
 {
-    EntityId source;
-    EntityId target;
+    EntityHandle source;
+    EntityHandle target;
     std::string event;
     std::string action;
     float delay_seconds = 0.0f;
@@ -32,7 +32,7 @@ struct SceneSettings
     glm::vec3 ambient_color = glm::vec3(0.0f);
     float exposure = 1.0f;
     glm::vec3 gravity = glm::vec3(0.0f, 0.0f, -9.81f);
-    EntityId active_entity;
+    EntityHandle active_entity;
 };
 
 class Scene
@@ -40,6 +40,10 @@ class Scene
   public:
     Scene() = default;
     ~Scene();
+    Scene(const Scene &) = delete;
+    Scene &operator=(const Scene &) = delete;
+    Scene(Scene &&) = delete;
+    Scene &operator=(Scene &&) = delete;
 
     void Reserve(std::size_t entity_count);
     Entity &AddEntity(std::unique_ptr<Entity> entity, std::string_view name = {});
@@ -51,10 +55,10 @@ class Scene
         return static_cast<EntityType &>(AddEntity(std::make_unique<EntityType>(std::forward<Args>(args)...), name));
     }
 
-    bool DestroyEntity(EntityId entity);
-    [[nodiscard]] bool IsAlive(EntityId entity) const;
-    Entity *GetEntity(EntityId entity);
-    [[nodiscard]] const Entity *GetEntity(EntityId entity) const;
+    bool DestroyEntity(EntityHandle entity);
+    [[nodiscard]] bool IsAlive(EntityHandle entity) const;
+    Entity *GetEntity(EntityHandle entity);
+    [[nodiscard]] const Entity *GetEntity(EntityHandle entity) const;
     [[nodiscard]] const std::vector<std::unique_ptr<Entity>> &Entities() const
     {
         return entities_;
@@ -76,8 +80,8 @@ class Scene
     {
         settings_ = settings;
     }
-    void Activate(EngineContext &context);
-    void Update(EngineContext &context, float delta_seconds);
+    void Activate(Context &context);
+    void Update(Context &context, float delta_seconds);
     void Stop() noexcept;
 
     void SetAssetReferences(std::vector<Assets::AssetReference> references);
@@ -94,7 +98,7 @@ class Scene
     }
 
   private:
-    EngineContext active_context_;
+    Context active_context_;
     std::vector<std::unique_ptr<Entity>> entities_;
     std::vector<std::uint32_t> generations_;
     std::vector<std::uint32_t> free_slots_;

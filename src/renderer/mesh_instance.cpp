@@ -1,6 +1,5 @@
 #include "renderer/mesh_instance.h"
 
-#include <algorithm>
 #include <array>
 
 namespace CEngine::Renderer

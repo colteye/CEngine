@@ -215,7 +215,7 @@ std::unique_ptr<Scene::Scene> LoadSceneInternal(const std::filesystem::path &pat
             Fail("scene active entity is disabled");
             return nullptr;
         }
-        settings.active_entity = active_entity->Id();
+        settings.active_entity = active_entity->GetHandle();
     }
     scene->SetSettings(settings);
 
@@ -226,8 +226,8 @@ std::unique_ptr<Scene::Scene> LoadSceneInternal(const std::filesystem::path &pat
         {
             const auto &connection = connections[index];
             scene->AddConnection({
-                entities[connection.source_entity]->Id(),
-                entities[connection.target_entity]->Id(),
+                entities[connection.source_entity]->GetHandle(),
+                entities[connection.target_entity]->GetHandle(),
                 std::string(file.String(connection.event_offset, connection.event_size)),
                 std::string(file.String(connection.action_offset, connection.action_size)),
                 connection.delay_seconds,

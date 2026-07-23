@@ -1,6 +1,6 @@
 #include "entity/post_process_entity.h"
 
-#include "engine_context.h"
+#include "context.h"
 #include "renderer/render_system.h"
 
 namespace CEngine::Entities
@@ -11,7 +11,7 @@ std::string_view PostProcessEntity::Classname() const
     return "post_process";
 }
 
-void PostProcessEntity::Update(EngineContext &context, float /*unused*/)
+void PostProcessEntity::Update(Context &context, float /*unused*/)
 {
     if (context.rendering == nullptr || !Enabled())
     {
@@ -45,7 +45,7 @@ void PostProcessEntity::Update(EngineContext &context, float /*unused*/)
     context.rendering->SetSSAOSettings(ssao);
 }
 
-void PostProcessEntity::Shutdown(EngineContext &context)
+void PostProcessEntity::Shutdown(Context &context)
 {
     if (context.rendering == nullptr)
     {

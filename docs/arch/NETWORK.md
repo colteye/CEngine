@@ -146,7 +146,7 @@ struct ClientRequestHeader {
 ```
 
 The payload has a registered bounded schema. It carries semantic IDs and values,
-never a function name, pointer, local `EntityId`, or arbitrary object graph.
+never a function name, pointer, local `EntityHandle`, or arbitrary object graph.
 This is not a general RPC system.
 
 The server processes requests during ingress in connection sequence order. It
@@ -169,11 +169,11 @@ protection appropriate to the protocol.
 Each connection maintains mappings:
 
 ```text
-Server: NetEntityId -> server EntityId
-Client: NetEntityId -> client EntityId
+Server: NetEntityId -> server EntityHandle
+Client: NetEntityId -> client EntityHandle
 ```
 
-Network references use `NetEntityId`, never a local `EntityId` or memory address.
+Network references use `NetEntityId`, never a local `EntityHandle` or memory address.
 Reference application is deferred when the target has not yet been created in
 the same snapshot stream.
 

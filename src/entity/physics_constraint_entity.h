@@ -15,8 +15,8 @@ class PhysicsConstraintEntity final : public Scene::Entity,
 {
   public:
     [[nodiscard]] std::string_view Classname() const override;
-    void Initialize(EngineContext &context) override;
-    void Shutdown(EngineContext &context) override;
+    void Initialize(Context &context) override;
+    void Shutdown(Context &context) override;
 
   private:
     PhysicsConstraintHandle constraint_;

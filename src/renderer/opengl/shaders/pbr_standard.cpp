@@ -5,7 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-namespace CEngine::Renderer
+namespace CEngine::Renderer::OpenGL
 {
 
 PBRStandard::PBRStandard()
@@ -19,14 +19,14 @@ void PBRStandard::Use() const
     shader_program_.Use();
 }
 
-void PBRStandard::UpdateFrame(RenderSystem &rendering, const OpenGLShadowGpuData &shadow_data, GLuint shadow_atlas,
-                              const std::array<GLuint, OpenGLShadows::KMaxPointShadows> &point_shadow_maps,
+void PBRStandard::UpdateFrame(RenderSystem &rendering, const ShadowGpuData &shadow_data, GLuint shadow_atlas,
+                              const std::array<GLuint, ShadowLimits::KMaxPointShadows> &point_shadow_maps,
                               GLuint irradiance_map, GLuint prefiltered_map)
 {
-    const RenderFrameConstants &constants = rendering.GetFrameConstants();
-    glUniform3fv(cam_pos_id_, 1, glm::value_ptr(constants.camera_position));
-    glUniformMatrix4fv(v_id_, 1, GL_FALSE, glm::value_ptr(constants.view));
-    glUniformMatrix4fv(p_id_, 1, GL_FALSE, glm::value_ptr(constants.proj));
+    const CameraFrameData &camera_frame_data = rendering.GetCameraFrameData();
+    glUniform3fv(cam_pos_id_, 1, glm::value_ptr(camera_frame_data.camera_position));
+    glUniformMatrix4fv(v_id_, 1, GL_FALSE, glm::value_ptr(camera_frame_data.view));
+    glUniformMatrix4fv(p_id_, 1, GL_FALSE, glm::value_ptr(camera_frame_data.proj));
     ambient_uniforms_.Upload(rendering);
     direct_lights_.BindAndUploadIfNeeded(rendering);
     shadow_buffer_.Upload(shadow_data);
@@ -111,4 +111,4 @@ void PBRStandard::SetMaterialParameters(const Material &material) const
     glUniform1i(receives_shadows_id_, material.receives_shadows ? 1 : 0);
 }
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL

@@ -4,7 +4,7 @@
 
 #include <glm/gtc/type_ptr.hpp>
 
-namespace CEngine::Renderer
+namespace CEngine::Renderer::OpenGL
 {
 
 DeferredLighting::DeferredLighting()
@@ -19,14 +19,14 @@ void DeferredLighting::Use() const
 }
 
 void DeferredLighting::Update(RenderSystem &rendering, GLuint albedo, GLuint normal_roughness, GLuint material,
-                              GLuint baked_light, GLuint depth, int width, int height,
-                              const OpenGLShadowGpuData &shadow_data, GLuint shadow_atlas,
-                              const std::array<GLuint, OpenGLShadows::KMaxPointShadows> &point_shadow_maps,
+                              GLuint baked_light, GLuint depth, int width, int height, const ShadowGpuData &shadow_data,
+                              GLuint shadow_atlas,
+                              const std::array<GLuint, ShadowLimits::KMaxPointShadows> &point_shadow_maps,
                               GLuint irradiance_map, GLuint prefiltered_map)
 {
-    const RenderFrameConstants &constants = rendering.GetFrameConstants();
-    const glm::mat4 inverse_view = glm::inverse(constants.view);
-    const glm::mat4 inverse_projection = glm::inverse(constants.proj);
+    const CameraFrameData &camera_frame_data = rendering.GetCameraFrameData();
+    const glm::mat4 inverse_view = glm::inverse(camera_frame_data.view);
+    const glm::mat4 inverse_projection = glm::inverse(camera_frame_data.proj);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, albedo);
@@ -48,11 +48,11 @@ void DeferredLighting::Update(RenderSystem &rendering, GLuint albedo, GLuint nor
     glBindTexture(GL_TEXTURE_2D, depth);
     glUniform1i(depth_id_, 4);
 
-    glUniformMatrix4fv(view_id_, 1, GL_FALSE, glm::value_ptr(constants.view));
-    glUniformMatrix4fv(projection_id_, 1, GL_FALSE, glm::value_ptr(constants.proj));
+    glUniformMatrix4fv(view_id_, 1, GL_FALSE, glm::value_ptr(camera_frame_data.view));
+    glUniformMatrix4fv(projection_id_, 1, GL_FALSE, glm::value_ptr(camera_frame_data.proj));
     glUniformMatrix4fv(inverse_view_id_, 1, GL_FALSE, glm::value_ptr(inverse_view));
     glUniformMatrix4fv(inverse_projection_id_, 1, GL_FALSE, glm::value_ptr(inverse_projection));
-    glUniform3fv(camera_position_id_, 1, glm::value_ptr(constants.camera_position));
+    glUniform3fv(camera_position_id_, 1, glm::value_ptr(camera_frame_data.camera_position));
     glUniform2f(texel_size_id_, 1.0f / static_cast<float>(width), 1.0f / static_cast<float>(height));
 
     ambient_uniforms_.Upload(rendering);
@@ -84,4 +84,4 @@ void DeferredLighting::InitializeParameters()
     texel_size_id_ = glGetUniformLocation(shader_id, "texel_size");
 }
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL

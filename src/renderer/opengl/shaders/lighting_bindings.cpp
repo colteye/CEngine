@@ -6,10 +6,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <cstring>
 #include <string>
 
-namespace CEngine::Renderer
+namespace CEngine::Renderer::OpenGL
 {
 
 namespace
@@ -18,14 +17,23 @@ constexpr GLuint KDirectLightBindingPoint = 0;
 constexpr GLuint KShadowBindingPoint = 1;
 constexpr GLint KShadowAtlasTextureUnit = 5;
 constexpr GLint KPointShadowFirstTextureUnit = 6;
+
+bool SameShadowData(const ShadowGpuData &left, const ShadowGpuData &right)
+{
+    return left.spot_matrices == right.spot_matrices && left.cascade_matrices == right.cascade_matrices &&
+           left.spot_atlas_rects == right.spot_atlas_rects && left.spot_params == right.spot_params &&
+           left.cascade_atlas_rects == right.cascade_atlas_rects && left.cascade_params == right.cascade_params &&
+           left.point_params == right.point_params && left.point_shadow_params == right.point_shadow_params &&
+           left.shadow_counts == right.shadow_counts;
+}
 } // namespace
 
-OpenGLDirectLightBuffer::~OpenGLDirectLightBuffer()
+DirectLightBuffer::~DirectLightBuffer()
 {
     Destroy();
 }
 
-void OpenGLDirectLightBuffer::Initialize(GLuint shader_id, const char *block_name)
+void DirectLightBuffer::Initialize(GLuint shader_id, const char *block_name)
 {
     const GLuint block_index = glGetUniformBlockIndex(shader_id, block_name);
     if (block_index != GL_INVALID_INDEX)
@@ -42,7 +50,7 @@ void OpenGLDirectLightBuffer::Initialize(GLuint shader_id, const char *block_nam
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
 
-void OpenGLDirectLightBuffer::BindAndUploadIfNeeded(RenderSystem &rendering)
+void DirectLightBuffer::BindAndUploadIfNeeded(RenderSystem &rendering)
 {
     glBindBufferBase(GL_UNIFORM_BUFFER, KDirectLightBindingPoint, buffer_);
 
@@ -67,7 +75,7 @@ void OpenGLDirectLightBuffer::BindAndUploadIfNeeded(RenderSystem &rendering)
     uploaded_revision_ = light_revision;
 }
 
-void OpenGLDirectLightBuffer::Destroy()
+void DirectLightBuffer::Destroy()
 {
     if (buffer_ != 0)
     {
@@ -77,12 +85,12 @@ void OpenGLDirectLightBuffer::Destroy()
     uploaded_revision_ = 0;
 }
 
-OpenGLShadowBuffer::~OpenGLShadowBuffer()
+ShadowBuffer::~ShadowBuffer()
 {
     Destroy();
 }
 
-void OpenGLShadowBuffer::Initialize(GLuint shader_id, const char *block_name)
+void ShadowBuffer::Initialize(GLuint shader_id, const char *block_name)
 {
     const GLuint block_index = glGetUniformBlockIndex(shader_id, block_name);
     if (block_index != GL_INVALID_INDEX)
@@ -92,26 +100,26 @@ void OpenGLShadowBuffer::Initialize(GLuint shader_id, const char *block_name)
 
     glGenBuffers(1, &buffer_);
     glBindBuffer(GL_UNIFORM_BUFFER, buffer_);
-    glBufferData(GL_UNIFORM_BUFFER, static_cast<GLsizeiptr>(sizeof(OpenGLShadowGpuData)), nullptr, GL_DYNAMIC_DRAW);
+    glBufferData(GL_UNIFORM_BUFFER, static_cast<GLsizeiptr>(sizeof(ShadowGpuData)), nullptr, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, KShadowBindingPoint, buffer_);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
 
-void OpenGLShadowBuffer::Upload(const OpenGLShadowGpuData &data)
+void ShadowBuffer::Upload(const ShadowGpuData &data)
 {
     glBindBufferBase(GL_UNIFORM_BUFFER, KShadowBindingPoint, buffer_);
-    if (uploaded_ && std::memcmp(&uploaded_data_, &data, sizeof(data)) == 0)
+    if (uploaded_ && SameShadowData(uploaded_data_, data))
     {
         return;
     }
     glBindBuffer(GL_UNIFORM_BUFFER, buffer_);
-    glBufferSubData(GL_UNIFORM_BUFFER, 0, static_cast<GLsizeiptr>(sizeof(OpenGLShadowGpuData)), &data);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, static_cast<GLsizeiptr>(sizeof(ShadowGpuData)), &data);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
     uploaded_data_ = data;
     uploaded_ = true;
 }
 
-void OpenGLShadowBuffer::Destroy()
+void ShadowBuffer::Destroy()
 {
     if (buffer_ != 0)
     {
@@ -122,24 +130,24 @@ void OpenGLShadowBuffer::Destroy()
     uploaded_ = false;
 }
 
-void OpenGLShadowSamplers::Initialize(GLuint shader_id)
+void ShadowSamplers::Initialize(GLuint shader_id)
 {
     atlas = glGetUniformLocation(shader_id, "shadow_atlas");
-    for (int index = 0; index < OpenGLShadows::KMaxPointShadows; ++index)
+    for (int index = 0; index < ShadowLimits::KMaxPointShadows; ++index)
     {
         const std::string name = "point_shadow_maps[" + std::to_string(index) + "]";
         point_maps[index] = glGetUniformLocation(shader_id, name.c_str());
     }
 }
 
-void OpenGLShadowSamplers::Bind(GLuint atlas_texture,
-                                const std::array<GLuint, OpenGLShadows::KMaxPointShadows> &point_textures) const
+void ShadowSamplers::Bind(GLuint atlas_texture,
+                          const std::array<GLuint, ShadowLimits::KMaxPointShadows> &point_textures) const
 {
     glActiveTexture(GL_TEXTURE0 + KShadowAtlasTextureUnit);
     glBindTexture(GL_TEXTURE_2D, atlas_texture);
     glUniform1i(atlas, KShadowAtlasTextureUnit);
 
-    for (int index = 0; index < OpenGLShadows::KMaxPointShadows; ++index)
+    for (int index = 0; index < ShadowLimits::KMaxPointShadows; ++index)
     {
         glActiveTexture(GL_TEXTURE0 + KPointShadowFirstTextureUnit + index);
         glBindTexture(GL_TEXTURE_CUBE_MAP, point_textures[index]);
@@ -147,7 +155,7 @@ void OpenGLShadowSamplers::Bind(GLuint atlas_texture,
     }
 }
 
-void OpenGLAmbientUniforms::Initialize(GLuint shader_id)
+void AmbientUniforms::Initialize(GLuint shader_id)
 {
     sky_color = glGetUniformLocation(shader_id, "ambient_sky_color");
     ground_color = glGetUniformLocation(shader_id, "ambient_ground_color");
@@ -155,7 +163,7 @@ void OpenGLAmbientUniforms::Initialize(GLuint shader_id)
     enabled = glGetUniformLocation(shader_id, "ambient_enabled");
 }
 
-void OpenGLAmbientUniforms::Upload(const RenderSystem &rendering) const
+void AmbientUniforms::Upload(const RenderSystem &rendering) const
 {
     const AmbientLighting &ambient = rendering.GetAmbientLighting();
     glUniform3fv(sky_color, 1, glm::value_ptr(ambient.sky_color));
@@ -164,7 +172,7 @@ void OpenGLAmbientUniforms::Upload(const RenderSystem &rendering) const
     glUniform1i(enabled, ambient.enabled ? 1 : 0);
 }
 
-void OpenGLEnvironmentUniforms::Initialize(GLuint shader_id)
+void EnvironmentUniforms::Initialize(GLuint shader_id)
 {
     irradiance = glGetUniformLocation(shader_id, "ibl_irradiance");
     prefiltered = glGetUniformLocation(shader_id, "ibl_prefiltered");
@@ -181,8 +189,8 @@ void OpenGLEnvironmentUniforms::Initialize(GLuint shader_id)
     fog_cutoff_distance = glGetUniformLocation(shader_id, "fog_cutoff_distance");
 }
 
-void OpenGLEnvironmentUniforms::BindAndUpload(const RenderSystem &rendering, GLuint irradiance_texture,
-                                              GLuint prefiltered_texture) const
+void EnvironmentUniforms::BindAndUpload(const RenderSystem &rendering, GLuint irradiance_texture,
+                                        GLuint prefiltered_texture) const
 {
     constexpr GLint KIrradianceTextureUnit = 14;
     constexpr GLint KPrefilteredTextureUnit = 15;
@@ -209,4 +217,4 @@ void OpenGLEnvironmentUniforms::BindAndUpload(const RenderSystem &rendering, GLu
     glUniform1f(fog_cutoff_distance, fog.cutoff_distance);
 }
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL

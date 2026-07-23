@@ -1,5 +1,4 @@
 #include "renderer/camera.h"
-#include "renderer/render_system.h"
 
 #include <algorithm>
 #include <cmath>
@@ -9,7 +8,7 @@
 namespace CEngine::Renderer
 {
 
-RenderFrameConstants Camera::FrameConstants(float aspect_ratio) const
+CameraFrameData Camera::BuildFrameData(float aspect_ratio) const
 {
     const glm::vec3 view_direction =
         glm::length(direction) > 0.00001f ? glm::normalize(direction) : glm::vec3(1.0f, 0.0f, 0.0f);
@@ -28,13 +27,13 @@ RenderFrameConstants Camera::FrameConstants(float aspect_ratio) const
     const float valid_far = std::max(far_clip, valid_near + 0.001f);
     const float valid_fov = std::clamp(vertical_fov_radians, 0.01f, 3.13f);
 
-    RenderFrameConstants constants;
-    constants.view = glm::lookAt(position, position + view_direction, up);
-    constants.proj = glm::perspective(valid_fov, valid_aspect, valid_near, valid_far);
-    constants.camera_position = position;
-    constants.near_clip = valid_near;
-    constants.far_clip = valid_far;
-    return constants;
+    CameraFrameData camera_frame_data;
+    camera_frame_data.view = glm::lookAt(position, position + view_direction, up);
+    camera_frame_data.proj = glm::perspective(valid_fov, valid_aspect, valid_near, valid_far);
+    camera_frame_data.camera_position = position;
+    camera_frame_data.near_clip = valid_near;
+    camera_frame_data.far_clip = valid_far;
+    return camera_frame_data;
 }
 
 } // namespace CEngine::Renderer

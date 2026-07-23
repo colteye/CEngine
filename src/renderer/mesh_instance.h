@@ -1,7 +1,7 @@
 #ifndef CENGINE_RENDERER_MESH_INSTANCE_H
 #define CENGINE_RENDERER_MESH_INSTANCE_H
 
-#include "foundation/slot_handle.h"
+#include "handle.h"
 #include "renderer/material.h"
 #include "renderer/mesh.h"
 #include "renderer/texture.h"
@@ -16,14 +16,11 @@ namespace CEngine::Renderer
 {
 
 struct MeshInstanceSlotTag;
-using MeshInstanceHandle = SlotHandle<MeshInstanceSlotTag>;
+using MeshInstanceHandle = Handle<MeshInstanceSlotTag>;
 
-enum : std::uint32_t
-{
-    MeshInstanceFlagCastsShadow = 1u << 0u,
-    MeshInstanceFlagShadowOnly = 1u << 1u,
-    MeshInstanceFlagVisible = 1u << 2u
-};
+inline constexpr std::uint32_t MeshInstanceFlagCastsShadow = 1u << 0u;
+inline constexpr std::uint32_t MeshInstanceFlagShadowOnly = 1u << 1u;
+inline constexpr std::uint32_t MeshInstanceFlagVisible = 1u << 2u;
 
 struct MeshInstance
 {

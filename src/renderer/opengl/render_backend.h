@@ -1,16 +1,16 @@
-#ifndef OPENGL_RENDER_BACKEND_H
-#define OPENGL_RENDER_BACKEND_H
+#ifndef CENGINE_RENDERER_OPENGL_RENDER_BACKEND_H
+#define CENGINE_RENDERER_OPENGL_RENDER_BACKEND_H
 
 #include "renderer/material.h"
 #include "renderer/mesh_instance.h"
-#include "renderer/opengl/opengl_render_data.h"
-#include "renderer/opengl/opengl_shadow_system.h"
+#include "renderer/opengl/render_data.h"
 #include "renderer/opengl/shaders/deferred_lighting.h"
 #include "renderer/opengl/shaders/fullscreen_blit.h"
 #include "renderer/opengl/shaders/pbr_geometry_pass.h"
 #include "renderer/opengl/shaders/pbr_standard.h"
 #include "renderer/opengl/shaders/shader.h"
 #include "renderer/opengl/shaders/ssao.h"
+#include "renderer/opengl/shadow_system.h"
 #include "renderer/render_backend.h"
 
 #include <glad/glad.h>
@@ -19,10 +19,10 @@
 #include <unordered_map>
 #include <vector>
 
-namespace CEngine::Renderer
+namespace CEngine::Renderer::OpenGL
 {
 
-struct OpenGLMaterialResources
+struct MaterialResources
 {
     GLuint albedo_tex = 0;
     GLuint normal_tex = 0;
@@ -35,13 +35,13 @@ struct OpenGLMaterialResources
     void Destroy();
 };
 
-struct OpenGLLightmapResources
+struct LightmapResources
 {
     GLuint texture = 0;
     std::size_t references = 0;
 };
 
-struct OpenGLFrameResources
+struct FrameResources
 {
     GLuint g_buffer_fbo = 0;
     GLuint g_albedo = 0;
@@ -59,7 +59,7 @@ struct OpenGLFrameResources
     void Destroy();
 };
 
-struct OpenGLShaderPasses
+struct ShaderPasses
 {
     std::unique_ptr<SSAO> ssao;
     std::unique_ptr<PBRStandard> pbr_forward;
@@ -68,7 +68,7 @@ struct OpenGLShaderPasses
     std::unique_ptr<FullscreenBlit> fullscreen_blit;
 };
 
-struct OpenGLEnvironmentResources
+struct EnvironmentResources
 {
     GLuint panorama = 0;
     GLuint environment_map = 0;
@@ -90,14 +90,14 @@ struct OpenGLEnvironmentResources
     void Destroy();
 };
 
-struct OpenGLMeshResources
+struct MeshResources
 {
-    OpenGLMeshResources() = default;
-    OpenGLMeshResources(const OpenGLMeshResources &) = delete;
-    OpenGLMeshResources &operator=(const OpenGLMeshResources &) = delete;
-    OpenGLMeshResources(OpenGLMeshResources &&other) noexcept;
-    OpenGLMeshResources &operator=(OpenGLMeshResources &&other) noexcept;
-    ~OpenGLMeshResources();
+    MeshResources() = default;
+    MeshResources(const MeshResources &) = delete;
+    MeshResources &operator=(const MeshResources &) = delete;
+    MeshResources(MeshResources &&other) noexcept;
+    MeshResources &operator=(MeshResources &&other) noexcept;
+    ~MeshResources();
 
     void Destroy();
 
@@ -108,7 +108,7 @@ struct OpenGLMeshResources
     std::size_t references = 0;
 };
 
-class OpenGLRenderBackend final : public IRenderBackend
+class RenderBackend final : public IRenderBackend
 {
   public:
     bool Initialize(RenderSystem &rendering, GLFWwindow *window, int window_width, int window_height) override;
@@ -122,7 +122,7 @@ class OpenGLRenderBackend final : public IRenderBackend
                             std::uint32_t flags) override;
 
   private:
-    static OpenGLMeshResources UploadMesh(const Mesh &mesh);
+    static MeshResources UploadMesh(const Mesh &mesh);
     bool RegisterMaterial(const Material *material);
     void RemoveMaterial(const Material *material);
     bool RegisterLightmap(const Texture *lightmap);
@@ -140,9 +140,9 @@ class OpenGLRenderBackend final : public IRenderBackend
     void DrawEnvironmentCube() const;
     void RenderForwardQueue(const std::vector<uint32_t> &queue, bool transparent);
     void PresentSceneColor();
-    static void DrawItem(const OpenGLDrawItem &item);
-    [[nodiscard]] static OpenGLRenderQueue ClassifyRenderMode(MaterialRenderMode mode);
-    [[nodiscard]] static bool DrawsShadowCaster(const OpenGLDrawItem &item);
+    static void Draw(const DrawItem &item);
+    [[nodiscard]] static RenderQueue ClassifyRenderMode(MaterialRenderMode mode);
+    [[nodiscard]] static bool DrawsShadowCaster(const DrawItem &item);
     void RenderScreenSpaceQuad();
     PBRStandard *GetShader(MaterialShaderType shader_type);
 
@@ -155,17 +155,17 @@ class OpenGLRenderBackend final : public IRenderBackend
     int window_width_ = 0;
     int window_height_ = 0;
 
-    OpenGLFrameResources frame_resources_;
-    OpenGLShadowSystem shadow_system_;
-    OpenGLRenderQueues render_queues_;
-    OpenGLShaderPasses shader_passes_;
-    OpenGLEnvironmentResources environment_resources_;
-    std::unordered_map<const Mesh *, OpenGLMeshResources> mesh_resources_;
-    std::unordered_map<const Material *, OpenGLMaterialResources> material_resources_;
-    std::unordered_map<const Texture *, OpenGLLightmapResources> lightmap_resources_;
-    std::vector<OpenGLDrawItem> draw_items_;
+    FrameResources frame_resources_;
+    ShadowSystem shadow_system_;
+    RenderQueues render_queues_;
+    ShaderPasses shader_passes_;
+    EnvironmentResources environment_resources_;
+    std::unordered_map<const Mesh *, MeshResources> mesh_resources_;
+    std::unordered_map<const Material *, MaterialResources> material_resources_;
+    std::unordered_map<const Texture *, LightmapResources> lightmap_resources_;
+    std::vector<DrawItem> draw_items_;
     std::vector<float> camera_distance_squared_;
 };
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL
 #endif

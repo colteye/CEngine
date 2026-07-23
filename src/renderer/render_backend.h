@@ -15,7 +15,12 @@ class RenderSystem;
 class IRenderBackend
 {
   public:
+    IRenderBackend() = default;
     virtual ~IRenderBackend() = default;
+    IRenderBackend(const IRenderBackend &) = delete;
+    IRenderBackend &operator=(const IRenderBackend &) = delete;
+    IRenderBackend(IRenderBackend &&) = delete;
+    IRenderBackend &operator=(IRenderBackend &&) = delete;
 
     virtual bool Initialize(RenderSystem &rendering, GLFWwindow *window, int window_width, int window_height) = 0;
     virtual void Shutdown() = 0;

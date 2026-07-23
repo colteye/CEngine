@@ -1,5 +1,5 @@
-#ifndef CENGINE_ENGINE_CONTEXT_H
-#define CENGINE_ENGINE_CONTEXT_H
+#ifndef CENGINE_CONTEXT_H
+#define CENGINE_CONTEXT_H
 
 namespace CEngine::Assets
 {
@@ -22,7 +22,7 @@ class PhysicsSystem;
 namespace CEngine
 {
 
-struct EngineContext
+struct Context
 {
     Assets::AssetStore *assets = nullptr;
     Scene::Scene *scene = nullptr;

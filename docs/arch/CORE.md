@@ -1019,7 +1019,7 @@ share private helpers, but each owns a separate concrete simulation root.
 - client scene instances;
 - camera, HUD, animation, audio, and rendering-facing behavior.
 
-The two simulations never share `Entity*`, `EntityId`, or mutable entity storage. A
+The two simulations never share `Entity*`, `EntityHandle`, or mutable entity storage. A
 `NetEntityId` relates representations across the network.
 
 ### 4. Entity classes
@@ -1105,7 +1105,7 @@ an identity scheme.
 
 The base entity contains only state common to all entities:
 
-- transient `EntityId`;
+- transient `EntityHandle`;
 - optional stable serialized identity;
 - target name;
 - flags and tags;
@@ -1151,7 +1151,7 @@ Consequences of the default policy are:
   records, then releases it in bulk.
 
 Raw entity addresses are callback-scoped and cannot be stored by game code.
-`EntityId`/`EntityRef` are the only durable references. Slab pages do
+`EntityHandle`/`EntityRef` are the only durable references. Slab pages do
 not compact live objects; this is an implementation rule, not a public pointer
 guarantee.
 
@@ -1196,7 +1196,7 @@ backend pointer in place.
 
 #### 6.1 Runtime identity
 
-`EntityId` is a generation handle containing a slot index and generation. It is
+`EntityHandle` is a generation handle containing a slot index and generation. It is
 valid only inside one simulation instance.
 
 Destroying an entity increments its slot generation. Stale handles then fail
@@ -1206,15 +1206,15 @@ cleanly rather than addressing a newly allocated entity.
 
 Scene data uses stable identity only where references must survive cooking or
 scene reconstruction. During instantiation, a staging
-transaction maps serialized identities to runtime `EntityId` values.
+transaction maps serialized identities to runtime `EntityHandle` values.
 
 #### 6.3 Network identity
 
 `NetEntityId` identifies one replicated game concept across server and client.
-It is not interchangeable with either side's `EntityId`.
+It is not interchangeable with either side's `EntityHandle`.
 
 ```text
-server EntityId -> NetEntityId -> client EntityId
+server EntityHandle -> NetEntityId -> client EntityHandle
 ```
 
 #### 6.4 Entity references
@@ -1277,15 +1277,15 @@ Ordinary game callbacks receive a tick-scoped `SimulationCommands` writer:
 
 ```text
 Spawn(SpawnDesc) -> SpawnToken
-Destroy(EntityId)
-SetParent(EntityId or SpawnToken, EntityId or SpawnToken, policy)
-Transfer(EntityId, destination ownership)
+Destroy(EntityHandle)
+SetParent(EntityHandle or SpawnToken, EntityHandle or SpawnToken, policy)
+Transfer(EntityHandle, destination ownership)
 ```
 
 Commands append into the tick arena and allocate no individual command objects.
 A `SpawnToken` can connect structural commands in the same buffer but cannot be
 stored as a durable entity reference. At commit, the simulation validates the entire
-dependency group, maps successful tokens to new `EntityId` values, and publishes
+dependency group, maps successful tokens to new `EntityHandle` values, and publishes
 spawn results at the next gameplay phase. If a required spawn fails, dependent
 commands fail with it rather than observing a half-created object.
 
@@ -1346,7 +1346,7 @@ Within a phase:
 - a callback receives a `TickContext` or `InputContext`, not a global clock or
   system locator.
 
-Stable order means a documented key such as phase, target `EntityId`, source
+Stable order means a documented key such as phase, target `EntityHandle`, source
 sequence, and insertion ordinal. It does not mean relying on hash-table or
 worker completion order.
 
@@ -1355,8 +1355,8 @@ worker completion order.
 The ordinary APIs are intentionally small:
 
 ```text
-Resolve(EntityId) -> EntityView or null
-FindByName(name) -> bounded view of EntityId
+Resolve(EntityHandle) -> EntityView or null
+FindByName(name) -> bounded view of EntityHandle
 ForEachClass<T>(callback)
 QuerySpatial(bounds, mask, output span) -> count/status
 ```
@@ -1395,10 +1395,10 @@ A target-name connection declares its cardinality and resolution time:
 
 - `exactly_one` must resolve to one target or validation/delivery fails;
 - `all_at_fire_time` resolves the current matching set when the output fires;
-- `first_stable` selects the lowest stable serialized identity, then `EntityId`
+- `first_stable` selects the lowest stable serialized identity, then `EntityHandle`
   for runtime-only targets.
 
-Multi-target delivery is sorted by stable identity/`EntityId`. Hash-table order
+Multi-target delivery is sorted by stable identity/`EntityHandle`. Hash-table order
 is never observable. A delayed connection either captures resolved `EntityRef`
 values or re-runs its declared query at delivery; the format states which.
 
@@ -1459,7 +1459,7 @@ That design fails for entities with multiple shapes, render objects, emitters,
 or effects and forces every new system into one central type.
 
 When a system must report an event, its front-end record stores a safe owner
-token such as `EntityId`. Backends never call entity code.
+token such as `EntityHandle`. Backends never call entity code.
 
 Bindings are normally created once and updated through buffered typed commands.
 Per-tick updates for many objects are submitted as spans from simulation-owned scratch
@@ -1492,7 +1492,7 @@ instance destroys those entities. Session-level game rules, connections, and
 ### 14. Invariants
 
 - One live entity belongs to exactly one simulation.
-- One `EntityId` is meaningful only in its owning simulation.
+- One `EntityHandle` is meaningful only in its owning simulation.
 - Server and client entities never share live memory.
 - A concrete entity class is registered before its scene data is instantiated.
 - Built-in and game entity classes use the same construction path.
@@ -1752,13 +1752,13 @@ Some classes exist only on one side:
 The server owns the association:
 
 ```text
-ConnectionId -> PlayerStateId -> possessed server EntityId
+ConnectionId -> PlayerStateId -> possessed server EntityHandle
 ```
 
 The client owns its presentation association:
 
 ```text
-local connection -> local player presentation -> client EntityId
+local connection -> local player presentation -> client EntityHandle
 ```
 
 The server decides which pawn a player possesses. A client requests actions for

@@ -1,7 +1,7 @@
 #ifndef LIGHT_H
 #define LIGHT_H
 
-#include "foundation/slot_handle.h"
+#include "handle.h"
 
 #include <cstdint>
 #include <glm/glm.hpp>
@@ -10,7 +10,7 @@ namespace CEngine::Renderer
 {
 
 struct LightSlotTag;
-using LightHandle = SlotHandle<LightSlotTag>;
+using LightHandle = Handle<LightSlotTag>;
 
 enum class LightType
 {

@@ -1,12 +1,12 @@
-#ifndef DEPTH_ONLY_H
-#define DEPTH_ONLY_H
+#ifndef CENGINE_RENDERER_OPENGL_SHADERS_DEPTH_ONLY_H
+#define CENGINE_RENDERER_OPENGL_SHADERS_DEPTH_ONLY_H
 
 #include "renderer/material.h"
 #include "shader.h"
 
 #include <glm/glm.hpp>
 
-namespace CEngine::Renderer
+namespace CEngine::Renderer::OpenGL
 {
 
 class DepthOnly
@@ -31,5 +31,5 @@ class DepthOnly
     GLint alpha_test_id_ = -1;
 };
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL
 #endif

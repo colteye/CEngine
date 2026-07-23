@@ -17,15 +17,6 @@ struct GLFWwindow;
 namespace CEngine::Renderer
 {
 
-struct RenderFrameConstants
-{
-    glm::vec3 camera_position = glm::vec3(0.0f);
-    glm::mat4 view = glm::mat4(1.0f);
-    glm::mat4 proj = glm::mat4(1.0f);
-    float near_clip = 0.1f;
-    float far_clip = 100.0f;
-};
-
 struct AmbientLighting
 {
     glm::vec3 sky_color = glm::vec3(0.36f, 0.42f, 0.52f);
@@ -92,7 +83,13 @@ class RenderSystem
   public:
     static constexpr std::size_t MaxGpuLights = 64;
 
+    RenderSystem() = default;
     ~RenderSystem();
+    RenderSystem(const RenderSystem &) = delete;
+    RenderSystem &operator=(const RenderSystem &) = delete;
+    RenderSystem(RenderSystem &&) = delete;
+    RenderSystem &operator=(RenderSystem &&) = delete;
+
     bool Initialize(GLFWwindow *window, int window_width, int window_height);
     void Shutdown();
     bool Resize(int window_width, int window_height);
@@ -116,7 +113,7 @@ class RenderSystem
     [[nodiscard]] std::uint64_t GetLightRevision() const;
     [[nodiscard]] std::uint64_t GetLightStateRevision() const;
     void SetLightShadowHandles(const std::vector<LightShadowBinding> &handles);
-    [[nodiscard]] const RenderFrameConstants &GetFrameConstants() const;
+    [[nodiscard]] const CameraFrameData &GetCameraFrameData() const;
     void UpdateCamera(const Camera &camera);
     void SetCameraAspectRatio(float aspect_ratio);
     [[nodiscard]] const Camera &ActiveCamera() const;
@@ -147,7 +144,7 @@ class RenderSystem
     std::vector<std::uint32_t> free_lights_;
     std::vector<GpuLight> gpu_lights_;
     std::vector<LightShadowBinding> light_shadow_handles_;
-    RenderFrameConstants frame_constants_;
+    CameraFrameData camera_frame_data_;
     Camera active_camera_;
     float camera_aspect_ratio_ = 4.0f / 3.0f;
     AmbientLighting ambient_lighting_;

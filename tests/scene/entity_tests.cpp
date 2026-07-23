@@ -1,6 +1,6 @@
 #include "assets/asset_store.h"
 #include "assets/scene_loader.h"
-#include "engine_context.h"
+#include "context.h"
 #include "entity/entity_factory.h"
 #include "entity/fog_entity.h"
 #include "entity/light_entity.h"
@@ -39,7 +39,7 @@ class CustomEntity final : public Entity
     {
         return "game_custom";
     }
-    void Update(CEngine::EngineContext & /*unused*/, float delta_seconds) override
+    void Update(CEngine::Context & /*unused*/, float delta_seconds) override
     {
         elapsed += delta_seconds;
     }
@@ -74,15 +74,15 @@ bool GenerationalSlotsRejectStaleHandles()
 {
     Scene scene;
     auto &first = scene.CreateEntity<CEngine::Entities::PropEntity>("Crate");
-    const EntityId old = first.Id();
+    const EntityHandle old = first.GetHandle();
     if (!Expect(scene.DestroyEntity(old), "live entity should be destroyed") ||
         !Expect(!scene.IsAlive(old), "destroyed handle should be stale"))
     {
         return false;
     }
     auto &second = scene.CreateEntity<CEngine::Entities::LightEntity>("Light");
-    return Expect(second.Id().index == old.index, "free slot should be reused") &&
-           Expect(second.Id().generation != old.generation, "reused slot should advance generation") &&
+    return Expect(second.GetHandle().Index() == old.Index(), "free slot should be reused") &&
+           Expect(second.GetHandle().Generation() != old.Generation(), "reused slot should advance generation") &&
            Expect(scene.GetEntity(old) == nullptr, "stale handle should not resolve");
 }
 
@@ -130,8 +130,8 @@ bool SlotLookupWorks()
 {
     Scene scene;
     auto &prop = scene.CreateEntity<CEngine::Entities::PropEntity>("Crate");
-    return Expect(scene.GetEntity(prop.Id()) == &prop, "runtime handle should find entity") &&
-           Expect(scene.Entities()[prop.Id().index].get() == &prop, "single entity list should own entity");
+    return Expect(scene.GetEntity(prop.GetHandle()) == &prop, "runtime handle should find entity") &&
+           Expect(scene.Entities()[prop.GetHandle().Index()].get() == &prop, "single entity list should own entity");
 }
 
 bool LightModesHaveExplicitRuntimeDirectSemantics()
@@ -148,7 +148,7 @@ bool LightModesHaveExplicitRuntimeDirectSemantics()
 bool LightRendererRecordFollowsEntityLifetime()
 {
     CEngine::Renderer::RenderSystem rendering;
-    CEngine::EngineContext context;
+    CEngine::Context context;
     context.rendering = &rendering;
     CEngine::Entities::LightEntity light;
     light.mode = CEngine::Generated::EngineEntities::LightMode::Baked;
@@ -177,7 +177,7 @@ bool LightRendererRecordFollowsEntityLifetime()
 
     light.Shutdown(context);
     const auto replacement = rendering.RegisterLight(CEngine::Renderer::Light{});
-    return Expect(replacement.index == 0 && replacement.generation == 2,
+    return Expect(replacement.Index() == 0 && replacement.Generation() == 2,
                   "the renderer light should be released exactly once during shutdown");
 }
 
@@ -192,7 +192,7 @@ bool GameLayerCanAddEntitiesAndDriveLifecycle()
     post_process.ssao_radius = 0.9f;
     CEngine::Renderer::RenderSystem rendering;
     CEngine::Input::InputSystem input;
-    CEngine::EngineContext context;
+    CEngine::Context context;
     context.rendering = &rendering;
     context.input = &input;
     scene.Activate(context);
@@ -253,11 +253,12 @@ int main(int argc, char **argv)
             return 1;
         }
         PhysicsSystem physics;
+#ifdef CENGINE_ENABLE_JOLT_PHYSICS
         if (!Expect(physics.Initialize({}), "physics should initialize for loaded prop"))
         {
             return 1;
         }
-        CEngine::EngineContext context;
+        CEngine::Context context;
         context.assets = &assets;
         context.physics = &physics;
         scene->Activate(context);
@@ -269,6 +270,9 @@ int main(int argc, char **argv)
                                    "scene shutdown should release Jolt bodies and constraints")
                    ? 0
                    : 1;
+#else
+        return Expect(!physics.Initialize({}), "physics should report that no backend is compiled") ? 0 : 1;
+#endif
     }
     return GenerationalSlotsRejectStaleHandles() && EntityClassesOwnTheirFields() &&
                    EnvironmentEntitiesOwnTheirFields() && SlotLookupWorks() &&

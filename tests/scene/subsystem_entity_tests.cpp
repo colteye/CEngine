@@ -1,6 +1,6 @@
 #include "assets/asset_store.h"
 #include "assets/scene_loader.h"
-#include "engine_context.h"
+#include "context.h"
 #include "entity/entity_factory.h"
 #include "entity/fog_entity.h"
 #include "entity/light_entity.h"
@@ -55,8 +55,9 @@ bool JoltRejectsStaleBodyHandles()
     PhysicsBodyDesc second_desc = first_desc;
     second_desc.position = glm::vec3(5.0f, 0.0f, 0.0f);
     const PhysicsBodyHandle current = physics.CreateBody(second_desc, shape);
-    return Expect(stale.index == current.index, "Jolt should reuse the freed body slot") &&
-           Expect(stale.generation != current.generation, "reused Jolt body slot should advance generation") && [&] {
+    return Expect(stale.Index() == current.Index(), "Jolt should reuse the freed body slot") &&
+           Expect(stale.Generation() != current.Generation(), "reused Jolt body slot should advance generation") &&
+           [&] {
                PhysicsBodyState state;
                return Expect(!physics.GetBodyState(stale, state), "stale Jolt body handle should not resolve") &&
                       Expect(physics.GetBodyState(current, state) && state.position.x == 5.0f,
@@ -285,7 +286,7 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
     }
     try
     {
-        CEngine::EngineContext context;
+        CEngine::Context context;
         context.assets = &assets;
         context.rendering = &renderer;
         context.input = &input;
@@ -408,9 +409,9 @@ int main(int argc, char **argv)
 
     const bool result =
         Expect(!invalid_mesh_instance, "renderer should reject a mesh instance without resources") &&
-        Expect(mesh_instance_handle.index == current_mesh_instance.index,
+        Expect(mesh_instance_handle.Index() == current_mesh_instance.Index(),
                "renderer should reuse a freed mesh-instance slot") &&
-        Expect(mesh_instance_handle.generation != current_mesh_instance.generation,
+        Expect(mesh_instance_handle.Generation() != current_mesh_instance.Generation(),
                "reused mesh-instance slot should advance generation") &&
         Expect(renderer.ResolveMeshInstance(mesh_instance_handle) == nullptr,
                "stale mesh-instance handle should not resolve") &&
@@ -422,8 +423,9 @@ int main(int argc, char **argv)
                "retained mesh instance should own its immutable resources") &&
         Expect(unchanged_mesh_instance_is_free, "an unchanged mesh instance update should not dirty renderer state") &&
         Expect(changed_mesh_instance_is_published, "a changed mesh instance should advance renderer state once") &&
-        Expect(light_handle.index == current_light.index, "renderer should reuse a freed light slot") &&
-        Expect(light_handle.generation != current_light.generation, "reused light slot should advance generation") &&
+        Expect(light_handle.Index() == current_light.Index(), "renderer should reuse a freed light slot") &&
+        Expect(light_handle.Generation() != current_light.Generation(),
+               "reused light slot should advance generation") &&
         Expect(renderer.ResolveLight(light_handle) == nullptr, "stale light handle should not resolve") &&
         Expect(renderer.ResolveLight(current_light) != nullptr, "current light handle should resolve") &&
         Expect(unchanged_light_is_free, "an unchanged light update should not dirty renderer state") &&
@@ -434,14 +436,14 @@ int main(int argc, char **argv)
     CEngine::Renderer::Camera camera;
     renderer.UpdateCamera(camera);
     renderer.SetCameraAspectRatio(16.0f / 9.0f);
-    const auto &frame = renderer.GetFrameConstants();
+    const auto &frame = renderer.GetCameraFrameData();
     const bool camera_result = Expect(std::abs((frame.proj[1][1] / frame.proj[0][0]) - (16.0f / 9.0f)) < 0.0001f,
                                       "camera projection should preserve the framebuffer aspect ratio");
 
     PhysicsSystem physics;
     PhysicsSystemDesc physics_desc;
     physics_desc.gravity = glm::vec3(0.0f);
-    physics.Initialize(physics_desc);
+    const bool physics_initialized = physics.Initialize(physics_desc);
     PhysicsShape dynamic_shape;
     dynamic_shape.half_extents = {1.0f, 2.0f, 3.0f};
     PhysicsBodyDesc dynamic_body;
@@ -455,10 +457,18 @@ int main(int argc, char **argv)
     const PhysicsBodyHandle floor_handle = physics.CreateBody(floor_body, floor_shape);
     physics.Step(1.0f / 60.0f);
     PhysicsBodyState dynamic_state;
+#ifdef CENGINE_ENABLE_JOLT_PHYSICS
     const bool physics_result =
-        Expect(physics.BodyCount() == 2, "standard body descriptions should reach Jolt") &&
+        Expect(physics_initialized && physics.BodyCount() == 2, "standard body descriptions should reach Jolt") &&
         Expect(physics.GetBodyState(dynamic_handle, dynamic_state) && glm::length(dynamic_state.position) < 0.0001f,
                "zero-gravity dynamic bodies should remain stable");
+#else
+    const bool physics_result = Expect(!physics_initialized, "physics should report that no backend is compiled") &&
+                                Expect(!dynamic_handle && !floor_handle && physics.BodyCount() == 0,
+                                       "an unavailable physics backend should not create runtime bodies") &&
+                                Expect(!physics.GetBodyState(dynamic_handle, dynamic_state),
+                                       "an unavailable physics backend should not resolve body state");
+#endif
     physics.DestroyBody(dynamic_handle);
     physics.DestroyBody(floor_handle);
     const bool cleanup_result = Expect(physics.BodyCount() == 0, "body destruction should release every Jolt body");

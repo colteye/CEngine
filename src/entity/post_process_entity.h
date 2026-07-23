@@ -13,8 +13,8 @@ class PostProcessEntity final : public Scene::Entity, public Generated::EngineEn
 {
   public:
     [[nodiscard]] std::string_view Classname() const override;
-    void Update(EngineContext &context, float delta_seconds) override;
-    void Shutdown(EngineContext &context) override;
+    void Update(Context &context, float delta_seconds) override;
+    void Shutdown(Context &context) override;
 };
 
 } // namespace CEngine::Entities

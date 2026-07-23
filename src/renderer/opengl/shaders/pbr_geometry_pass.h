@@ -1,5 +1,5 @@
-#ifndef PBR_GEOMETRY_PASS_H
-#define PBR_GEOMETRY_PASS_H
+#ifndef CENGINE_RENDERER_OPENGL_SHADERS_PBR_GEOMETRY_PASS_H
+#define CENGINE_RENDERER_OPENGL_SHADERS_PBR_GEOMETRY_PASS_H
 
 #include "renderer/material.h"
 #include "shader.h"
@@ -8,9 +8,11 @@
 
 namespace CEngine::Renderer
 {
-
 class RenderSystem;
+}
 
+namespace CEngine::Renderer::OpenGL
+{
 class PBRGeometryPass
 {
   public:
@@ -48,5 +50,5 @@ class PBRGeometryPass
     GLint has_lightmap_id_ = -1;
 };
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL
 #endif

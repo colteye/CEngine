@@ -22,17 +22,17 @@ class PropEntity final : public Scene::Entity, public Generated::EngineEntities:
 {
   public:
     [[nodiscard]] std::string_view Classname() const override;
-    void Initialize(EngineContext &context) override;
-    void Update(EngineContext &context, float delta_seconds) override;
-    void LateUpdate(EngineContext &context, float delta_seconds) override;
-    void Shutdown(EngineContext &context) override;
+    void Initialize(Context &context) override;
+    void Update(Context &context, float delta_seconds) override;
+    void LateUpdate(Context &context, float delta_seconds) override;
+    void Shutdown(Context &context) override;
     [[nodiscard]] PhysicsBodyHandle PhysicsBody() const
     {
         return physics_body_;
     }
 
   private:
-    void RegisterMeshInstance(EngineContext &context, std::shared_ptr<const Renderer::Mesh> mesh,
+    void RegisterMeshInstance(Context &context, std::shared_ptr<const Renderer::Mesh> mesh,
                               std::shared_ptr<const Renderer::Material> material,
                               std::shared_ptr<const Renderer::Texture> lightmap);
     [[nodiscard]] std::uint32_t BuildMeshInstanceFlags() const;

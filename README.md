@@ -237,7 +237,9 @@ See `docs/asset_formats.md` for the current format decisions.
 
 ## Tooling
 
-The repo includes cross-platform formatting and static analysis configuration:
+The repo includes cross-platform formatting and static analysis configuration.
+See [docs/cpp_style.md](docs/cpp_style.md) for the enforced C++ style and file
+scope.
 
 ```sh
 cmake --build --preset debug --target format

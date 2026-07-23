@@ -6,7 +6,14 @@
 namespace CEngine::Renderer
 {
 
-struct RenderFrameConstants;
+struct CameraFrameData
+{
+    glm::vec3 camera_position = glm::vec3(0.0f);
+    glm::mat4 view = glm::mat4(1.0f);
+    glm::mat4 proj = glm::mat4(1.0f);
+    float near_clip = 0.1f;
+    float far_clip = 100.0f;
+};
 
 struct Camera
 {
@@ -16,7 +23,7 @@ struct Camera
     float near_clip = 0.1f;
     float far_clip = 100.0f;
 
-    [[nodiscard]] RenderFrameConstants FrameConstants(float aspect_ratio) const;
+    [[nodiscard]] CameraFrameData BuildFrameData(float aspect_ratio) const;
 };
 
 } // namespace CEngine::Renderer

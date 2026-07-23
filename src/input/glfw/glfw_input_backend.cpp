@@ -1,4 +1,5 @@
 #include "input/glfw/glfw_input_backend.h"
+#include "input/input_system.h"
 
 #include <GLFW/glfw3.h>
 

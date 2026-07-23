@@ -1,7 +1,7 @@
-#ifndef LIGHTING_BINDINGS_H
-#define LIGHTING_BINDINGS_H
+#ifndef CENGINE_RENDERER_OPENGL_SHADERS_LIGHTING_BINDINGS_H
+#define CENGINE_RENDERER_OPENGL_SHADERS_LIGHTING_BINDINGS_H
 
-#include "renderer/opengl/opengl_shadow_types.h"
+#include "renderer/opengl/shadow_types.h"
 
 #include <array>
 #include <cstdint>
@@ -10,16 +10,20 @@
 
 namespace CEngine::Renderer
 {
-
 class RenderSystem;
+}
 
-class OpenGLDirectLightBuffer
+namespace CEngine::Renderer::OpenGL
+{
+class DirectLightBuffer
 {
   public:
-    OpenGLDirectLightBuffer() = default;
-    OpenGLDirectLightBuffer(const OpenGLDirectLightBuffer &) = delete;
-    OpenGLDirectLightBuffer &operator=(const OpenGLDirectLightBuffer &) = delete;
-    ~OpenGLDirectLightBuffer();
+    DirectLightBuffer() = default;
+    DirectLightBuffer(const DirectLightBuffer &) = delete;
+    DirectLightBuffer &operator=(const DirectLightBuffer &) = delete;
+    DirectLightBuffer(DirectLightBuffer &&) = delete;
+    DirectLightBuffer &operator=(DirectLightBuffer &&) = delete;
+    ~DirectLightBuffer();
 
     void Initialize(GLuint shader_id, const char *block_name);
     void BindAndUploadIfNeeded(RenderSystem &rendering);
@@ -30,34 +34,36 @@ class OpenGLDirectLightBuffer
     uint64_t uploaded_revision_ = 0;
 };
 
-class OpenGLShadowBuffer
+class ShadowBuffer
 {
   public:
-    OpenGLShadowBuffer() = default;
-    OpenGLShadowBuffer(const OpenGLShadowBuffer &) = delete;
-    OpenGLShadowBuffer &operator=(const OpenGLShadowBuffer &) = delete;
-    ~OpenGLShadowBuffer();
+    ShadowBuffer() = default;
+    ShadowBuffer(const ShadowBuffer &) = delete;
+    ShadowBuffer &operator=(const ShadowBuffer &) = delete;
+    ShadowBuffer(ShadowBuffer &&) = delete;
+    ShadowBuffer &operator=(ShadowBuffer &&) = delete;
+    ~ShadowBuffer();
 
     void Initialize(GLuint shader_id, const char *block_name);
-    void Upload(const OpenGLShadowGpuData &data);
+    void Upload(const ShadowGpuData &data);
     void Destroy();
 
   private:
     GLuint buffer_ = 0;
-    OpenGLShadowGpuData uploaded_data_{};
+    ShadowGpuData uploaded_data_{};
     bool uploaded_ = false;
 };
 
-struct OpenGLShadowSamplers
+struct ShadowSamplers
 {
     GLint atlas = -1;
-    std::array<GLint, OpenGLShadows::KMaxPointShadows> point_maps{};
+    std::array<GLint, ShadowLimits::KMaxPointShadows> point_maps{};
 
     void Initialize(GLuint shader_id);
-    void Bind(GLuint atlas_texture, const std::array<GLuint, OpenGLShadows::KMaxPointShadows> &point_textures) const;
+    void Bind(GLuint atlas_texture, const std::array<GLuint, ShadowLimits::KMaxPointShadows> &point_textures) const;
 };
 
-struct OpenGLAmbientUniforms
+struct AmbientUniforms
 {
     GLint sky_color = -1;
     GLint ground_color = -1;
@@ -68,7 +74,7 @@ struct OpenGLAmbientUniforms
     void Upload(const RenderSystem &rendering) const;
 };
 
-struct OpenGLEnvironmentUniforms
+struct EnvironmentUniforms
 {
     GLint irradiance = -1;
     GLint prefiltered = -1;
@@ -88,5 +94,5 @@ struct OpenGLEnvironmentUniforms
     void BindAndUpload(const RenderSystem &rendering, GLuint irradiance_texture, GLuint prefiltered_texture) const;
 };
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL
 #endif

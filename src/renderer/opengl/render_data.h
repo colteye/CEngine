@@ -1,5 +1,5 @@
-#ifndef OPENGL_RENDER_DATA_H
-#define OPENGL_RENDER_DATA_H
+#ifndef CENGINE_RENDERER_OPENGL_RENDER_DATA_H
+#define CENGINE_RENDERER_OPENGL_RENDER_DATA_H
 
 #include "renderer/material.h"
 #include "renderer/mesh_instance.h"
@@ -12,10 +12,10 @@
 
 #include <glm/glm.hpp>
 
-namespace CEngine::Renderer
+namespace CEngine::Renderer::OpenGL
 {
 
-struct OpenGLDrawItem
+struct DrawItem
 {
     const Mesh *mesh = nullptr;
     const Material *material = nullptr;
@@ -34,7 +34,7 @@ struct OpenGLDrawItem
     float lightmap_rgbm_range = 8.0f;
 };
 
-enum class OpenGLRenderQueue
+enum class RenderQueue
 {
     DeferredOpaque,
     ForwardOpaque,
@@ -42,7 +42,7 @@ enum class OpenGLRenderQueue
     None
 };
 
-struct OpenGLRenderQueues
+struct RenderQueues
 {
     std::vector<uint32_t> opaque_deferred;
     std::vector<uint32_t> forward;
@@ -52,5 +52,5 @@ struct OpenGLRenderQueues
     void ClearAndReserve(size_t draw_item_count);
 };
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL
 #endif

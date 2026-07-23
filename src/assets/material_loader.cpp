@@ -252,7 +252,7 @@ bool LoadMaterialAsset(const std::filesystem::path &path, Renderer::Material &ma
     {
         return AssetError("material shader id is not supported");
     }
-    Renderer::MaterialRenderMode render_mode;
+    Renderer::MaterialRenderMode render_mode = Renderer::MaterialRenderMode::OpaqueDeferred;
     if (!MaterialRenderModeFromDisk(header.render_mode, render_mode))
     {
         return AssetError("material render mode is not supported");

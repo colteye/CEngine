@@ -1,5 +1,5 @@
-#ifndef PBR_STANDARD_H
-#define PBR_STANDARD_H
+#ifndef CENGINE_RENDERER_OPENGL_SHADERS_PBR_STANDARD_H
+#define CENGINE_RENDERER_OPENGL_SHADERS_PBR_STANDARD_H
 
 #include "lighting_bindings.h"
 #include "shader.h"
@@ -8,9 +8,11 @@
 
 namespace CEngine::Renderer
 {
-
 class RenderSystem;
+}
 
+namespace CEngine::Renderer::OpenGL
+{
 class PBRStandard
 {
   public:
@@ -21,9 +23,9 @@ class PBRStandard
 
     PBRStandard();
     void Use() const;
-    void UpdateFrame(RenderSystem &rendering, const OpenGLShadowGpuData &shadow_data, GLuint shadow_atlas,
-                     const std::array<GLuint, OpenGLShadows::KMaxPointShadows> &point_shadow_maps,
-                     GLuint irradiance_map, GLuint prefiltered_map);
+    void UpdateFrame(RenderSystem &rendering, const ShadowGpuData &shadow_data, GLuint shadow_atlas,
+                     const std::array<GLuint, ShadowLimits::KMaxPointShadows> &point_shadow_maps, GLuint irradiance_map,
+                     GLuint prefiltered_map);
     void UpdateObject(const glm::mat4 &model, const Material &material, const glm::vec2 &lightmap_scale,
                       const glm::vec2 &lightmap_offset, float lightmap_rgbm_range);
     void SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao, GLuint lightmap);
@@ -34,24 +36,28 @@ class PBRStandard
     void SetMaterialParameters(const Material &material) const;
 
     ShaderProgram shader_program_;
-    OpenGLDirectLightBuffer direct_lights_;
-    OpenGLShadowBuffer shadow_buffer_;
-    OpenGLShadowSamplers shadow_samplers_;
-    OpenGLAmbientUniforms ambient_uniforms_;
-    OpenGLEnvironmentUniforms environment_uniforms_;
-    GLuint cam_pos_id_{};
-    GLuint m_id_{}, v_id_{}, p_id_{};
-    GLuint albedo_id_{}, normal_id_{}, metallic_roughness_ao_id_{};
-    GLuint base_color_factor_id_{};
-    GLuint metallic_roughness_ao_factors_id_{};
-    GLuint alpha_cutoff_id_{};
-    GLuint render_mode_id_{};
-    GLuint receives_shadows_id_{};
-    GLuint lightmap_id_{};
-    GLuint lightmap_scale_offset_id_{};
-    GLuint lightmap_rgbm_range_id_{};
-    GLuint has_lightmap_id_{};
+    DirectLightBuffer direct_lights_;
+    ShadowBuffer shadow_buffer_;
+    ShadowSamplers shadow_samplers_;
+    AmbientUniforms ambient_uniforms_;
+    EnvironmentUniforms environment_uniforms_;
+    GLint cam_pos_id_ = -1;
+    GLint m_id_ = -1;
+    GLint v_id_ = -1;
+    GLint p_id_ = -1;
+    GLint albedo_id_ = -1;
+    GLint normal_id_ = -1;
+    GLint metallic_roughness_ao_id_ = -1;
+    GLint base_color_factor_id_ = -1;
+    GLint metallic_roughness_ao_factors_id_ = -1;
+    GLint alpha_cutoff_id_ = -1;
+    GLint render_mode_id_ = -1;
+    GLint receives_shadows_id_ = -1;
+    GLint lightmap_id_ = -1;
+    GLint lightmap_scale_offset_id_ = -1;
+    GLint lightmap_rgbm_range_id_ = -1;
+    GLint has_lightmap_id_ = -1;
 };
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL
 #endif

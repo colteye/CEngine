@@ -19,9 +19,9 @@ class PlayerEntity final : public CEngine::Scene::Entity, public Generated::Play
     }
     float move_speed = 5.0f;
     [[nodiscard]] std::string_view Classname() const override;
-    void Initialize(CEngine::EngineContext &context) override;
-    void Update(CEngine::EngineContext &context, float delta_seconds) override;
-    void Shutdown(CEngine::EngineContext &context) override;
+    void Initialize(CEngine::Context &context) override;
+    void Update(CEngine::Context &context, float delta_seconds) override;
+    void Shutdown(CEngine::Context &context) override;
 
   private:
     Actions actions_;

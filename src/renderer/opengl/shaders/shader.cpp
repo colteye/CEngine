@@ -6,7 +6,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace CEngine::Renderer
+namespace CEngine::Renderer::OpenGL
 {
 namespace
 {
@@ -139,4 +139,4 @@ bool ShaderProgram::Load(const std::string &vertex_file_path, const std::string 
     return true;
 }
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL

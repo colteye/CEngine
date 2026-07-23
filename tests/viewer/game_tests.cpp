@@ -1,4 +1,4 @@
-#include "engine_context.h"
+#include "context.h"
 #include "entity/entity_factory.h"
 #include "entity/player_entity.h"
 #include "input/actions.h"
@@ -47,7 +47,7 @@ int main()
     player.far_clip = 750.0f;
 
     CEngine::Renderer::RenderSystem rendering;
-    CEngine::EngineContext context;
+    CEngine::Context context;
     context.rendering = &rendering;
     context.input = &input;
     scene.Activate(context);

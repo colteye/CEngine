@@ -1,7 +1,7 @@
 #ifndef PHYSICS_TYPES_H
 #define PHYSICS_TYPES_H
 
-#include "foundation/slot_handle.h"
+#include "handle.h"
 
 #include <cstdint>
 #include <glm/glm.hpp>
@@ -9,11 +9,11 @@
 #include <vector>
 
 struct PhysicsBodySlotTag;
-using PhysicsBodyHandle = CEngine::SlotHandle<PhysicsBodySlotTag>;
+using PhysicsBodyHandle = CEngine::Handle<PhysicsBodySlotTag>;
 struct PhysicsConstraintSlotTag;
-using PhysicsConstraintHandle = CEngine::SlotHandle<PhysicsConstraintSlotTag>;
+using PhysicsConstraintHandle = CEngine::Handle<PhysicsConstraintSlotTag>;
 struct PhysicsCharacterSlotTag;
-using PhysicsCharacterHandle = CEngine::SlotHandle<PhysicsCharacterSlotTag>;
+using PhysicsCharacterHandle = CEngine::Handle<PhysicsCharacterSlotTag>;
 
 enum class PhysicsMotionType
 {
@@ -54,15 +54,12 @@ struct PhysicsShape
     std::vector<PhysicsShape> children;
 };
 
-enum : std::uint8_t
-{
-    PhysicsLockTranslationX = 1u << 0u,
-    PhysicsLockTranslationY = 1u << 1u,
-    PhysicsLockTranslationZ = 1u << 2u,
-    PhysicsLockRotationX = 1u << 3u,
-    PhysicsLockRotationY = 1u << 4u,
-    PhysicsLockRotationZ = 1u << 5u,
-};
+inline constexpr std::uint8_t PhysicsLockTranslationX = 1u << 0u;
+inline constexpr std::uint8_t PhysicsLockTranslationY = 1u << 1u;
+inline constexpr std::uint8_t PhysicsLockTranslationZ = 1u << 2u;
+inline constexpr std::uint8_t PhysicsLockRotationX = 1u << 3u;
+inline constexpr std::uint8_t PhysicsLockRotationY = 1u << 4u;
+inline constexpr std::uint8_t PhysicsLockRotationZ = 1u << 5u;
 
 struct PhysicsSystemDesc
 {

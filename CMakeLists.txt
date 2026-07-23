@@ -312,26 +312,27 @@ if(CENGINE_BUILD_TESTS)
         COMMAND CEngineSceneTests "${CENGINE_PYTHON_CSCENE_FIXTURE}")
     set_tests_properties(load_python_cscene_fixture PROPERTIES FIXTURES_REQUIRED python_cscene)
     if(CENGINE_ENABLE_OPENGL)
-        add_executable(CEngineDirectionalShadowTests
-            src/renderer/opengl/directional_shadow_cascade.cpp
-            tests/renderer/directional_shadow_cascade_tests.cpp
+        add_executable(CEngineShadowSystemTests
+            tests/renderer/shadow_system_tests.cpp
         )
-        target_include_directories(CEngineDirectionalShadowTests
+        target_include_directories(CEngineShadowSystemTests
             PRIVATE
                 "${CMAKE_CURRENT_SOURCE_DIR}/src"
             SYSTEM PRIVATE
                 "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glm"
         )
         if(MSVC)
-            target_compile_options(CEngineDirectionalShadowTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+            target_compile_options(CEngineShadowSystemTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
         else()
-            target_compile_options(CEngineDirectionalShadowTests PRIVATE -Wall -Wextra -Wpedantic)
+            target_compile_options(CEngineShadowSystemTests PRIVATE -Wall -Wextra -Wpedantic)
         endif()
-        add_test(NAME directional_shadow_cascades COMMAND CEngineDirectionalShadowTests)
+        target_link_libraries(CEngineShadowSystemTests PRIVATE CEngineCore)
+        add_test(NAME shadow_system COMMAND CEngineShadowSystemTests)
     endif()
 endif()
 
 set(CENGINE_CORE_SOURCES
+    src/physics/physics_system.cpp
     src/renderer/camera.cpp
     src/input/glfw/glfw_input_backend.cpp
     src/input/input_system.cpp
@@ -341,17 +342,16 @@ set(CENGINE_CORE_SOURCES
 
 if(CENGINE_ENABLE_JOLT_PHYSICS)
     list(APPEND CENGINE_CORE_SOURCES
-        src/physics/jolt/jolt_physics_system.cpp
+        src/physics/jolt/jolt_physics_backend.cpp
     )
 endif()
 
 if(CENGINE_ENABLE_OPENGL)
     list(APPEND CENGINE_CORE_SOURCES
         third_party/glad/src/glad.c
-        src/renderer/opengl/directional_shadow_cascade.cpp
-        src/renderer/opengl/opengl_render_backend.cpp
-        src/renderer/opengl/opengl_shadow_system.cpp
-        src/renderer/opengl/opengl_texture.cpp
+        src/renderer/opengl/render_backend.cpp
+        src/renderer/opengl/shadow_system.cpp
+        src/renderer/opengl/texture.cpp
         src/renderer/opengl/shaders/deferred_lighting.cpp
         src/renderer/opengl/shaders/depth_only.cpp
         src/renderer/opengl/shaders/fullscreen_blit.cpp
@@ -423,7 +423,7 @@ if(MSVC)
         list(APPEND CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/glad/src/glad.c)
     endif()
     if(CENGINE_ENABLE_JOLT_PHYSICS)
-        set_source_files_properties(src/physics/jolt/jolt_physics_system.cpp PROPERTIES COMPILE_OPTIONS /wd4003)
+        set_source_files_properties(src/physics/jolt/jolt_physics_backend.cpp PROPERTIES COMPILE_OPTIONS /wd4003)
     endif()
     if(CENGINE_SILENCED_THIRD_PARTY_SOURCES)
         set_source_files_properties(${CENGINE_SILENCED_THIRD_PARTY_SOURCES} PROPERTIES COMPILE_OPTIONS /W0)
@@ -434,7 +434,7 @@ else()
         list(APPEND CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/glad/src/glad.c)
     endif()
     if(CENGINE_ENABLE_JOLT_PHYSICS)
-        set_source_files_properties(src/physics/jolt/jolt_physics_system.cpp PROPERTIES COMPILE_OPTIONS -Wno-pedantic)
+        set_source_files_properties(src/physics/jolt/jolt_physics_backend.cpp PROPERTIES COMPILE_OPTIONS -Wno-pedantic)
     endif()
     if(CENGINE_SILENCED_THIRD_PARTY_SOURCES)
         set_source_files_properties(${CENGINE_SILENCED_THIRD_PARTY_SOURCES} PROPERTIES COMPILE_OPTIONS -w)

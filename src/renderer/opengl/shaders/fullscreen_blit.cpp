@@ -4,7 +4,7 @@
 
 #include <glm/geometric.hpp>
 
-namespace CEngine::Renderer
+namespace CEngine::Renderer::OpenGL
 {
 
 FullscreenBlit::FullscreenBlit()
@@ -21,7 +21,7 @@ void FullscreenBlit::Use() const
 void FullscreenBlit::Update(const RenderSystem &rendering, GLuint source_texture, GLuint depth_texture) const
 {
     const PostProcessSettings &settings = rendering.GetPostProcessSettings();
-    const RenderFrameConstants &frame = rendering.GetFrameConstants();
+    const CameraFrameData &frame = rendering.GetCameraFrameData();
     glm::vec3 sun_direction(0.0f);
     for (const Light &light : rendering.GetDirectLights())
     {
@@ -84,4 +84,4 @@ void FullscreenBlit::InitializeParameters()
     far_clip_id_ = glGetUniformLocation(program, "far_clip");
 }
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL

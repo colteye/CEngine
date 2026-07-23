@@ -3,7 +3,7 @@
 
 #include "renderer/render_backend.h"
 
-#if defined(CENGINE_ENABLE_VULKAN)
+#ifdef CENGINE_ENABLE_VULKAN
 
 #include <vulkan/vulkan.h>
 

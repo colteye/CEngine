@@ -4,7 +4,7 @@
 
 #include <glm/gtc/type_ptr.hpp>
 
-namespace CEngine::Renderer
+namespace CEngine::Renderer::OpenGL
 {
 
 PBRGeometryPass::PBRGeometryPass()
@@ -20,9 +20,9 @@ void PBRGeometryPass::Use() const
 
 void PBRGeometryPass::UpdateFrame(const RenderSystem &rendering) const
 {
-    const RenderFrameConstants &constants = rendering.GetFrameConstants();
-    glUniformMatrix4fv(view_id_, 1, GL_FALSE, glm::value_ptr(constants.view));
-    glUniformMatrix4fv(projection_id_, 1, GL_FALSE, glm::value_ptr(constants.proj));
+    const CameraFrameData &camera_frame_data = rendering.GetCameraFrameData();
+    glUniformMatrix4fv(view_id_, 1, GL_FALSE, glm::value_ptr(camera_frame_data.view));
+    glUniformMatrix4fv(projection_id_, 1, GL_FALSE, glm::value_ptr(camera_frame_data.proj));
 }
 
 void PBRGeometryPass::UpdateObject(const glm::mat4 &model, const Material &material, const glm::vec2 &lightmap_scale,
@@ -83,4 +83,4 @@ void PBRGeometryPass::InitializeParameters()
     has_lightmap_id_ = glGetUniformLocation(shader_id, "has_lightmap");
 }
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL

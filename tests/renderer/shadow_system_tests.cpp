@@ -1,4 +1,4 @@
-#include "renderer/opengl/directional_shadow_cascade.h"
+#include "renderer/opengl/shadow_system.h"
 
 #include <array>
 #include <cmath>
@@ -10,8 +10,8 @@ namespace
 {
 
 using CEngine::Renderer::Bounds;
-using CEngine::Renderer::BuildDirectionalShadowCascade;
-using CEngine::Renderer::DirectionalShadowCascade;
+using CEngine::Renderer::OpenGL::BuildDirectionalShadowCascade;
+using CEngine::Renderer::OpenGL::DirectionalShadowCascade;
 
 std::array<glm::vec3, 8> BoxCorners(const glm::vec3 &minimum, const glm::vec3 &maximum)
 {

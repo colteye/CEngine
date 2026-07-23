@@ -1,7 +1,7 @@
 #ifndef CENGINE_ENTITY_ENTITY_H
 #define CENGINE_ENTITY_ENTITY_H
 
-#include "foundation/slot_handle.h"
+#include "handle.h"
 
 #include <cstdint>
 #include <string>
@@ -13,7 +13,7 @@
 
 namespace CEngine
 {
-struct EngineContext;
+struct Context;
 }
 namespace CEngine::Scene
 {
@@ -21,7 +21,7 @@ namespace CEngine::Scene
 class Scene;
 
 struct EntitySlotTag;
-using EntityId = SlotHandle<EntitySlotTag>;
+using EntityHandle = Handle<EntitySlotTag>;
 
 inline constexpr std::uint32_t EntityEnabled = 1u << 0u;
 
@@ -40,22 +40,27 @@ class Entity
 {
   public:
     virtual ~Entity() = default;
+    Entity(const Entity &) = delete;
+    Entity &operator=(const Entity &) = delete;
+    Entity(Entity &&) = delete;
+    Entity &operator=(Entity &&) = delete;
+
     [[nodiscard]] virtual std::string_view Classname() const = 0;
 
-    virtual void Initialize(EngineContext & /*unused*/)
+    virtual void Initialize(Context & /*unused*/)
     {
     }
-    virtual void Update(EngineContext & /*unused*/, float /*unused*/)
+    virtual void Update(Context & /*unused*/, float /*unused*/)
     {
     }
-    virtual void LateUpdate(EngineContext & /*unused*/, float /*unused*/)
+    virtual void LateUpdate(Context & /*unused*/, float /*unused*/)
     {
     }
-    virtual void Shutdown(EngineContext & /*unused*/)
+    virtual void Shutdown(Context & /*unused*/)
     {
     }
 
-    [[nodiscard]] EntityId Id() const
+    [[nodiscard]] EntityHandle GetHandle() const
     {
         return id_;
     }
@@ -91,7 +96,7 @@ class Entity
 
   private:
     friend class Scene;
-    EntityId id_;
+    EntityHandle id_;
     std::string name_;
     std::uint32_t flags_ = EntityEnabled;
     Transform transform_;

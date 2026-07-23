@@ -15,9 +15,9 @@ class SkyboxEntity final : public Scene::Entity, public Generated::EngineEntitie
 {
   public:
     [[nodiscard]] std::string_view Classname() const override;
-    void Initialize(EngineContext &context) override;
-    void Update(EngineContext &context, float delta_seconds) override;
-    void Shutdown(EngineContext &context) override;
+    void Initialize(Context &context) override;
+    void Update(Context &context, float delta_seconds) override;
+    void Shutdown(Context &context) override;
 
   private:
     std::shared_ptr<const Renderer::Texture> panorama_;

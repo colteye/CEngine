@@ -6,6 +6,8 @@
 #include <cstddef>
 #include <memory>
 
+class IPhysicsBackend;
+
 class PhysicsSystem
 {
   public:
@@ -70,8 +72,7 @@ class PhysicsSystem
     [[nodiscard]] std::size_t BodyCount() const;
 
   private:
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
+    std::unique_ptr<IPhysicsBackend> backend_;
 };
 
 #endif

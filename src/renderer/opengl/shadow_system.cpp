@@ -1,18 +1,15 @@
-#include "opengl_shadow_system.h"
-
-#include "renderer/opengl/directional_shadow_cascade.h"
+#include "renderer/opengl/shadow_system.h"
 #include "renderer/render_system.h"
 
 #include <algorithm>
 #include <cassert>
 #include <cmath>
-#include <cstring>
 #include <iostream>
 #include <limits>
 
 #include <glm/gtc/matrix_transform.hpp>
 
-namespace CEngine::Renderer
+namespace CEngine::Renderer::OpenGL
 {
 
 namespace
@@ -39,6 +36,16 @@ glm::vec3 StableUpForDirection(const glm::vec3 &direction)
     return {0.0f, 0.0f, 1.0f};
 }
 
+std::array<glm::vec3, 8> BoundsCorners(const Bounds &bounds)
+{
+    return {
+        glm::vec3(bounds.min.x, bounds.min.y, bounds.min.z), glm::vec3(bounds.max.x, bounds.min.y, bounds.min.z),
+        glm::vec3(bounds.min.x, bounds.max.y, bounds.min.z), glm::vec3(bounds.max.x, bounds.max.y, bounds.min.z),
+        glm::vec3(bounds.min.x, bounds.min.y, bounds.max.z), glm::vec3(bounds.max.x, bounds.min.y, bounds.max.z),
+        glm::vec3(bounds.min.x, bounds.max.y, bounds.max.z), glm::vec3(bounds.max.x, bounds.max.y, bounds.max.z),
+    };
+}
+
 glm::mat4 LookAlong(const glm::vec3 &position, const glm::vec3 &direction)
 {
     const glm::vec3 forward = NormalizeOrDefault(direction, glm::vec3(0.0f, 0.0f, -1.0f));
@@ -47,7 +54,7 @@ glm::mat4 LookAlong(const glm::vec3 &position, const glm::vec3 &direction)
 
 int ClampShadowResolution(uint32_t resolution)
 {
-    const uint32_t clamped = std::max<uint32_t>(64, std::min<uint32_t>(resolution, OpenGLShadows::KAtlasSize));
+    const uint32_t clamped = std::max<uint32_t>(64, std::min<uint32_t>(resolution, ShadowLimits::KAtlasSize));
     int power_of_two = 64;
     while (power_of_two * 2 <= static_cast<int>(clamped))
     {
@@ -87,9 +94,9 @@ std::array<glm::vec3, 8> FrustumSliceCorners(const glm::mat4 &inverse_view, cons
     return corners;
 }
 
-glm::vec4 AtlasRect(const OpenGLShadowSystem::AtlasTile &tile)
+glm::vec4 AtlasRect(const ShadowSystem::AtlasTile &tile)
 {
-    const auto atlas_size = static_cast<float>(OpenGLShadows::KAtlasSize);
+    const auto atlas_size = static_cast<float>(ShadowLimits::KAtlasSize);
     const float inset = 0.5f / atlas_size;
     const float size = static_cast<float>(tile.size - 1) / atlas_size;
     return {(static_cast<float>(tile.x) / atlas_size) + inset, (static_cast<float>(tile.y) / atlas_size) + inset, size,
@@ -107,29 +114,127 @@ float CascadeBlendRange(float split_depth, bool last_cascade)
 }
 } // namespace
 
-bool OpenGLShadowSystem::SameMatrix(const glm::mat4 &left, const glm::mat4 &right)
+DirectionalShadowCascade BuildDirectionalShadowCascade(const std::array<glm::vec3, 8> &receiver_corners,
+                                                       const glm::vec3 &requested_light_direction, int resolution,
+                                                       const std::vector<Bounds> &shadow_caster_bounds,
+                                                       float unbounded_caster_depth)
 {
-    return std::memcmp(&left[0][0], &right[0][0], sizeof(glm::mat4)) == 0;
+    const glm::vec3 light_direction = NormalizeOrDefault(requested_light_direction, glm::vec3(-0.4f, -1.0f, -0.2f));
+    const glm::vec3 light_right = NormalizeOrDefault(glm::cross(light_direction, StableUpForDirection(light_direction)),
+                                                     glm::vec3(1.0f, 0.0f, 0.0f));
+    const glm::vec3 light_up = glm::cross(light_right, light_direction);
+
+    glm::vec3 center(0.0f);
+    for (const glm::vec3 &corner : receiver_corners)
+    {
+        center += corner;
+    }
+    center /= static_cast<float>(receiver_corners.size());
+
+    float radius = 0.0f;
+    for (const glm::vec3 &corner : receiver_corners)
+    {
+        radius = std::max(radius, glm::length(corner - center));
+    }
+    radius = std::max(0.0625f, std::ceil(radius * 16.0f) / 16.0f);
+
+    const float world_units_per_texel = (radius * 2.0f) / static_cast<float>(std::max(resolution, 1));
+    if (world_units_per_texel > 0.0f)
+    {
+        const float right_coordinate = glm::dot(center, light_right);
+        const float up_coordinate = glm::dot(center, light_up);
+        center += light_right *
+                  ((std::round(right_coordinate / world_units_per_texel) * world_units_per_texel) - right_coordinate);
+        center +=
+            light_up * ((std::round(up_coordinate / world_units_per_texel) * world_units_per_texel) - up_coordinate);
+    }
+
+    // This view establishes the light-space orientation and snapped XY origin.
+    // Its position along the light direction is moved after the caster depth
+    // range is known.
+    const glm::mat4 centered_view = glm::lookAt(center, center + light_direction, light_up);
+    glm::vec3 receiver_min(std::numeric_limits<float>::max());
+    glm::vec3 receiver_max(std::numeric_limits<float>::lowest());
+    for (const glm::vec3 &corner : receiver_corners)
+    {
+        const glm::vec3 light_space = glm::vec3(centered_view * glm::vec4(corner, 1.0f));
+        receiver_min = glm::min(receiver_min, light_space);
+        receiver_max = glm::max(receiver_max, light_space);
+    }
+
+    const float xy_padding = world_units_per_texel * 3.0f;
+    const float min_x = -radius - xy_padding;
+    const float max_x = radius + xy_padding;
+    const float min_y = -radius - xy_padding;
+    const float max_y = radius + xy_padding;
+    float caster_max_z = receiver_max.z;
+    bool has_unbounded_caster = false;
+
+    for (const Bounds &bounds : shadow_caster_bounds)
+    {
+        if (!bounds.valid)
+        {
+            has_unbounded_caster = true;
+            continue;
+        }
+
+        glm::vec3 caster_min(std::numeric_limits<float>::max());
+        glm::vec3 caster_max(std::numeric_limits<float>::lowest());
+        for (const glm::vec3 &corner : BoundsCorners(bounds))
+        {
+            const glm::vec3 light_space = glm::vec3(centered_view * glm::vec4(corner, 1.0f));
+            caster_min = glm::min(caster_min, light_space);
+            caster_max = glm::max(caster_max, light_space);
+        }
+
+        const bool overlaps_xy =
+            caster_max.x >= min_x && caster_min.x <= max_x && caster_max.y >= min_y && caster_min.y <= max_y;
+        if (overlaps_xy)
+        {
+            // A directional-light blocker can affect this receiver footprint
+            // only from the light-facing side, which is +Z in this view.
+            caster_max_z = std::max(caster_max_z, caster_max.z);
+        }
+    }
+
+    if (has_unbounded_caster)
+    {
+        caster_max_z = std::max(caster_max_z, receiver_max.z + std::max(0.0f, unbounded_caster_depth));
+    }
+
+    const float depth_padding = std::max(1.0f, world_units_per_texel * 4.0f);
+    const float light_offset = caster_max_z + depth_padding;
+    DirectionalShadowCascade cascade;
+    cascade.view = glm::lookAt(center - light_direction * light_offset, center, light_up);
+    const float near_depth = depth_padding;
+    const float far_depth = std::max(near_depth + 1.0f, light_offset - receiver_min.z + depth_padding);
+    cascade.projection = glm::ortho(min_x, max_x, min_y, max_y, near_depth, far_depth);
+    return cascade;
 }
 
-bool OpenGLShadowSystem::SameRect(const glm::vec4 &left, const glm::vec4 &right)
+bool ShadowSystem::SameMatrix(const glm::mat4 &left, const glm::mat4 &right)
 {
-    return std::memcmp(&left[0], &right[0], sizeof(glm::vec4)) == 0;
+    return left == right;
 }
 
-OpenGLShadowSystem::~OpenGLShadowSystem()
+bool ShadowSystem::SameRect(const glm::vec4 &left, const glm::vec4 &right)
+{
+    return left == right;
+}
+
+ShadowSystem::~ShadowSystem()
 {
     Destroy();
 }
 
-bool OpenGLShadowSystem::Initialize(RenderSystem &in_rendering)
+bool ShadowSystem::Initialize(RenderSystem &in_rendering)
 {
     rendering_ = &in_rendering;
     glGenFramebuffers(1, &depth_fbo_);
 
     glGenTextures(1, &atlas_texture_);
     glBindTexture(GL_TEXTURE_2D, atlas_texture_);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, OpenGLShadows::KAtlasSize, OpenGLShadows::KAtlasSize, 0,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, ShadowLimits::KAtlasSize, ShadowLimits::KAtlasSize, 0,
                  GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -168,7 +273,7 @@ bool OpenGLShadowSystem::Initialize(RenderSystem &in_rendering)
     return atlas_texture_ != 0 && depth_fbo_ != 0;
 }
 
-void OpenGLShadowSystem::Destroy()
+void ShadowSystem::Destroy()
 {
     for (GLuint &texture : point_textures_)
     {
@@ -194,7 +299,7 @@ void OpenGLShadowSystem::Destroy()
     point_valid_.fill(false);
     depth_only_.reset();
     point_depth_.reset();
-    gpu_data_ = OpenGLShadowGpuData();
+    gpu_data_ = ShadowGpuData();
     point_slot_used_.fill(false);
     cached_spot_valid_.fill(false);
     cached_cascade_valid_.fill(false);
@@ -204,16 +309,16 @@ void OpenGLShadowSystem::Destroy()
     rendering_ = nullptr;
 }
 
-OpenGLShadowSystem::AtlasTile OpenGLShadowSystem::AllocateAtlasTile(int requested_size)
+ShadowSystem::AtlasTile ShadowSystem::AllocateAtlasTile(int requested_size)
 {
     const int size = ClampShadowResolution(static_cast<uint32_t>(requested_size));
-    if (atlas_cursor_x_ + size > OpenGLShadows::KAtlasSize)
+    if (atlas_cursor_x_ + size > ShadowLimits::KAtlasSize)
     {
         atlas_cursor_x_ = 0;
         atlas_cursor_y_ += atlas_row_height_;
         atlas_row_height_ = 0;
     }
-    if (atlas_cursor_y_ + size > OpenGLShadows::KAtlasSize)
+    if (atlas_cursor_y_ + size > ShadowLimits::KAtlasSize)
     {
         return {};
     }
@@ -227,9 +332,9 @@ OpenGLShadowSystem::AtlasTile OpenGLShadowSystem::AllocateAtlasTile(int requeste
     return tile;
 }
 
-int OpenGLShadowSystem::AllocatePointSlot(size_t light_index, int resolution)
+int ShadowSystem::AllocatePointSlot(size_t light_index, int resolution)
 {
-    for (int slot = 0; slot < OpenGLShadows::KMaxPointShadows; ++slot)
+    for (int slot = 0; slot < ShadowLimits::KMaxPointShadows; ++slot)
     {
         if (point_light_indices_[slot] == light_index)
         {
@@ -250,7 +355,7 @@ int OpenGLShadowSystem::AllocatePointSlot(size_t light_index, int resolution)
         }
     }
 
-    for (int slot = 0; slot < OpenGLShadows::KMaxPointShadows; ++slot)
+    for (int slot = 0; slot < ShadowLimits::KMaxPointShadows; ++slot)
     {
         if (point_light_indices_[slot] == std::numeric_limits<size_t>::max())
         {
@@ -281,14 +386,14 @@ int OpenGLShadowSystem::AllocatePointSlot(size_t light_index, int resolution)
     return -1;
 }
 
-void OpenGLShadowSystem::Render(const std::vector<OpenGLDrawItem> &draw_items, const OpenGLRenderQueues &queues)
+void ShadowSystem::Render(const std::vector<DrawItem> &draw_items, const RenderQueues &queues)
 {
     if (atlas_texture_ == 0 || depth_fbo_ == 0)
     {
         return;
     }
 
-    gpu_data_ = OpenGLShadowGpuData();
+    gpu_data_ = ShadowGpuData();
     point_slot_used_.fill(false);
     atlas_cursor_x_ = 0;
     atlas_cursor_y_ = 0;
@@ -323,7 +428,7 @@ void OpenGLShadowSystem::Render(const std::vector<OpenGLDrawItem> &draw_items, c
         }
     }
 
-    for (int slot = 0; slot < OpenGLShadows::KMaxPointShadows; ++slot)
+    for (int slot = 0; slot < ShadowLimits::KMaxPointShadows; ++slot)
     {
         if (point_slot_used_[slot])
         {
@@ -336,17 +441,16 @@ void OpenGLShadowSystem::Render(const std::vector<OpenGLDrawItem> &draw_items, c
     cached_mesh_instance_revision_ = mesh_instance_revision;
     cached_light_state_revision_ = light_state_revision;
     gpu_data_.shadow_counts = glm::vec4(
-        static_cast<float>(OpenGLShadows::KMaxSpotShadows), static_cast<float>(OpenGLShadows::KMaxDirectionalCascades),
-        static_cast<float>(OpenGLShadows::KMaxPointShadows), static_cast<float>(OpenGLShadows::KAtlasSize));
+        static_cast<float>(ShadowLimits::KMaxSpotShadows), static_cast<float>(ShadowLimits::KMaxDirectionalCascades),
+        static_cast<float>(ShadowLimits::KMaxPointShadows), static_cast<float>(ShadowLimits::KAtlasSize));
     rendering_->SetLightShadowHandles(handles);
 }
 
-void OpenGLShadowSystem::RenderSpotShadow(size_t light_index, const Light &light,
-                                          const std::vector<OpenGLDrawItem> &draw_items,
-                                          const OpenGLRenderQueues &queues, std::vector<LightShadowBinding> &handles)
+void ShadowSystem::RenderSpotShadow(size_t light_index, const Light &light, const std::vector<DrawItem> &draw_items,
+                                    const RenderQueues &queues, std::vector<LightShadowBinding> &handles)
 {
     int spot_index = -1;
-    for (int index = 0; index < OpenGLShadows::KMaxSpotShadows; ++index)
+    for (int index = 0; index < ShadowLimits::KMaxSpotShadows; ++index)
     {
         if (gpu_data_.spot_params[index].z == 0.0f)
         {
@@ -375,7 +479,7 @@ void OpenGLShadowSystem::RenderSpotShadow(size_t light_index, const Light &light
     gpu_data_.spot_atlas_rects[spot_index] = AtlasRect(tile);
     gpu_data_.spot_params[spot_index] =
         glm::vec4(light.shadow_bias, light.shadow_normal_bias, static_cast<float>(resolution), far_plane);
-    handles[light_index] = {spot_index, OpenGLShadows::KTypeSpot};
+    handles[light_index] = {spot_index, ShadowLimits::KTypeSpot};
 
     const glm::mat4 matrix = projection * view;
     const glm::vec4 rect = gpu_data_.spot_atlas_rects[spot_index];
@@ -389,14 +493,13 @@ void OpenGLShadowSystem::RenderSpotShadow(size_t light_index, const Light &light
     }
 }
 
-void OpenGLShadowSystem::RenderDirectionalShadow(size_t light_index, const Light &light,
-                                                 const std::vector<OpenGLDrawItem> &draw_items,
-                                                 const OpenGLRenderQueues &queues,
-                                                 std::vector<LightShadowBinding> &handles)
+void ShadowSystem::RenderDirectionalShadow(size_t light_index, const Light &light,
+                                           const std::vector<DrawItem> &draw_items, const RenderQueues &queues,
+                                           std::vector<LightShadowBinding> &handles)
 {
     int cascade_base = -1;
-    for (int index = 0; index <= OpenGLShadows::KMaxDirectionalCascades - OpenGLShadows::KCascadeCount;
-         index += OpenGLShadows::KCascadeCount)
+    for (int index = 0; index <= ShadowLimits::KMaxDirectionalCascades - ShadowLimits::KCascadeCount;
+         index += ShadowLimits::KCascadeCount)
     {
         if (gpu_data_.cascade_params[index].x == 0.0f)
         {
@@ -409,16 +512,16 @@ void OpenGLShadowSystem::RenderDirectionalShadow(size_t light_index, const Light
         return;
     }
 
-    const RenderFrameConstants &constants = rendering_->GetFrameConstants();
-    const glm::mat4 inverse_view = glm::inverse(constants.view);
-    const float near_plane = std::max(0.01f, ProjectionNear(constants.proj));
+    const CameraFrameData &camera_frame_data = rendering_->GetCameraFrameData();
+    const glm::mat4 inverse_view = glm::inverse(camera_frame_data.view);
+    const float near_plane = std::max(0.01f, ProjectionNear(camera_frame_data.proj));
     const float far_plane =
-        std::min(std::max(near_plane + 1.0f, ProjectionFar(constants.proj)), KDirectionalShadowDistance);
-    std::array<float, OpenGLShadows::KCascadeCount + 1> splits{};
+        std::min(std::max(near_plane + 1.0f, ProjectionFar(camera_frame_data.proj)), KDirectionalShadowDistance);
+    std::array<float, ShadowLimits::KCascadeCount + 1> splits{};
     splits[0] = near_plane;
-    for (int cascade = 1; cascade <= OpenGLShadows::KCascadeCount; ++cascade)
+    for (int cascade = 1; cascade <= ShadowLimits::KCascadeCount; ++cascade)
     {
-        const float ratio = static_cast<float>(cascade) / static_cast<float>(OpenGLShadows::KCascadeCount);
+        const float ratio = static_cast<float>(cascade) / static_cast<float>(ShadowLimits::KCascadeCount);
         const float log_split = near_plane * std::pow(far_plane / near_plane, ratio);
         const float linear_split = near_plane + ((far_plane - near_plane) * ratio);
         splits[cascade] = (KCascadeSplitLambda * log_split) + ((1.0f - KCascadeSplitLambda) * linear_split);
@@ -433,7 +536,7 @@ void OpenGLShadowSystem::RenderDirectionalShadow(size_t light_index, const Light
         caster_bounds.push_back(draw_items[draw_index].world_bounds);
     }
 
-    for (int cascade = 0; cascade < OpenGLShadows::KCascadeCount; ++cascade)
+    for (int cascade = 0; cascade < ShadowLimits::KCascadeCount; ++cascade)
     {
         const AtlasTile tile = AllocateAtlasTile(resolution);
         if (tile.size == 0)
@@ -444,7 +547,7 @@ void OpenGLShadowSystem::RenderDirectionalShadow(size_t light_index, const Light
         const float overlap = cascade == 0 ? 0.0f : CascadeBlendRange(splits[cascade], false);
         const float slice_near = std::max(near_plane, splits[cascade] - overlap);
         const std::array<glm::vec3, 8> corners =
-            FrustumSliceCorners(inverse_view, constants.proj, slice_near, splits[cascade + 1]);
+            FrustumSliceCorners(inverse_view, camera_frame_data.proj, slice_near, splits[cascade + 1]);
         const DirectionalShadowCascade cascade_matrices = BuildDirectionalShadowCascade(
             corners, light_direction, resolution, caster_bounds, KDirectionalShadowDistance);
         const glm::mat4 &view = cascade_matrices.view;
@@ -455,7 +558,7 @@ void OpenGLShadowSystem::RenderDirectionalShadow(size_t light_index, const Light
         gpu_data_.cascade_atlas_rects[cascade_index] = AtlasRect(tile);
         gpu_data_.cascade_params[cascade_index] =
             glm::vec4(splits[cascade + 1], light.shadow_bias, light.shadow_normal_bias,
-                      CascadeBlendRange(splits[cascade + 1], cascade == OpenGLShadows::KCascadeCount - 1));
+                      CascadeBlendRange(splits[cascade + 1], cascade == ShadowLimits::KCascadeCount - 1));
 
         const glm::mat4 matrix = projection * view;
         const glm::vec4 rect = gpu_data_.cascade_atlas_rects[cascade_index];
@@ -470,12 +573,11 @@ void OpenGLShadowSystem::RenderDirectionalShadow(size_t light_index, const Light
         }
     }
 
-    handles[light_index] = {cascade_base, OpenGLShadows::KTypeDirectional};
+    handles[light_index] = {cascade_base, ShadowLimits::KTypeDirectional};
 }
 
-void OpenGLShadowSystem::RenderPointShadow(size_t light_index, const Light &light,
-                                           const std::vector<OpenGLDrawItem> &draw_items,
-                                           const OpenGLRenderQueues &queues, std::vector<LightShadowBinding> &handles)
+void ShadowSystem::RenderPointShadow(size_t light_index, const Light &light, const std::vector<DrawItem> &draw_items,
+                                     const RenderQueues &queues, std::vector<LightShadowBinding> &handles)
 {
     const int resolution = ClampShadowResolution(light.shadow_resolution);
     const int slot = AllocatePointSlot(light_index, resolution);
@@ -489,7 +591,7 @@ void OpenGLShadowSystem::RenderPointShadow(size_t light_index, const Light &ligh
     gpu_data_.point_params[slot] = glm::vec4(light.position, far_plane);
     gpu_data_.point_shadow_params[slot] =
         glm::vec4(light.shadow_bias, light.shadow_normal_bias, static_cast<float>(resolution), 0.0f);
-    handles[light_index] = {slot, OpenGLShadows::KTypePoint};
+    handles[light_index] = {slot, ShadowLimits::KTypePoint};
 
     if (!should_update)
     {
@@ -513,9 +615,8 @@ void OpenGLShadowSystem::RenderPointShadow(size_t light_index, const Light &ligh
     }
 }
 
-void OpenGLShadowSystem::RenderDepthToAtlas(const AtlasTile &tile, const glm::mat4 &view, const glm::mat4 &projection,
-                                            const std::vector<OpenGLDrawItem> &draw_items,
-                                            const OpenGLRenderQueues &queues)
+void ShadowSystem::RenderDepthToAtlas(const AtlasTile &tile, const glm::mat4 &view, const glm::mat4 &projection,
+                                      const std::vector<DrawItem> &draw_items, const RenderQueues &queues)
 {
     assert(depth_only_ != nullptr);
     const Frustum light_frustum = ExtractFrustum(projection * view);
@@ -542,7 +643,7 @@ void OpenGLShadowSystem::RenderDepthToAtlas(const AtlasTile &tile, const glm::ma
     GLuint bound_vertex_array = 0;
     for (uint32_t draw_index : queues.shadow_casters)
     {
-        const OpenGLDrawItem &item = draw_items[draw_index];
+        const DrawItem &item = draw_items[draw_index];
         if (!IntersectsFrustum(item.world_bounds, light_frustum))
         {
             continue;
@@ -563,10 +664,9 @@ void OpenGLShadowSystem::RenderDepthToAtlas(const AtlasTile &tile, const glm::ma
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void OpenGLShadowSystem::RenderPointFace(GLenum face, GLuint texture, int resolution, const glm::mat4 &view,
-                                         const glm::mat4 &projection, const glm::vec3 &position, float far_plane,
-                                         const std::vector<OpenGLDrawItem> &draw_items,
-                                         const OpenGLRenderQueues &queues)
+void ShadowSystem::RenderPointFace(GLenum face, GLuint texture, int resolution, const glm::mat4 &view,
+                                   const glm::mat4 &projection, const glm::vec3 &position, float far_plane,
+                                   const std::vector<DrawItem> &draw_items, const RenderQueues &queues)
 {
     assert(point_depth_ != nullptr);
     const Frustum light_frustum = ExtractFrustum(projection * view);
@@ -591,7 +691,7 @@ void OpenGLShadowSystem::RenderPointFace(GLenum face, GLuint texture, int resolu
     GLuint bound_vertex_array = 0;
     for (uint32_t draw_index : queues.shadow_casters)
     {
-        const OpenGLDrawItem &item = draw_items[draw_index];
+        const DrawItem &item = draw_items[draw_index];
         if (!IntersectsFrustum(item.world_bounds, light_frustum))
         {
             continue;
@@ -611,4 +711,4 @@ void OpenGLShadowSystem::RenderPointFace(GLenum face, GLuint texture, int resolu
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL

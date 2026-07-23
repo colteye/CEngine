@@ -1,7 +1,8 @@
 #include "scene/scene.h"
 
-#include "engine_context.h"
+#include "context.h"
 #include "physics/physics_system.h"
+#include <iostream>
 
 #include <algorithm>
 #include <stdexcept>
@@ -14,7 +15,7 @@ Scene::~Scene()
     Stop();
 }
 
-void Scene::Activate(EngineContext &context)
+void Scene::Activate(Context &context)
 {
     if (active_)
     {
@@ -59,7 +60,7 @@ void Scene::Activate(EngineContext &context)
     }
 }
 
-void Scene::Update(EngineContext &context, float delta_seconds)
+void Scene::Update(Context &context, float delta_seconds)
 {
     if (!active_)
     {
@@ -99,6 +100,7 @@ void Scene::Stop() noexcept
         }
         catch (...)
         {
+            std::cerr << "Entity shutdown failed while stopping the scene.\n";
         }
     }
     started_entities_.clear();
@@ -151,17 +153,17 @@ Entity &Scene::AddEntity(std::unique_ptr<Entity> entity, std::string_view name)
     return result;
 }
 
-bool Scene::DestroyEntity(EntityId entity)
+bool Scene::DestroyEntity(EntityHandle entity)
 {
     if (!IsAlive(entity))
     {
         return false;
     }
+    const std::uint32_t index = entity.Index();
     if (active_)
     {
-        entities_[entity.index]->Shutdown(active_context_);
-        const auto started =
-            std::find(started_entities_.begin(), started_entities_.end(), entities_[entity.index].get());
+        entities_[index]->Shutdown(active_context_);
+        const auto started = std::find(started_entities_.begin(), started_entities_.end(), entities_[index].get());
         if (started != started_entities_.end())
         {
             started_entities_.erase(started);
@@ -172,30 +174,31 @@ bool Scene::DestroyEntity(EntityId entity)
                                           return connection.source == entity || connection.target == entity;
                                       }),
                        connections_.end());
-    entities_[entity.index].reset();
-    ++generations_[entity.index];
-    if (generations_[entity.index] == 0)
+    entities_[index].reset();
+    ++generations_[index];
+    if (generations_[index] == 0)
     {
-        ++generations_[entity.index];
+        ++generations_[index];
     }
-    free_slots_.push_back(entity.index);
+    free_slots_.push_back(index);
     --live_count_;
     return true;
 }
 
-bool Scene::IsAlive(EntityId entity) const
+bool Scene::IsAlive(EntityHandle entity) const
 {
-    return entity.index < entities_.size() && entities_[entity.index] != nullptr &&
-           generations_[entity.index] == entity.generation;
+    const std::uint32_t index = entity.Index();
+    return entity && index < entities_.size() && entities_[index] != nullptr &&
+           generations_[index] == entity.Generation();
 }
 
-Entity *Scene::GetEntity(EntityId entity)
+Entity *Scene::GetEntity(EntityHandle entity)
 {
-    return IsAlive(entity) ? entities_[entity.index].get() : nullptr;
+    return IsAlive(entity) ? entities_[entity.Index()].get() : nullptr;
 }
-const Entity *Scene::GetEntity(EntityId entity) const
+const Entity *Scene::GetEntity(EntityHandle entity) const
 {
-    return IsAlive(entity) ? entities_[entity.index].get() : nullptr;
+    return IsAlive(entity) ? entities_[entity.Index()].get() : nullptr;
 }
 
 void Scene::SetAssetReferences(std::vector<Assets::AssetReference> references)

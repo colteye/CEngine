@@ -1,6 +1,6 @@
 #include "entity/fog_entity.h"
 
-#include "engine_context.h"
+#include "context.h"
 #include "renderer/render_system.h"
 
 namespace CEngine::Entities
@@ -10,7 +10,7 @@ std::string_view FogEntity::Classname() const
     return "exponential_height_fog";
 }
 
-void FogEntity::Update(EngineContext &context, float /*unused*/)
+void FogEntity::Update(Context &context, float /*unused*/)
 {
     if (context.rendering == nullptr)
     {
@@ -28,7 +28,7 @@ void FogEntity::Update(EngineContext &context, float /*unused*/)
     context.rendering->SetExponentialHeightFog(fog);
 }
 
-void FogEntity::Shutdown(EngineContext &context)
+void FogEntity::Shutdown(Context &context)
 {
     if (context.rendering != nullptr)
     {

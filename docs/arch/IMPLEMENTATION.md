@@ -32,7 +32,7 @@ RenderSystem
 Scene
 ```
 
-`EngineContext` is a non-owning composition value passed during lifecycle
+`Context` is a non-owning composition value passed during lifecycle
 calls. Its raw pointers are valid because the application owns every referenced
 system for longer than the active scene. An active `Scene` keeps a copy of that
 small value for symmetric teardown; it never keeps a pointer to the caller's
@@ -59,14 +59,14 @@ The representation follows lifetime:
 
 | Value | Representation | Reason |
 | --- | --- | --- |
-| reusable entity, mesh-instance, light, body, constraint, character slot | tagged `SlotHandle<Tag>{index, generation}` | stale references must fail after slot reuse and unrelated handle domains must not mix |
-| append-only input action | `ActionId{index}` | actions are never removed or reused |
+| reusable entity, mesh-instance, light, body, constraint, character slot | tagged 64-bit `Handle<Tag>` packing a 32-bit index and generation | stale references must fail after slot reuse and unrelated handle domains must not mix |
+| append-only input action | tagged `ActionHandle` with a fixed generation | actions share the typed handle representation but are never removed or reused |
 | serialized entity or asset table position | `uint32_t` | it is a file-local index, not a live runtime identity |
 | cooked asset identity | validated `AssetReference{path, guid, type}` | immutable assets do not need mutable runtime handles |
 | immutable decoded asset ownership | `shared_ptr<const T>` | scenes and render records may safely share one decoded value |
 | backend lookup key | raw `const T*` | call-scoped or backend-private observation of an asset retained by a public `shared_ptr` owner |
-| subsystem composition | raw pointer in `EngineContext` | explicitly non-owning and bounded by application lifetime |
-| private implementation | `unique_ptr<Impl>` | hides Jolt and other heavy implementation details |
+| subsystem composition | raw pointer in `Context` | explicitly non-owning and bounded by application lifetime |
+| compile-selected subsystem backend | `unique_ptr<I*Backend>` | keeps graphics, input, and physics implementations replaceable without runtime registries |
 
 Do not introduce an asset handle in parallel with `AssetReference` and
 `shared_ptr`. Do not use a bare integer for a reusable slot. Do not place
@@ -132,11 +132,19 @@ The compiled `IRenderBackend` boundary exists because OpenGL and Vulkan have
 different resource implementations. It is not a runtime plugin registry.
 Vulkan remains an incomplete compiled alternative.
 
+OpenGL implementation types live in `CEngine::Renderer::OpenGL`; the backend
+directory therefore uses local names such as `RenderBackend`, `ShadowSystem`,
+and `ShadowBuffer` without repeating `OpenGL` in every filename and type.
+Directional cascade fitting is part of `shadow_system.h/.cpp`, not a parallel
+subsystem.
+
 ## Physics
 
-`PhysicsSystem` is the only engine-facing physics object. Jolt classes, body
-IDs, layers, listeners, allocators, and constraints remain in
-`jolt_physics_system.cpp`.
+`PhysicsSystem` is the engine-facing physics facade and owns one
+compile-selected `IPhysicsBackend`. `JoltPhysicsBackend` is the current concrete
+implementation. Jolt classes, body IDs, layers, listeners, allocators, and
+constraints remain in `jolt_physics_backend.cpp`. This is an ordinary compiled
+backend boundary like rendering and input, not a runtime plugin registry.
 
 Public collision data is `PhysicsShape`, an engine-neutral tree supporting:
 
@@ -172,7 +180,7 @@ falls back to transform movement in tests or tools without physics.
 
 `InputSystem` owns one platform backend and maps device state to append-only
 actions. `Key` covers every standard GLFW keyboard key. Game code consumes
-`ActionId` values; device-specific GLFW values do not cross the backend.
+`ActionHandle` values; device-specific GLFW values do not cross the backend.
 
 ## Extension rules
 

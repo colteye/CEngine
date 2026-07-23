@@ -1,7 +1,7 @@
-#include "opengl_render_backend.h"
+#include "renderer/opengl/render_backend.h"
 
 #include "renderer/mesh.h"
-#include "renderer/opengl/opengl_texture.h"
+#include "renderer/opengl/texture.h"
 #include "renderer/render_system.h"
 
 #include <algorithm>
@@ -12,7 +12,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-namespace CEngine::Renderer
+namespace CEngine::Renderer::OpenGL
 {
 
 namespace
@@ -32,13 +32,13 @@ glm::vec3 BoundsCenter(const Bounds &bounds, const glm::mat4 &transform)
 {
     if (!bounds.valid)
     {
-        return glm::vec3(transform[3]);
+        return {transform[3]};
     }
     return (bounds.min + bounds.max) * 0.5f;
 }
 } // namespace
 
-void OpenGLEnvironmentResources::Destroy()
+void EnvironmentResources::Destroy()
 {
     panorama_to_cube.reset();
     irradiance.reset();
@@ -71,7 +71,7 @@ void OpenGLEnvironmentResources::Destroy()
     skybox_environment_map = -1;
 }
 
-void OpenGLMaterialResources::Destroy()
+void MaterialResources::Destroy()
 {
     if (owns_albedo_tex && albedo_tex != 0)
     {
@@ -93,12 +93,12 @@ void OpenGLMaterialResources::Destroy()
     owns_metallic_roughness_ao_tex = false;
 }
 
-OpenGLMeshResources::OpenGLMeshResources(OpenGLMeshResources &&other) noexcept
+MeshResources::MeshResources(MeshResources &&other) noexcept
 {
     *this = std::move(other);
 }
 
-OpenGLMeshResources &OpenGLMeshResources::operator=(OpenGLMeshResources &&other) noexcept
+MeshResources &MeshResources::operator=(MeshResources &&other) noexcept
 {
     if (this == &other)
     {
@@ -122,12 +122,12 @@ OpenGLMeshResources &OpenGLMeshResources::operator=(OpenGLMeshResources &&other)
     return *this;
 }
 
-OpenGLMeshResources::~OpenGLMeshResources()
+MeshResources::~MeshResources()
 {
     Destroy();
 }
 
-void OpenGLFrameResources::Destroy()
+void FrameResources::Destroy()
 {
     if (g_albedo != 0)
     {
@@ -191,7 +191,7 @@ void OpenGLFrameResources::Destroy()
     }
 }
 
-void OpenGLRenderQueues::ClearAndReserve(size_t draw_item_count)
+void RenderQueues::ClearAndReserve(size_t draw_item_count)
 {
     opaque_deferred.clear();
     forward.clear();
@@ -207,7 +207,7 @@ void OpenGLRenderQueues::ClearAndReserve(size_t draw_item_count)
     }
 }
 
-void OpenGLMeshResources::Destroy()
+void MeshResources::Destroy()
 {
     if (vertex_buffer != 0)
     {
@@ -229,8 +229,8 @@ void OpenGLMeshResources::Destroy()
     references = 0;
 }
 
-bool OpenGLRenderBackend::Initialize(RenderSystem &in_rendering, GLFWwindow * /*window*/, int in_window_width,
-                                     int in_window_height)
+bool RenderBackend::Initialize(RenderSystem &in_rendering, GLFWwindow * /*window*/, int in_window_width,
+                               int in_window_height)
 {
     rendering_ = &in_rendering;
     glEnable(GL_DEPTH_TEST);
@@ -249,8 +249,8 @@ bool OpenGLRenderBackend::Initialize(RenderSystem &in_rendering, GLFWwindow * /*
         DestroyFrameResources();
         return false;
     }
-    default_white_texture_ = OpenGLTexture::CreateSolid(255, 255, 255);
-    default_normal_texture_ = OpenGLTexture::CreateSolid(128, 128, 255);
+    default_white_texture_ = TextureLoader::CreateSolid(255, 255, 255);
+    default_normal_texture_ = TextureLoader::CreateSolid(128, 128, 255);
     if (default_white_texture_ == 0 || default_normal_texture_ == 0)
     {
         if (default_white_texture_ != 0)
@@ -278,10 +278,10 @@ bool OpenGLRenderBackend::Initialize(RenderSystem &in_rendering, GLFWwindow * /*
     return true;
 }
 
-void OpenGLRenderBackend::Shutdown()
+void RenderBackend::Shutdown()
 {
     environment_resources_.Destroy();
-    shader_passes_ = OpenGLShaderPasses();
+    shader_passes_ = ShaderPasses();
 
     for (auto &it : material_resources_)
     {
@@ -329,7 +329,7 @@ void OpenGLRenderBackend::Shutdown()
     rendering_ = nullptr;
 }
 
-bool OpenGLRenderBackend::Resize(int in_window_width, int in_window_height)
+bool RenderBackend::Resize(int in_window_width, int in_window_height)
 {
     if (in_window_width <= 0 || in_window_height <= 0)
     {
@@ -357,8 +357,8 @@ bool OpenGLRenderBackend::Resize(int in_window_width, int in_window_height)
     return true;
 }
 
-bool OpenGLRenderBackend::RegisterMeshInstance(std::uint32_t slot, const MeshInstance &mesh_instance,
-                                               const Bounds &world_bounds)
+bool RenderBackend::RegisterMeshInstance(std::uint32_t slot, const MeshInstance &mesh_instance,
+                                         const Bounds &world_bounds)
 {
     assert(mesh_instance.mesh != nullptr);
     assert(mesh_instance.material != nullptr);
@@ -377,7 +377,7 @@ bool OpenGLRenderBackend::RegisterMeshInstance(std::uint32_t slot, const MeshIns
     auto mesh = mesh_resources_.find(mesh_instance.mesh.get());
     if (mesh == mesh_resources_.end())
     {
-        OpenGLMeshResources uploaded = UploadMesh(*mesh_instance.mesh);
+        MeshResources uploaded = UploadMesh(*mesh_instance.mesh);
         if (uploaded.index_count == 0)
         {
             if (mesh_instance.lightmap != nullptr)
@@ -390,7 +390,7 @@ bool OpenGLRenderBackend::RegisterMeshInstance(std::uint32_t slot, const MeshIns
         mesh = mesh_resources_.emplace(mesh_instance.mesh.get(), std::move(uploaded)).first;
     }
 
-    OpenGLDrawItem draw_item;
+    DrawItem draw_item;
     draw_item.mesh = mesh_instance.mesh.get();
     draw_item.material = material;
     draw_item.lightmap = mesh_instance.lightmap.get();
@@ -399,7 +399,7 @@ bool OpenGLRenderBackend::RegisterMeshInstance(std::uint32_t slot, const MeshIns
     draw_item.count = mesh->second.index_count;
     draw_item.flags = mesh_instance.flags;
     draw_item.vertex_array_obj = mesh->second.vertex_array_obj;
-    const OpenGLMaterialResources &resources = material_resources_.at(material);
+    const MaterialResources &resources = material_resources_.at(material);
     draw_item.albedo_tex = resources.albedo_tex;
     draw_item.normal_tex = resources.normal_tex;
     draw_item.metallic_roughness_ao_tex = resources.metallic_roughness_ao_tex;
@@ -423,8 +423,8 @@ bool OpenGLRenderBackend::RegisterMeshInstance(std::uint32_t slot, const MeshIns
     return true;
 }
 
-void OpenGLRenderBackend::UpdateMeshInstance(std::uint32_t slot, const glm::mat4 &transform, const Bounds &world_bounds,
-                                             std::uint32_t flags)
+void RenderBackend::UpdateMeshInstance(std::uint32_t slot, const glm::mat4 &transform, const Bounds &world_bounds,
+                                       std::uint32_t flags)
 {
     if (slot >= draw_items_.size())
     {
@@ -436,7 +436,7 @@ void OpenGLRenderBackend::UpdateMeshInstance(std::uint32_t slot, const glm::mat4
     draw_items_[slot].flags = flags;
 }
 
-void OpenGLRenderBackend::RemoveMeshInstance(std::uint32_t slot)
+void RenderBackend::RemoveMeshInstance(std::uint32_t slot)
 {
     if (slot >= draw_items_.size())
     {
@@ -466,9 +466,9 @@ void OpenGLRenderBackend::RemoveMeshInstance(std::uint32_t slot)
     draw_items_[slot] = {};
 }
 
-OpenGLMeshResources OpenGLRenderBackend::UploadMesh(const Mesh &mesh)
+MeshResources RenderBackend::UploadMesh(const Mesh &mesh)
 {
-    OpenGLMeshResources buffers;
+    MeshResources buffers;
     if (mesh.Empty())
     {
         return buffers;
@@ -483,7 +483,8 @@ OpenGLMeshResources OpenGLRenderBackend::UploadMesh(const Mesh &mesh)
 
     glGenBuffers(1, &buffers.vertex_buffer);
     glBindBuffer(GL_ARRAY_BUFFER, buffers.vertex_buffer);
-    glBufferData(GL_ARRAY_BUFFER, mesh.vertices.size() * sizeof(MeshVertex), mesh.vertices.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(mesh.vertices.size() * sizeof(MeshVertex)),
+                 mesh.vertices.data(), GL_STATIC_DRAW);
     const GLsizei stride = sizeof(MeshVertex);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void *>(offsetof(MeshVertex, position)));
@@ -499,8 +500,8 @@ OpenGLMeshResources OpenGLRenderBackend::UploadMesh(const Mesh &mesh)
 
     glGenBuffers(1, &buffers.index_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers.index_buffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.indices.size() * sizeof(std::uint32_t), mesh.indices.data(),
-                 GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(mesh.indices.size() * sizeof(std::uint32_t)),
+                 mesh.indices.data(), GL_STATIC_DRAW);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
@@ -513,7 +514,7 @@ OpenGLMeshResources OpenGLRenderBackend::UploadMesh(const Mesh &mesh)
     return buffers;
 }
 
-bool OpenGLRenderBackend::RegisterMaterial(const Material *material)
+bool RenderBackend::RegisterMaterial(const Material *material)
 {
     assert(material != nullptr);
     const auto existing = material_resources_.find(material);
@@ -523,15 +524,15 @@ bool OpenGLRenderBackend::RegisterMaterial(const Material *material)
         return true;
     }
 
-    OpenGLMaterialResources resources;
+    MaterialResources resources;
     resources.references = 1;
     resources.owns_albedo_tex = !material->albedo.Empty();
     resources.owns_normal_tex = !material->normal.Empty();
     resources.owns_metallic_roughness_ao_tex = !material->metallic_roughness_ao.Empty();
-    resources.albedo_tex = resources.owns_albedo_tex ? OpenGLTexture::Load(material->albedo) : default_white_texture_;
-    resources.normal_tex = resources.owns_normal_tex ? OpenGLTexture::Load(material->normal) : default_normal_texture_;
+    resources.albedo_tex = resources.owns_albedo_tex ? TextureLoader::Load(material->albedo) : default_white_texture_;
+    resources.normal_tex = resources.owns_normal_tex ? TextureLoader::Load(material->normal) : default_normal_texture_;
     resources.metallic_roughness_ao_tex = resources.owns_metallic_roughness_ao_tex
-                                              ? OpenGLTexture::Load(material->metallic_roughness_ao)
+                                              ? TextureLoader::Load(material->metallic_roughness_ao)
                                               : default_white_texture_;
     if (resources.albedo_tex == 0 || resources.normal_tex == 0 || resources.metallic_roughness_ao_tex == 0)
     {
@@ -542,7 +543,7 @@ bool OpenGLRenderBackend::RegisterMaterial(const Material *material)
     return true;
 }
 
-void OpenGLRenderBackend::RemoveMaterial(const Material *material)
+void RenderBackend::RemoveMaterial(const Material *material)
 {
     const auto found = material_resources_.find(material);
     if (found == material_resources_.end())
@@ -558,7 +559,7 @@ void OpenGLRenderBackend::RemoveMaterial(const Material *material)
     material_resources_.erase(found);
 }
 
-bool OpenGLRenderBackend::RegisterLightmap(const Texture *lightmap)
+bool RenderBackend::RegisterLightmap(const Texture *lightmap)
 {
     assert(lightmap != nullptr);
     const auto found = lightmap_resources_.find(lightmap);
@@ -568,16 +569,16 @@ bool OpenGLRenderBackend::RegisterLightmap(const Texture *lightmap)
         return true;
     }
 
-    const GLuint texture = OpenGLTexture::Load(*lightmap);
+    const GLuint texture = TextureLoader::Load(*lightmap);
     if (texture == 0)
     {
         return false;
     }
-    lightmap_resources_.emplace(lightmap, OpenGLLightmapResources{texture, 1});
+    lightmap_resources_.emplace(lightmap, LightmapResources{texture, 1});
     return true;
 }
 
-void OpenGLRenderBackend::RemoveLightmap(const Texture *lightmap)
+void RenderBackend::RemoveLightmap(const Texture *lightmap)
 {
     const auto found = lightmap_resources_.find(lightmap);
     if (found == lightmap_resources_.end())
@@ -595,7 +596,7 @@ void OpenGLRenderBackend::RemoveLightmap(const Texture *lightmap)
     lightmap_resources_.erase(found);
 }
 
-PBRStandard *OpenGLRenderBackend::GetShader(MaterialShaderType shader_type)
+PBRStandard *RenderBackend::GetShader(MaterialShaderType shader_type)
 {
     switch (shader_type)
     {
@@ -613,9 +614,9 @@ PBRStandard *OpenGLRenderBackend::GetShader(MaterialShaderType shader_type)
     return nullptr;
 }
 
-bool OpenGLRenderBackend::CreateFrameResources(int width, int height)
+bool RenderBackend::CreateFrameResources(int width, int height)
 {
-    OpenGLFrameResources &resources = frame_resources_;
+    FrameResources &resources = frame_resources_;
 
     glGenFramebuffers(1, &resources.g_buffer_fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, resources.g_buffer_fbo);
@@ -699,21 +700,21 @@ bool OpenGLRenderBackend::CreateFrameResources(int width, int height)
     return true;
 }
 
-void OpenGLRenderBackend::DestroyFrameResources()
+void RenderBackend::DestroyFrameResources()
 {
     frame_resources_.Destroy();
 }
 
-void OpenGLRenderBackend::BuildRenderQueues()
+void RenderBackend::BuildRenderQueues()
 {
     render_queues_.ClearAndReserve(draw_items_.size());
-    const RenderFrameConstants &frame = rendering_->GetFrameConstants();
+    const CameraFrameData &frame = rendering_->GetCameraFrameData();
     const Frustum camera_frustum = ExtractFrustum(frame.proj * frame.view);
     camera_distance_squared_.resize(draw_items_.size());
 
     for (uint32_t index = 0; index < draw_items_.size(); ++index)
     {
-        const OpenGLDrawItem &item = draw_items_[index];
+        const DrawItem &item = draw_items_[index];
         if (item.material == nullptr || item.count == 0)
         {
             continue;
@@ -728,16 +729,16 @@ void OpenGLRenderBackend::BuildRenderQueues()
         {
             switch (ClassifyRenderMode(item.material->render_mode))
             {
-            case OpenGLRenderQueue::DeferredOpaque:
+            case RenderQueue::DeferredOpaque:
                 render_queues_.opaque_deferred.push_back(index);
                 break;
-            case OpenGLRenderQueue::ForwardOpaque:
+            case RenderQueue::ForwardOpaque:
                 render_queues_.forward.push_back(index);
                 break;
-            case OpenGLRenderQueue::Transparent:
+            case RenderQueue::Transparent:
                 render_queues_.transparent.push_back(index);
                 break;
-            case OpenGLRenderQueue::None:
+            case RenderQueue::None:
                 break;
             }
         }
@@ -759,7 +760,7 @@ void OpenGLRenderBackend::BuildRenderQueues()
               });
 }
 
-void OpenGLRenderBackend::RenderGeometryPass()
+void RenderBackend::RenderGeometryPass()
 {
     if (shader_passes_.pbr_geometry == nullptr)
     {
@@ -783,7 +784,7 @@ void OpenGLRenderBackend::RenderGeometryPass()
     GLuint bound_vertex_array = 0;
     for (uint32_t draw_index : render_queues_.opaque_deferred)
     {
-        const OpenGLDrawItem &item = draw_items_[draw_index];
+        const DrawItem &item = draw_items_[draw_index];
 
         if (bound_vertex_array != item.vertex_array_obj)
         {
@@ -794,12 +795,12 @@ void OpenGLRenderBackend::RenderGeometryPass()
                                                  item.lightmap_tex);
         shader_passes_.pbr_geometry->UpdateObject(item.transform, *item.material, item.lightmap_scale,
                                                   item.lightmap_offset, item.lightmap_rgbm_range);
-        DrawItem(item);
+        Draw(item);
     }
     glBindVertexArray(0);
 }
 
-void OpenGLRenderBackend::RenderDeferredLightingPass()
+void RenderBackend::RenderDeferredLightingPass()
 {
     if (shader_passes_.deferred_lighting == nullptr)
     {
@@ -823,7 +824,7 @@ void OpenGLRenderBackend::RenderDeferredLightingPass()
     RenderScreenSpaceQuad();
 }
 
-void OpenGLRenderBackend::RenderAmbientOcclusionPass()
+void RenderBackend::RenderAmbientOcclusionPass()
 {
     assert(shader_passes_.ssao != nullptr);
     glBindFramebuffer(GL_FRAMEBUFFER, frame_resources_.ssao_fbo);
@@ -843,7 +844,7 @@ void OpenGLRenderBackend::RenderAmbientOcclusionPass()
     RenderScreenSpaceQuad();
 }
 
-bool OpenGLRenderBackend::BuildEnvironmentResources()
+bool RenderBackend::BuildEnvironmentResources()
 {
     const ImageBasedLighting &lighting = rendering_->GetImageBasedLighting();
     auto &resources = environment_resources_;
@@ -851,7 +852,7 @@ bool OpenGLRenderBackend::BuildEnvironmentResources()
     {
         return false;
     }
-    resources.panorama = OpenGLTexture::Load(*lighting.panorama);
+    resources.panorama = TextureLoader::Load(*lighting.panorama);
     if (resources.panorama == 0)
     {
         return false;
@@ -995,7 +996,7 @@ bool OpenGLRenderBackend::BuildEnvironmentResources()
     return glGetError() == GL_NO_ERROR;
 }
 
-void OpenGLRenderBackend::SyncEnvironmentResources()
+void RenderBackend::SyncEnvironmentResources()
 {
     if (!rendering_->ConsumeImageBasedLightingResourcesDirty())
     {
@@ -1009,14 +1010,14 @@ void OpenGLRenderBackend::SyncEnvironmentResources()
     }
 }
 
-void OpenGLRenderBackend::DrawEnvironmentCube() const
+void RenderBackend::DrawEnvironmentCube() const
 {
     glBindVertexArray(environment_resources_.cube_vao);
     glDrawArrays(GL_TRIANGLES, 0, 36);
     glBindVertexArray(0);
 }
 
-void OpenGLRenderBackend::RenderSkybox()
+void RenderBackend::RenderSkybox()
 {
     const ImageBasedLighting &lighting = rendering_->GetImageBasedLighting();
     if (!lighting.enabled || environment_resources_.environment_map == 0 || !environment_resources_.skybox)
@@ -1030,7 +1031,7 @@ void OpenGLRenderBackend::RenderSkybox()
     glDepthMask(GL_FALSE);
     glDisable(GL_CULL_FACE);
     environment_resources_.skybox->Use();
-    const RenderFrameConstants &frame = rendering_->GetFrameConstants();
+    const CameraFrameData &frame = rendering_->GetCameraFrameData();
     glUniformMatrix4fv(environment_resources_.skybox_view, 1, GL_FALSE, glm::value_ptr(frame.view));
     glUniformMatrix4fv(environment_resources_.skybox_projection, 1, GL_FALSE, glm::value_ptr(frame.proj));
     glUniform1f(environment_resources_.skybox_intensity, lighting.sky_intensity);
@@ -1044,7 +1045,7 @@ void OpenGLRenderBackend::RenderSkybox()
     glDepthFunc(GL_LESS);
 }
 
-void OpenGLRenderBackend::RenderForwardQueue(const std::vector<uint32_t> &queue, bool transparent)
+void RenderBackend::RenderForwardQueue(const std::vector<uint32_t> &queue, bool transparent)
 {
     if (queue.empty())
     {
@@ -1072,7 +1073,7 @@ void OpenGLRenderBackend::RenderForwardQueue(const std::vector<uint32_t> &queue,
     PBRStandard *bound_shader = nullptr;
     for (uint32_t draw_index : queue)
     {
-        const OpenGLDrawItem &item = draw_items_[draw_index];
+        const DrawItem &item = draw_items_[draw_index];
         PBRStandard *shader = GetShader(item.material->shader_type);
         if (shader == nullptr)
         {
@@ -1095,7 +1096,7 @@ void OpenGLRenderBackend::RenderForwardQueue(const std::vector<uint32_t> &queue,
         shader->SetTextures(item.albedo_tex, item.normal_tex, item.metallic_roughness_ao_tex, item.lightmap_tex);
         shader->UpdateObject(item.transform, *item.material, item.lightmap_scale, item.lightmap_offset,
                              item.lightmap_rgbm_range);
-        DrawItem(item);
+        Draw(item);
     }
 
     glDepthMask(GL_TRUE);
@@ -1103,7 +1104,7 @@ void OpenGLRenderBackend::RenderForwardQueue(const std::vector<uint32_t> &queue,
     glBindVertexArray(0);
 }
 
-void OpenGLRenderBackend::PresentSceneColor()
+void RenderBackend::PresentSceneColor()
 {
     if (shader_passes_.fullscreen_blit == nullptr)
     {
@@ -1121,34 +1122,34 @@ void OpenGLRenderBackend::PresentSceneColor()
     RenderScreenSpaceQuad();
 }
 
-void OpenGLRenderBackend::DrawItem(const OpenGLDrawItem &item)
+void RenderBackend::Draw(const DrawItem &item)
 {
     glDrawElements(GL_TRIANGLES, item.count, GL_UNSIGNED_INT, nullptr);
 }
 
-OpenGLRenderQueue OpenGLRenderBackend::ClassifyRenderMode(MaterialRenderMode mode)
+RenderQueue RenderBackend::ClassifyRenderMode(MaterialRenderMode mode)
 {
     switch (mode)
     {
     case MaterialRenderMode::OpaqueDeferred:
     case MaterialRenderMode::AlphaClip:
     case MaterialRenderMode::AlphaHashDither:
-        return OpenGLRenderQueue::DeferredOpaque;
+        return RenderQueue::DeferredOpaque;
     case MaterialRenderMode::Unlit:
-        return OpenGLRenderQueue::ForwardOpaque;
+        return RenderQueue::ForwardOpaque;
     case MaterialRenderMode::TransparentBlend:
-        return OpenGLRenderQueue::Transparent;
+        return RenderQueue::Transparent;
     }
 
-    return OpenGLRenderQueue::None;
+    return RenderQueue::None;
 }
 
-bool OpenGLRenderBackend::DrawsShadowCaster(const OpenGLDrawItem &item)
+bool RenderBackend::DrawsShadowCaster(const DrawItem &item)
 {
     return item.material->casts_shadows && (item.flags & MeshInstanceFlagCastsShadow) != 0;
 }
 
-void OpenGLRenderBackend::Render()
+void RenderBackend::Render()
 {
     SyncEnvironmentResources();
     BuildRenderQueues();
@@ -1164,7 +1165,7 @@ void OpenGLRenderBackend::Render()
     glEnable(GL_DEPTH_TEST);
 }
 
-void OpenGLRenderBackend::RenderScreenSpaceQuad()
+void RenderBackend::RenderScreenSpaceQuad()
 {
     if (quad_VAO_ == 0)
     {
@@ -1186,4 +1187,4 @@ void OpenGLRenderBackend::RenderScreenSpaceQuad()
     glBindVertexArray(0);
 }
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL

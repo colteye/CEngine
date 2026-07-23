@@ -1,13 +1,15 @@
-#ifndef FULLSCREEN_BLIT_H
-#define FULLSCREEN_BLIT_H
+#ifndef CENGINE_RENDERER_OPENGL_SHADERS_FULLSCREEN_BLIT_H
+#define CENGINE_RENDERER_OPENGL_SHADERS_FULLSCREEN_BLIT_H
 
 #include "shader.h"
 
 namespace CEngine::Renderer
 {
-
 class RenderSystem;
+}
 
+namespace CEngine::Renderer::OpenGL
+{
 class FullscreenBlit
 {
   public:
@@ -42,5 +44,5 @@ class FullscreenBlit
     GLint far_clip_id_ = -1;
 };
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL
 #endif

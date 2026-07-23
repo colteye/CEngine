@@ -5,7 +5,7 @@
 namespace CEngine::Input
 {
 
-ActionId InputSystem::RegisterAction(std::string name)
+ActionHandle InputSystem::RegisterAction(std::string name)
 {
     if (name.empty())
     {
@@ -16,15 +16,15 @@ ActionId InputSystem::RegisterAction(std::string name)
     {
         return existing->second;
     }
-    const ActionId action{static_cast<std::uint32_t>(values_.size())};
+    const ActionHandle action{static_cast<std::uint32_t>(values_.size()), 1};
     actions_by_name_.emplace(std::move(name), action);
     values_.push_back(0.0f);
     return action;
 }
 
-bool InputSystem::BindKey(ActionId action, Key key, float scale)
+bool InputSystem::BindKey(ActionHandle action, Key key, float scale)
 {
-    if (!action || action.index >= values_.size() || !std::isfinite(scale))
+    if (!action || action.Index() >= values_.size() || !std::isfinite(scale))
     {
         return false;
     }
@@ -32,9 +32,9 @@ bool InputSystem::BindKey(ActionId action, Key key, float scale)
     return true;
 }
 
-bool InputSystem::BindPointerAxis(ActionId action, PointerAxis axis, float scale)
+bool InputSystem::BindPointerAxis(ActionHandle action, PointerAxis axis, float scale)
 {
-    if (!action || action.index >= values_.size() || !std::isfinite(scale))
+    if (!action || action.Index() >= values_.size() || !std::isfinite(scale))
     {
         return false;
     }
@@ -42,17 +42,17 @@ bool InputSystem::BindPointerAxis(ActionId action, PointerAxis axis, float scale
     return true;
 }
 
-void InputSystem::Set(ActionId action, float value)
+void InputSystem::Set(ActionHandle action, float value)
 {
-    if (action && action.index < values_.size())
+    if (action && action.Index() < values_.size())
     {
-        values_[action.index] = value;
+        values_[action.Index()] = value;
     }
 }
 
-float InputSystem::Value(ActionId action) const
+float InputSystem::Value(ActionHandle action) const
 {
-    return action && action.index < values_.size() ? values_[action.index] : 0.0f;
+    return action && action.Index() < values_.size() ? values_[action.Index()] : 0.0f;
 }
 
 } // namespace CEngine::Input

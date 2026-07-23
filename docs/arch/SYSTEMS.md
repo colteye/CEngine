@@ -263,7 +263,7 @@ Prop entity -> MeshAsset + material bindings + transform + flags
 ```
 
 The cooker groups prop records by class in deterministic packed arrays. A live
-`SceneInstance` creates an entity and `EntityId` for every prop. Rendering and
+`SceneInstance` creates an entity and `EntityHandle` for every prop. Rendering and
 physics may group static prop bindings by coarse bounds and compatible storage
 behind handles such as `RenderSceneChunkHandle` or `PhysicsStaticChunkHandle`.
 That batching is private to the owning system and never replaces entity
@@ -608,12 +608,12 @@ Descriptions use CEngine math, collision-layer IDs, material IDs, asset
 references, and safe owner tokens. Jolt types remain private to its backend.
 Batch variants accept caller-owned spans. Static prop collision bindings may
 enter physics in bulk rather than through one allocating call per triangle or
-mesh instance; each binding still has a safe owner `EntityId`.
+mesh instance; each binding still has a safe owner `EntityHandle`.
 
 ### 5. Body and shape ownership
 
 `PhysicsBodyHandle` identifies a PhysicsSystem front-end record. That record can
-store the owning server `EntityId` used when producing events.
+store the owning server `EntityHandle` used when producing events.
 
 Immutable collision geometry originates in `CollisionAsset`. PhysicsSystem
 creates or caches backend shapes derived from the asset revision. Bodies retain
@@ -729,7 +729,7 @@ After the step:
 ```text
 backend contacts
   -> PhysicsSystem event normalization
-  -> owner EntityId mapping
+  -> owner EntityHandle mapping
   -> ServerSimulation event queue
   -> entity/game-rule dispatch
 ```
@@ -754,11 +754,13 @@ support. They never permanently rewind the live authoritative simulation.
 
 ### 12. Backend boundary
 
-The boundary is a source and ownership boundary, not an `IPhysicsBackend`
-hierarchy. Only `PhysicsSystem` implementation files include Jolt headers or
-identifiers. `PhysicsSystem` calls Jolt directly behind the public facade.
+`PhysicsSystem` owns one compile-selected `IPhysicsBackend`.
+`JoltPhysicsBackend` is the current concrete implementation, and only its
+implementation file includes Jolt headers or identifiers. Additional physics
+backends use the same contract and are selected by build configuration; this is
+not a runtime plugin registry.
 
-The facade owns:
+The selected backend owns:
 
 - handle allocation and generation validation;
 - engine collision layers and filters;

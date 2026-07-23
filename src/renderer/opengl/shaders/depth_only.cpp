@@ -2,7 +2,7 @@
 
 #include <glm/gtc/type_ptr.hpp>
 
-namespace CEngine::Renderer
+namespace CEngine::Renderer::OpenGL
 {
 
 DepthOnly::DepthOnly()
@@ -51,4 +51,4 @@ void DepthOnly::InitializeParameters()
     alpha_test_id_ = glGetUniformLocation(shader_id, "alpha_test");
 }
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL

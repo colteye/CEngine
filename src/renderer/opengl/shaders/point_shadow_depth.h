@@ -1,12 +1,12 @@
-#ifndef POINT_SHADOW_DEPTH_H
-#define POINT_SHADOW_DEPTH_H
+#ifndef CENGINE_RENDERER_OPENGL_SHADERS_POINT_SHADOW_DEPTH_H
+#define CENGINE_RENDERER_OPENGL_SHADERS_POINT_SHADOW_DEPTH_H
 
 #include "renderer/material.h"
 #include "shader.h"
 
 #include <glm/glm.hpp>
 
-namespace CEngine::Renderer
+namespace CEngine::Renderer::OpenGL
 {
 
 class PointShadowDepth
@@ -34,5 +34,5 @@ class PointShadowDepth
     GLint alpha_test_id_ = -1;
 };
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL
 #endif

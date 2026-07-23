@@ -1,6 +1,6 @@
 #include "entity/player_entity.h"
 
-#include "engine_context.h"
+#include "context.h"
 #include "input/input_system.h"
 #include "physics/physics_system.h"
 #include "renderer/camera.h"
@@ -18,7 +18,7 @@ std::string_view PlayerEntity::Classname() const
     return "player";
 }
 
-void PlayerEntity::Initialize(CEngine::EngineContext &context)
+void PlayerEntity::Initialize(CEngine::Context &context)
 {
     const glm::vec3 direction =
         glm::normalize(glm::vec3(GetTransform().world_matrix * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)));
@@ -38,7 +38,7 @@ void PlayerEntity::Initialize(CEngine::EngineContext &context)
     }
 }
 
-void PlayerEntity::Update(CEngine::EngineContext &context, float delta_seconds)
+void PlayerEntity::Update(CEngine::Context &context, float delta_seconds)
 {
     if (!enabled)
     {
@@ -105,7 +105,7 @@ void PlayerEntity::Update(CEngine::EngineContext &context, float delta_seconds)
     }
 }
 
-void PlayerEntity::Shutdown(CEngine::EngineContext &context)
+void PlayerEntity::Shutdown(CEngine::Context &context)
 {
     if (context.physics != nullptr && character_)
     {

@@ -230,10 +230,19 @@ std::vector<std::uint8_t> StaticMeshPayload(std::uint32_t flags = 0, std::uint32
 
     std::vector<std::uint8_t> payload;
     AppendStruct(payload, mesh_metadata);
-    const std::vector<std::uint8_t> geometry =
-        vertex_stride == 56
-            ? SkinnedTriangleGeometry()
-            : ((flags & MeshFlagLightmapUv) != 0 ? LightmappedTriangleGeometry() : StaticTriangleGeometry());
+    std::vector<std::uint8_t> geometry;
+    if (vertex_stride == 56)
+    {
+        geometry = SkinnedTriangleGeometry();
+    }
+    else if ((flags & MeshFlagLightmapUv) != 0)
+    {
+        geometry = LightmappedTriangleGeometry();
+    }
+    else
+    {
+        geometry = StaticTriangleGeometry();
+    }
     payload.insert(payload.end(), geometry.begin(), geometry.end());
     return payload;
 }

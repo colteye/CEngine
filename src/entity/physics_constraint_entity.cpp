@@ -1,6 +1,6 @@
 #include "entity/physics_constraint_entity.h"
 
-#include "engine_context.h"
+#include "context.h"
 #include "entity/prop_entity.h"
 #include "physics/physics_system.h"
 #include "scene/scene.h"
@@ -62,7 +62,7 @@ std::string_view PhysicsConstraintEntity::Classname() const
     return "physics_constraint";
 }
 
-void PhysicsConstraintEntity::Initialize(EngineContext &context)
+void PhysicsConstraintEntity::Initialize(Context &context)
 {
     if (context.physics == nullptr || context.scene == nullptr)
     {
@@ -101,7 +101,7 @@ void PhysicsConstraintEntity::Initialize(EngineContext &context)
     }
 }
 
-void PhysicsConstraintEntity::Shutdown(EngineContext &context)
+void PhysicsConstraintEntity::Shutdown(Context &context)
 {
     if (context.physics != nullptr && constraint_)
     {

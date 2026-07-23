@@ -5,7 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-namespace CEngine::Renderer
+namespace CEngine::Renderer::OpenGL
 {
 
 SSAO::SSAO()
@@ -29,11 +29,11 @@ void SSAO::UpdateCompute(const RenderSystem &rendering) const
     glBindTexture(GL_TEXTURE_2D, normal_roughness_tex_);
     glUniform1i(normal_roughness_id_, 1);
 
-    const RenderFrameConstants &constants = rendering.GetFrameConstants();
-    const glm::mat4 inverse_projection = glm::inverse(constants.proj);
-    glUniformMatrix4fv(projection_id_, 1, GL_FALSE, glm::value_ptr(constants.proj));
+    const CameraFrameData &camera_frame_data = rendering.GetCameraFrameData();
+    const glm::mat4 inverse_projection = glm::inverse(camera_frame_data.proj);
+    glUniformMatrix4fv(projection_id_, 1, GL_FALSE, glm::value_ptr(camera_frame_data.proj));
     glUniformMatrix4fv(inverse_projection_id_, 1, GL_FALSE, glm::value_ptr(inverse_projection));
-    glUniformMatrix4fv(view_id_, 1, GL_FALSE, glm::value_ptr(constants.view));
+    glUniformMatrix4fv(view_id_, 1, GL_FALSE, glm::value_ptr(camera_frame_data.view));
     const SSAOSettings &settings = rendering.GetSSAOSettings();
     glUniform1f(radius_id_, settings.radius);
     glUniform1f(bias_id_, settings.bias);
@@ -57,9 +57,9 @@ void SSAO::UpdateComposite(const RenderSystem &rendering) const
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, ao_tex_);
     glUniform1i(composite_ao_id_, 2);
-    glUniform2f(texel_size_id_, 1.0f / texture_width_, 1.0f / texture_height_);
-    const RenderFrameConstants &constants = rendering.GetFrameConstants();
-    const glm::mat4 inverse_projection = glm::inverse(constants.proj);
+    glUniform2f(texel_size_id_, 1.0f / static_cast<float>(texture_width_), 1.0f / static_cast<float>(texture_height_));
+    const CameraFrameData &camera_frame_data = rendering.GetCameraFrameData();
+    const glm::mat4 inverse_projection = glm::inverse(camera_frame_data.proj);
     glUniformMatrix4fv(composite_inverse_projection_id_, 1, GL_FALSE, glm::value_ptr(inverse_projection));
     const ExponentialHeightFog &fog = rendering.GetExponentialHeightFog();
     glUniform1i(fog_enabled_id_, static_cast<GLint>(fog.enabled));
@@ -101,4 +101,4 @@ void SSAO::SetTextures(GLuint render, GLuint depth, GLuint normal_roughness, GLu
     texture_height_ = height;
 }
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL

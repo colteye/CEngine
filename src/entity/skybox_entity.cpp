@@ -1,7 +1,7 @@
 #include "entity/skybox_entity.h"
 
 #include "assets/asset_store.h"
-#include "engine_context.h"
+#include "context.h"
 #include "renderer/render_system.h"
 #include "scene/scene.h"
 
@@ -14,7 +14,7 @@ std::string_view SkyboxEntity::Classname() const
     return "skybox";
 }
 
-void SkyboxEntity::Initialize(EngineContext &context)
+void SkyboxEntity::Initialize(Context &context)
 {
     if (context.assets == nullptr || context.scene == nullptr)
     {
@@ -32,7 +32,7 @@ void SkyboxEntity::Initialize(EngineContext &context)
     }
 }
 
-void SkyboxEntity::Update(EngineContext &context, float /*unused*/)
+void SkyboxEntity::Update(Context &context, float /*unused*/)
 {
     if (context.rendering == nullptr)
     {
@@ -53,7 +53,7 @@ void SkyboxEntity::Update(EngineContext &context, float /*unused*/)
     }
 }
 
-void SkyboxEntity::Shutdown(EngineContext &context)
+void SkyboxEntity::Shutdown(Context &context)
 {
     if (context.rendering != nullptr)
     {

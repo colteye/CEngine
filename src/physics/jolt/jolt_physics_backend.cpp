@@ -1,4 +1,4 @@
-#include "physics/physics_system.h"
+#include "physics/jolt/jolt_physics_backend.h"
 
 #include <Jolt/Jolt.h>
 
@@ -174,8 +174,12 @@ bool ValidateShape(const PhysicsShape &shape, std::uint32_t depth = 0)
             return false;
         }
         for (const glm::vec3 &vertex : shape.vertices)
+        {
             if (!Finite(vertex))
+            {
                 return false;
+            }
+        }
         return shape.indices.empty() && shape.heights.empty() && shape.samples_per_side == 0 && shape.children.empty();
     case PhysicsShapeType::TriangleMesh:
         if (shape.vertices.size() < 3 || shape.indices.empty() || shape.indices.size() % 3 != 0)
@@ -183,11 +187,19 @@ bool ValidateShape(const PhysicsShape &shape, std::uint32_t depth = 0)
             return false;
         }
         for (const glm::vec3 &vertex : shape.vertices)
+        {
             if (!Finite(vertex))
+            {
                 return false;
+            }
+        }
         for (std::uint32_t index : shape.indices)
+        {
             if (index >= shape.vertices.size())
+            {
                 return false;
+            }
+        }
         return shape.heights.empty() && shape.samples_per_side == 0 && shape.children.empty();
     case PhysicsShapeType::HeightField:
         if (shape.samples_per_side < 2 ||
@@ -197,22 +209,26 @@ bool ValidateShape(const PhysicsShape &shape, std::uint32_t depth = 0)
             return false;
         }
         for (float height : shape.heights)
+        {
             if (!std::isfinite(height))
+            {
                 return false;
+            }
+        }
         return shape.vertices.empty() && shape.indices.empty() && shape.children.empty();
     case PhysicsShapeType::Compound:
-        return !(!no_geometry || shape.children.empty() || shape.children.size() > 1024);
+        return no_geometry && !shape.children.empty() && shape.children.size() <= 1024;
     }
     return false;
 }
 
 bool IsMovableShape(const PhysicsShape &shape)
 {
-    return !(shape.type == PhysicsShapeType::TriangleMesh || shape.type == PhysicsShapeType::HeightField ||
-             shape.type == PhysicsShapeType::Plane);
+    return shape.type != PhysicsShapeType::TriangleMesh && shape.type != PhysicsShapeType::HeightField &&
+           shape.type != PhysicsShapeType::Plane;
 }
 
-JPH::RefConst<JPH::Shape> ShapeResult(JPH::ShapeSettings::ShapeResult result)
+JPH::RefConst<JPH::Shape> ShapeResult(const JPH::ShapeSettings::ShapeResult &result)
 {
     if (!result.IsValid())
     {
@@ -258,7 +274,9 @@ JPH::RefConst<JPH::Shape> BuildShape(const PhysicsShape &shape, bool apply_local
         JPH::Array<JPH::Vec3> points;
         points.reserve(shape.vertices.size());
         for (const glm::vec3 &point : shape.vertices)
+        {
             points.push_back(ToJoltVec3(point));
+        }
         result = ShapeResult(JPH::ConvexHullShapeSettings(points).Create());
         break;
     }
@@ -267,7 +285,9 @@ JPH::RefConst<JPH::Shape> BuildShape(const PhysicsShape &shape, bool apply_local
         JPH::IndexedTriangleList triangles;
         vertices.reserve(shape.vertices.size());
         for (const glm::vec3 &vertex : shape.vertices)
+        {
             vertices.emplace_back(vertex.x, vertex.y, vertex.z);
+        }
         triangles.reserve(shape.indices.size() / 3);
         for (std::size_t index = 0; index < shape.indices.size(); index += 3)
         {
@@ -289,14 +309,16 @@ JPH::RefConst<JPH::Shape> BuildShape(const PhysicsShape &shape, bool apply_local
         }
         const glm::vec3 &offset = shape.height_field_offset;
         const glm::vec3 &scale = shape.height_field_scale;
-        const JPH::Vec3 jolt_offset(offset.x, offset.z, -(offset.y + ((side - 1) * scale.y)));
+        const JPH::Vec3 jolt_offset(offset.x, offset.z, -(offset.y + (static_cast<float>(side - 1u) * scale.y)));
         const JPH::Vec3 jolt_scale(scale.x, scale.z, scale.y);
         result = ShapeResult(JPH::HeightFieldShapeSettings(samples.data(), jolt_offset, jolt_scale, side).Create());
         if (result != nullptr)
+        {
             result = ShapeResult(
                 JPH::RotatedTranslatedShapeSettings(
                     JPH::Vec3::sZero(), JPH::Quat::sRotation(JPH::Vec3::sAxisX(), 0.5f * JPH::JPH_PI), result)
                     .Create());
+        }
         break;
     }
     case PhysicsShapeType::Compound: {
@@ -305,7 +327,9 @@ JPH::RefConst<JPH::Shape> BuildShape(const PhysicsShape &shape, bool apply_local
         {
             JPH::RefConst<JPH::Shape> child_shape = BuildShape(child, false);
             if (child_shape == nullptr)
+            {
                 return nullptr;
+            }
             compound.AddShape(ToJoltVec3(child.local_position), ToJoltQuat(glm::normalize(child.local_rotation)),
                               child_shape);
         }
@@ -315,15 +339,19 @@ JPH::RefConst<JPH::Shape> BuildShape(const PhysicsShape &shape, bool apply_local
     }
 
     if (result == nullptr || !apply_local_transform)
+    {
         return result;
+    }
     const glm::quat rotation = glm::normalize(shape.local_rotation);
     const bool translated = glm::dot(shape.local_position, shape.local_position) > 0.0f;
     const bool rotated = std::abs(rotation.w - 1.0f) > 1.0e-6f || std::abs(rotation.x) > 1.0e-6f ||
                          std::abs(rotation.y) > 1.0e-6f || std::abs(rotation.z) > 1.0e-6f;
     if (translated || rotated)
+    {
         result = ShapeResult(
             JPH::RotatedTranslatedShapeSettings(ToJoltVec3(shape.local_position), ToJoltQuat(rotation), result)
                 .Create());
+    }
     return result;
 }
 
@@ -468,7 +496,7 @@ class ObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFilter
         return (masks[first] & (1u << second)) != 0 && (masks[second] & (1u << first)) != 0;
     }
 
-    std::array<std::uint32_t, Layers::Count> masks;
+    std::array<std::uint32_t, Layers::Count> masks{};
 };
 
 class BroadPhaseLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface
@@ -526,7 +554,7 @@ class ObjectVsBroadPhaseLayerFilterImpl final : public JPH::ObjectVsBroadPhaseLa
     }
 };
 
-struct PhysicsSystem::Impl
+struct JoltPhysicsBackend::Impl
 {
     struct BodySlot
     {
@@ -537,7 +565,7 @@ struct PhysicsSystem::Impl
 
     struct ConstraintSlot
     {
-        JPH::Ref<JPH::Constraint> constraint{};
+        JPH::Ref<JPH::Constraint> constraint;
         PhysicsBodyHandle first;
         PhysicsBodyHandle second;
         std::uint32_t generation = 1;
@@ -545,7 +573,7 @@ struct PhysicsSystem::Impl
 
     struct CharacterSlot
     {
-        JPH::Ref<JPH::CharacterVirtual> character{};
+        JPH::Ref<JPH::CharacterVirtual> character;
         float radius = 0.0f;
         float height = 0.0f;
         float step_height = 0.0f;
@@ -556,12 +584,13 @@ struct PhysicsSystem::Impl
 
     [[nodiscard]] JPH::BodyID GetBodyID(PhysicsBodyHandle handle) const
     {
-        if (handle.index >= bodies.size() || bodies[handle.index].generation != handle.generation)
+        const std::uint32_t index = handle.Index();
+        if (!handle || index >= bodies.size() || bodies[index].generation != handle.Generation())
         {
             return {};
         }
 
-        return bodies[handle.index].body;
+        return bodies[index].body;
     }
 
     [[nodiscard]] PhysicsBodyHandle GetBodyHandle(JPH::BodyID body) const
@@ -572,33 +601,35 @@ struct PhysicsSystem::Impl
 
     [[nodiscard]] JPH::Constraint *GetConstraint(PhysicsConstraintHandle handle) const
     {
-        return handle.index < constraints.size() && constraints[handle.index].generation == handle.generation
-                   ? constraints[handle.index].constraint.GetPtr()
+        const std::uint32_t index = handle.Index();
+        return handle && index < constraints.size() && constraints[index].generation == handle.Generation()
+                   ? constraints[index].constraint.GetPtr()
                    : nullptr;
     }
 
     [[nodiscard]] JPH::CharacterVirtual *GetCharacter(PhysicsCharacterHandle handle) const
     {
-        return handle.index < characters.size() && characters[handle.index].generation == handle.generation
-                   ? characters[handle.index].character.GetPtr()
+        const std::uint32_t index = handle.Index();
+        return handle && index < characters.size() && characters[index].generation == handle.Generation()
+                   ? characters[index].character.GetPtr()
                    : nullptr;
     }
 
-    std::unique_ptr<BroadPhaseLayerInterfaceImpl> broad_phase_layer_interface{};
-    std::unique_ptr<ObjectVsBroadPhaseLayerFilterImpl> object_vs_broad_phase_layer_filter{};
-    std::unique_ptr<ObjectLayerPairFilterImpl> object_layer_pair_filter{};
-    std::unique_ptr<JPH::TempAllocatorImpl> temp_allocator{};
-    std::unique_ptr<JPH::JobSystemSingleThreaded> job_system{};
-    std::unique_ptr<JPH::PhysicsSystem> physics_system{};
-    std::vector<BodySlot> bodies{};
-    std::vector<std::uint32_t> free_handles{};
-    std::vector<ConstraintSlot> constraints{};
-    std::vector<std::uint32_t> free_constraint_handles{};
-    std::vector<CharacterSlot> characters{};
-    std::vector<std::uint32_t> free_character_handles{};
-    std::unordered_map<std::uint32_t, PhysicsBodyHandle> body_handles{};
+    std::unique_ptr<BroadPhaseLayerInterfaceImpl> broad_phase_layer_interface;
+    std::unique_ptr<ObjectVsBroadPhaseLayerFilterImpl> object_vs_broad_phase_layer_filter;
+    std::unique_ptr<ObjectLayerPairFilterImpl> object_layer_pair_filter;
+    std::unique_ptr<JPH::TempAllocatorImpl> temp_allocator;
+    std::unique_ptr<JPH::JobSystemSingleThreaded> job_system;
+    std::unique_ptr<JPH::PhysicsSystem> physics_system;
+    std::vector<BodySlot> bodies;
+    std::vector<std::uint32_t> free_handles;
+    std::vector<ConstraintSlot> constraints;
+    std::vector<std::uint32_t> free_constraint_handles;
+    std::vector<CharacterSlot> characters;
+    std::vector<std::uint32_t> free_character_handles;
+    std::unordered_map<std::uint32_t, PhysicsBodyHandle> body_handles;
     ContactCollector contact_collector;
-    std::vector<RawContact> contact_events{};
+    std::vector<RawContact> contact_events;
     std::size_t max_contact_events = 0;
     std::uint64_t dropped_contact_events = 0;
     std::size_t body_count = 0;
@@ -608,17 +639,17 @@ struct PhysicsSystem::Impl
     bool owns_jolt_runtime = false;
 };
 
-PhysicsSystem::PhysicsSystem() = default;
+JoltPhysicsBackend::JoltPhysicsBackend() = default;
 
-PhysicsSystem::~PhysicsSystem()
+JoltPhysicsBackend::~JoltPhysicsBackend()
 {
     Shutdown();
 }
 
-PhysicsSystem::PhysicsSystem(PhysicsSystem &&) noexcept = default;
-PhysicsSystem &PhysicsSystem::operator=(PhysicsSystem &&) noexcept = default;
+JoltPhysicsBackend::JoltPhysicsBackend(JoltPhysicsBackend &&) noexcept = default;
+JoltPhysicsBackend &JoltPhysicsBackend::operator=(JoltPhysicsBackend &&) noexcept = default;
 
-bool PhysicsSystem::Initialize(const PhysicsSystemDesc &desc)
+bool JoltPhysicsBackend::Initialize(const PhysicsSystemDesc &desc)
 {
     Shutdown();
     impl_ = std::make_unique<Impl>();
@@ -652,7 +683,7 @@ bool PhysicsSystem::Initialize(const PhysicsSystemDesc &desc)
     return true;
 }
 
-void PhysicsSystem::Shutdown()
+void JoltPhysicsBackend::Shutdown()
 {
     if (impl_ == nullptr)
     {
@@ -662,7 +693,9 @@ void PhysicsSystem::Shutdown()
     if (impl_->physics_system != nullptr)
     {
         for (Impl::CharacterSlot &slot : impl_->characters)
+        {
             slot.character = nullptr;
+        }
         for (Impl::ConstraintSlot &slot : impl_->constraints)
         {
             if (slot.constraint != nullptr)
@@ -712,7 +745,7 @@ void PhysicsSystem::Shutdown()
     impl_.reset();
 }
 
-void PhysicsSystem::Step(float fixed_delta_time)
+void JoltPhysicsBackend::Step(float fixed_delta_time)
 {
     if (impl_ == nullptr || !impl_->initialized || impl_->physics_system == nullptr ||
         impl_->temp_allocator == nullptr || impl_->job_system == nullptr)
@@ -723,7 +756,7 @@ void PhysicsSystem::Step(float fixed_delta_time)
     impl_->physics_system->Update(fixed_delta_time, 1, impl_->temp_allocator.get(), impl_->job_system.get());
 }
 
-PhysicsBodyHandle PhysicsSystem::CreateBody(const PhysicsBodyDesc &desc, const PhysicsShape &source_shape)
+PhysicsBodyHandle JoltPhysicsBackend::CreateBody(const PhysicsBodyDesc &desc, const PhysicsShape &source_shape)
 {
     if (impl_ == nullptr || !impl_->initialized || impl_->physics_system == nullptr)
     {
@@ -783,27 +816,29 @@ PhysicsBodyHandle PhysicsSystem::CreateBody(const PhysicsBodyDesc &desc, const P
         body_interface.SetAngularVelocity(body_id, ToJoltVec3(desc.angular_velocity));
     }
 
-    PhysicsBodyHandle handle;
+    std::uint32_t index = 0;
+    std::uint32_t generation = 1;
     if (!impl_->free_handles.empty())
     {
-        handle.index = impl_->free_handles.back();
+        index = impl_->free_handles.back();
         impl_->free_handles.pop_back();
-        impl_->bodies[handle.index].body = body_id;
-        impl_->bodies[handle.index].motion_type = desc.motion_type;
-        handle.generation = impl_->bodies[handle.index].generation;
+        impl_->bodies[index].body = body_id;
+        impl_->bodies[index].motion_type = desc.motion_type;
+        generation = impl_->bodies[index].generation;
     }
     else
     {
-        handle = {static_cast<std::uint32_t>(impl_->bodies.size()), 1};
-        impl_->bodies.push_back({body_id, handle.generation, desc.motion_type});
+        index = static_cast<std::uint32_t>(impl_->bodies.size());
+        impl_->bodies.push_back({body_id, generation, desc.motion_type});
     }
+    const PhysicsBodyHandle handle{index, generation};
 
     ++impl_->body_count;
     impl_->body_handles.emplace(body_id.GetIndexAndSequenceNumber(), handle);
     return handle;
 }
 
-void PhysicsSystem::DestroyBody(PhysicsBodyHandle body)
+void JoltPhysicsBackend::DestroyBody(PhysicsBodyHandle body)
 {
     if (impl_ == nullptr || !impl_->initialized || impl_->physics_system == nullptr)
     {
@@ -829,7 +864,8 @@ void PhysicsSystem::DestroyBody(PhysicsBodyHandle body)
     impl_->body_handles.erase(body_id.GetIndexAndSequenceNumber());
     body_interface.RemoveBody(body_id);
     body_interface.DestroyBody(body_id);
-    Impl::BodySlot &slot = impl_->bodies[body.index];
+    const std::uint32_t index = body.Index();
+    Impl::BodySlot &slot = impl_->bodies[index];
     slot.body = JPH::BodyID();
     slot.motion_type = PhysicsMotionType::Static;
     ++slot.generation;
@@ -837,16 +873,16 @@ void PhysicsSystem::DestroyBody(PhysicsBodyHandle body)
     {
         ++slot.generation;
     }
-    impl_->free_handles.push_back(body.index);
+    impl_->free_handles.push_back(index);
     --impl_->body_count;
 }
 
-bool PhysicsSystem::IsValid(PhysicsBodyHandle body) const
+bool JoltPhysicsBackend::IsValid(PhysicsBodyHandle body) const
 {
     return impl_ != nullptr && impl_->initialized && !impl_->GetBodyID(body).IsInvalid();
 }
 
-bool PhysicsSystem::GetBodyState(PhysicsBodyHandle body, PhysicsBodyState &state) const
+bool JoltPhysicsBackend::GetBodyState(PhysicsBodyHandle body, PhysicsBodyState &state) const
 {
     state = {};
     if (impl_ == nullptr || !impl_->initialized || impl_->physics_system == nullptr)
@@ -872,8 +908,8 @@ bool PhysicsSystem::GetBodyState(PhysicsBodyHandle body, PhysicsBodyState &state
     return true;
 }
 
-bool PhysicsSystem::SetBodyTransform(PhysicsBodyHandle body, const glm::vec3 &position, const glm::quat &rotation,
-                                     bool activate)
+bool JoltPhysicsBackend::SetBodyTransform(PhysicsBodyHandle body, const glm::vec3 &position, const glm::quat &rotation,
+                                          bool activate)
 {
     if (!Finite(position) || !Finite(rotation) || !IsValid(body))
     {
@@ -885,11 +921,11 @@ bool PhysicsSystem::SetBodyTransform(PhysicsBodyHandle body, const glm::vec3 &po
     return true;
 }
 
-bool PhysicsSystem::MoveKinematic(PhysicsBodyHandle body, const glm::vec3 &position, const glm::quat &rotation,
-                                  float fixed_delta_time)
+bool JoltPhysicsBackend::MoveKinematic(PhysicsBodyHandle body, const glm::vec3 &position, const glm::quat &rotation,
+                                       float fixed_delta_time)
 {
     if (!Finite(position) || !Finite(rotation) || !std::isfinite(fixed_delta_time) || fixed_delta_time <= 0.0f ||
-        !IsValid(body) || impl_->bodies[body.index].motion_type != PhysicsMotionType::Kinematic)
+        !IsValid(body) || impl_->bodies[body.Index()].motion_type != PhysicsMotionType::Kinematic)
     {
         return false;
     }
@@ -898,7 +934,7 @@ bool PhysicsSystem::MoveKinematic(PhysicsBodyHandle body, const glm::vec3 &posit
     return true;
 }
 
-bool PhysicsSystem::SetVelocity(PhysicsBodyHandle body, const glm::vec3 &linear, const glm::vec3 &angular)
+bool JoltPhysicsBackend::SetVelocity(PhysicsBodyHandle body, const glm::vec3 &linear, const glm::vec3 &angular)
 {
     if (!Finite(linear) || !Finite(angular) || !IsValid(body))
     {
@@ -909,7 +945,7 @@ bool PhysicsSystem::SetVelocity(PhysicsBodyHandle body, const glm::vec3 &linear,
     return true;
 }
 
-bool PhysicsSystem::AddForce(PhysicsBodyHandle body, const glm::vec3 &force)
+bool JoltPhysicsBackend::AddForce(PhysicsBodyHandle body, const glm::vec3 &force)
 {
     if (!Finite(force) || !IsValid(body))
     {
@@ -919,7 +955,7 @@ bool PhysicsSystem::AddForce(PhysicsBodyHandle body, const glm::vec3 &force)
     return true;
 }
 
-bool PhysicsSystem::AddForceAt(PhysicsBodyHandle body, const glm::vec3 &force, const glm::vec3 &world_position)
+bool JoltPhysicsBackend::AddForceAt(PhysicsBodyHandle body, const glm::vec3 &force, const glm::vec3 &world_position)
 {
     if (!Finite(force) || !Finite(world_position) || !IsValid(body))
     {
@@ -930,7 +966,7 @@ bool PhysicsSystem::AddForceAt(PhysicsBodyHandle body, const glm::vec3 &force, c
     return true;
 }
 
-bool PhysicsSystem::AddTorque(PhysicsBodyHandle body, const glm::vec3 &torque)
+bool JoltPhysicsBackend::AddTorque(PhysicsBodyHandle body, const glm::vec3 &torque)
 {
     if (!Finite(torque) || !IsValid(body))
     {
@@ -940,7 +976,7 @@ bool PhysicsSystem::AddTorque(PhysicsBodyHandle body, const glm::vec3 &torque)
     return true;
 }
 
-bool PhysicsSystem::AddImpulse(PhysicsBodyHandle body, const glm::vec3 &impulse)
+bool JoltPhysicsBackend::AddImpulse(PhysicsBodyHandle body, const glm::vec3 &impulse)
 {
     if (!Finite(impulse) || !IsValid(body))
     {
@@ -950,7 +986,7 @@ bool PhysicsSystem::AddImpulse(PhysicsBodyHandle body, const glm::vec3 &impulse)
     return true;
 }
 
-bool PhysicsSystem::AddImpulseAt(PhysicsBodyHandle body, const glm::vec3 &impulse, const glm::vec3 &world_position)
+bool JoltPhysicsBackend::AddImpulseAt(PhysicsBodyHandle body, const glm::vec3 &impulse, const glm::vec3 &world_position)
 {
     if (!Finite(impulse) || !Finite(world_position) || !IsValid(body))
     {
@@ -961,7 +997,7 @@ bool PhysicsSystem::AddImpulseAt(PhysicsBodyHandle body, const glm::vec3 &impuls
     return true;
 }
 
-bool PhysicsSystem::SetGravityFactor(PhysicsBodyHandle body, float factor)
+bool JoltPhysicsBackend::SetGravityFactor(PhysicsBodyHandle body, float factor)
 {
     if (!std::isfinite(factor) || !IsValid(body))
     {
@@ -971,7 +1007,7 @@ bool PhysicsSystem::SetGravityFactor(PhysicsBodyHandle body, float factor)
     return true;
 }
 
-bool PhysicsSystem::SetSensor(PhysicsBodyHandle body, bool sensor)
+bool JoltPhysicsBackend::SetSensor(PhysicsBodyHandle body, bool sensor)
 {
     if (!IsValid(body))
     {
@@ -981,7 +1017,7 @@ bool PhysicsSystem::SetSensor(PhysicsBodyHandle body, bool sensor)
     return true;
 }
 
-bool PhysicsSystem::Activate(PhysicsBodyHandle body)
+bool JoltPhysicsBackend::Activate(PhysicsBodyHandle body)
 {
     if (!IsValid(body))
     {
@@ -991,7 +1027,7 @@ bool PhysicsSystem::Activate(PhysicsBodyHandle body)
     return true;
 }
 
-bool PhysicsSystem::SetLayerCollision(std::uint8_t first, std::uint8_t second, bool enabled)
+bool JoltPhysicsBackend::SetLayerCollision(std::uint8_t first, std::uint8_t second, bool enabled)
 {
     if (impl_ == nullptr || !impl_->initialized || first >= Layers::Count || second >= Layers::Count)
     {
@@ -1012,8 +1048,8 @@ bool PhysicsSystem::SetLayerCollision(std::uint8_t first, std::uint8_t second, b
     return true;
 }
 
-bool PhysicsSystem::RayCast(const glm::vec3 &origin, const glm::vec3 &displacement, PhysicsQueryHit &hit,
-                            std::uint32_t layer_mask, PhysicsBodyHandle ignore) const
+bool JoltPhysicsBackend::RayCast(const glm::vec3 &origin, const glm::vec3 &displacement, PhysicsQueryHit &hit,
+                                 std::uint32_t layer_mask, PhysicsBodyHandle ignore) const
 {
     hit = {};
     if (impl_ == nullptr || !impl_->initialized || !Finite(origin) || !Finite(displacement) ||
@@ -1046,8 +1082,9 @@ bool PhysicsSystem::RayCast(const glm::vec3 &origin, const glm::vec3 &displaceme
     return true;
 }
 
-std::size_t PhysicsSystem::RayCastAll(const glm::vec3 &origin, const glm::vec3 &displacement, PhysicsQueryHit *hits,
-                                      std::size_t capacity, std::uint32_t layer_mask, PhysicsBodyHandle ignore) const
+std::size_t JoltPhysicsBackend::RayCastAll(const glm::vec3 &origin, const glm::vec3 &displacement,
+                                           PhysicsQueryHit *hits, std::size_t capacity, std::uint32_t layer_mask,
+                                           PhysicsBodyHandle ignore) const
 {
     if (hits == nullptr || capacity == 0 || impl_ == nullptr || !impl_->initialized || !Finite(origin) ||
         !Finite(displacement) || glm::dot(displacement, displacement) <= 0.0f || layer_mask == 0)
@@ -1080,9 +1117,9 @@ std::size_t PhysicsSystem::RayCastAll(const glm::vec3 &origin, const glm::vec3 &
     return count;
 }
 
-bool PhysicsSystem::ShapeCast(const PhysicsShape &source_shape, const glm::vec3 &position, const glm::quat &rotation,
-                              const glm::vec3 &displacement, PhysicsQueryHit &hit, std::uint32_t layer_mask,
-                              PhysicsBodyHandle ignore) const
+bool JoltPhysicsBackend::ShapeCast(const PhysicsShape &source_shape, const glm::vec3 &position,
+                                   const glm::quat &rotation, const glm::vec3 &displacement, PhysicsQueryHit &hit,
+                                   std::uint32_t layer_mask, PhysicsBodyHandle ignore) const
 {
     hit = {};
     if (impl_ == nullptr || !impl_->initialized || !ValidateShape(source_shape) ||
@@ -1123,9 +1160,9 @@ bool PhysicsSystem::ShapeCast(const PhysicsShape &source_shape, const glm::vec3 
     return true;
 }
 
-std::size_t PhysicsSystem::Overlap(const PhysicsShape &source_shape, const glm::vec3 &position,
-                                   const glm::quat &rotation, PhysicsBodyHandle *bodies, std::size_t capacity,
-                                   std::uint32_t layer_mask, PhysicsBodyHandle ignore) const
+std::size_t JoltPhysicsBackend::Overlap(const PhysicsShape &source_shape, const glm::vec3 &position,
+                                        const glm::quat &rotation, PhysicsBodyHandle *bodies, std::size_t capacity,
+                                        std::uint32_t layer_mask, PhysicsBodyHandle ignore) const
 {
     if (bodies == nullptr || capacity == 0 || impl_ == nullptr || !impl_->initialized || !ValidateShape(source_shape) ||
         !Finite(position) || !Finite(rotation) || layer_mask == 0)
@@ -1151,18 +1188,21 @@ std::size_t PhysicsSystem::Overlap(const PhysicsShape &source_shape, const glm::
     {
         const PhysicsBodyHandle handle = impl_->GetBodyHandle(result.mBodyID2);
         if (!handle || handle == ignore || std::find(unique.begin(), unique.end(), handle) != unique.end())
+        {
             continue;
+        }
         unique.push_back(handle);
     }
     std::sort(unique.begin(), unique.end(), [](PhysicsBodyHandle first, PhysicsBodyHandle second) {
-        return first.index < second.index || (first.index == second.index && first.generation < second.generation);
+        return first.Index() < second.Index() ||
+               (first.Index() == second.Index() && first.Generation() < second.Generation());
     });
     const std::size_t count = std::min(capacity, unique.size());
     std::copy_n(unique.begin(), count, bodies);
     return count;
 }
 
-std::size_t PhysicsSystem::DrainContactEvents(PhysicsContactEvent *events, std::size_t capacity)
+std::size_t JoltPhysicsBackend::DrainContactEvents(PhysicsContactEvent *events, std::size_t capacity)
 {
     if (events == nullptr || capacity == 0 || impl_ == nullptr)
     {
@@ -1198,17 +1238,17 @@ std::size_t PhysicsSystem::DrainContactEvents(PhysicsContactEvent *events, std::
     return count;
 }
 
-std::size_t PhysicsSystem::PendingContactEventCount() const
+std::size_t JoltPhysicsBackend::PendingContactEventCount() const
 {
     return impl_ != nullptr ? impl_->contact_events.size() : 0;
 }
 
-std::uint64_t PhysicsSystem::DroppedContactEventCount() const
+std::uint64_t JoltPhysicsBackend::DroppedContactEventCount() const
 {
     return impl_ != nullptr ? impl_->dropped_contact_events : 0;
 }
 
-PhysicsConstraintHandle PhysicsSystem::CreateConstraint(const PhysicsConstraintDesc &desc)
+PhysicsConstraintHandle JoltPhysicsBackend::CreateConstraint(const PhysicsConstraintDesc &desc)
 {
     if (impl_ == nullptr || !impl_->initialized || !IsValid(desc.first) || !IsValid(desc.second) ||
         desc.first == desc.second || !Finite(desc.first_anchor) || !Finite(desc.second_anchor) || !Finite(desc.axis) ||
@@ -1343,22 +1383,24 @@ PhysicsConstraintHandle PhysicsSystem::CreateConstraint(const PhysicsConstraintD
     }
     impl_->physics_system->AddConstraint(constraint);
 
-    PhysicsConstraintHandle handle;
+    std::uint32_t index = 0;
+    std::uint32_t generation = 1;
     if (!impl_->free_constraint_handles.empty())
     {
-        handle.index = impl_->free_constraint_handles.back();
+        index = impl_->free_constraint_handles.back();
         impl_->free_constraint_handles.pop_back();
-        Impl::ConstraintSlot &slot = impl_->constraints[handle.index];
+        Impl::ConstraintSlot &slot = impl_->constraints[index];
         slot.constraint = constraint;
         slot.first = desc.first;
         slot.second = desc.second;
-        handle.generation = slot.generation;
+        generation = slot.generation;
     }
     else
     {
-        handle = {static_cast<std::uint32_t>(impl_->constraints.size()), 1};
-        impl_->constraints.push_back({constraint, desc.first, desc.second, handle.generation});
+        index = static_cast<std::uint32_t>(impl_->constraints.size());
+        impl_->constraints.push_back({constraint, desc.first, desc.second, generation});
     }
+    const PhysicsConstraintHandle handle{index, generation};
     ++impl_->constraint_count;
     if (desc.motor != PhysicsMotorMode::Off &&
         !SetConstraintMotor(handle, desc.motor, desc.motor_target, desc.motor_force_limit, desc.motor_frequency,
@@ -1370,7 +1412,7 @@ PhysicsConstraintHandle PhysicsSystem::CreateConstraint(const PhysicsConstraintD
     return handle;
 }
 
-void PhysicsSystem::DestroyConstraint(PhysicsConstraintHandle constraint)
+void JoltPhysicsBackend::DestroyConstraint(PhysicsConstraintHandle constraint)
 {
     if (impl_ == nullptr || !impl_->initialized)
     {
@@ -1382,7 +1424,8 @@ void PhysicsSystem::DestroyConstraint(PhysicsConstraintHandle constraint)
         return;
     }
     impl_->physics_system->RemoveConstraint(value);
-    Impl::ConstraintSlot &slot = impl_->constraints[constraint.index];
+    const std::uint32_t index = constraint.Index();
+    Impl::ConstraintSlot &slot = impl_->constraints[index];
     slot.constraint = nullptr;
     slot.first = {};
     slot.second = {};
@@ -1391,11 +1434,11 @@ void PhysicsSystem::DestroyConstraint(PhysicsConstraintHandle constraint)
     {
         ++slot.generation;
     }
-    impl_->free_constraint_handles.push_back(constraint.index);
+    impl_->free_constraint_handles.push_back(index);
     --impl_->constraint_count;
 }
 
-bool PhysicsSystem::SetConstraintEnabled(PhysicsConstraintHandle constraint, bool enabled)
+bool JoltPhysicsBackend::SetConstraintEnabled(PhysicsConstraintHandle constraint, bool enabled)
 {
     JPH::Constraint *value = impl_ != nullptr ? impl_->GetConstraint(constraint) : nullptr;
     if (value == nullptr)
@@ -1406,8 +1449,8 @@ bool PhysicsSystem::SetConstraintEnabled(PhysicsConstraintHandle constraint, boo
     return true;
 }
 
-bool PhysicsSystem::SetConstraintMotor(PhysicsConstraintHandle constraint, PhysicsMotorMode mode, float target,
-                                       float force_limit, float frequency, float damping)
+bool JoltPhysicsBackend::SetConstraintMotor(PhysicsConstraintHandle constraint, PhysicsMotorMode mode, float target,
+                                            float force_limit, float frequency, float damping)
 {
     JPH::Constraint *value = impl_ != nullptr ? impl_->GetConstraint(constraint) : nullptr;
     if (value == nullptr || !std::isfinite(target) || !std::isfinite(force_limit) || !std::isfinite(frequency) ||
@@ -1416,13 +1459,20 @@ bool PhysicsSystem::SetConstraintMotor(PhysicsConstraintHandle constraint, Physi
     {
         return false;
     }
-    const JPH::EMotorState state = mode == PhysicsMotorMode::Velocity   ? JPH::EMotorState::Velocity
-                                   : mode == PhysicsMotorMode::Position ? JPH::EMotorState::Position
-                                                                        : JPH::EMotorState::Off;
+    JPH::EMotorState state = JPH::EMotorState::Off;
+    if (mode == PhysicsMotorMode::Velocity)
+    {
+        state = JPH::EMotorState::Velocity;
+    }
+    else if (mode == PhysicsMotorMode::Position)
+    {
+        state = JPH::EMotorState::Position;
+    }
     switch (value->GetSubType())
     {
     case JPH::EConstraintSubType::Hinge: {
-        auto &hinge = static_cast<JPH::HingeConstraint &>(*value);
+        // The subtype check is Jolt's supported downcast contract.
+        auto &hinge = static_cast<JPH::HingeConstraint &>(*value); // NOLINT
         JPH::MotorSettings &settings = hinge.GetMotorSettings();
         settings.mSpringSettings.mFrequency = frequency;
         settings.mSpringSettings.mDamping = damping;
@@ -1433,7 +1483,8 @@ bool PhysicsSystem::SetConstraintMotor(PhysicsConstraintHandle constraint, Physi
         return true;
     }
     case JPH::EConstraintSubType::Slider: {
-        auto &slider = static_cast<JPH::SliderConstraint &>(*value);
+        // The subtype check is Jolt's supported downcast contract.
+        auto &slider = static_cast<JPH::SliderConstraint &>(*value); // NOLINT
         JPH::MotorSettings &settings = slider.GetMotorSettings();
         settings.mSpringSettings.mFrequency = frequency;
         settings.mSpringSettings.mDamping = damping;
@@ -1448,17 +1499,17 @@ bool PhysicsSystem::SetConstraintMotor(PhysicsConstraintHandle constraint, Physi
     }
 }
 
-bool PhysicsSystem::IsValid(PhysicsConstraintHandle constraint) const
+bool JoltPhysicsBackend::IsValid(PhysicsConstraintHandle constraint) const
 {
     return impl_ != nullptr && impl_->GetConstraint(constraint) != nullptr;
 }
 
-std::size_t PhysicsSystem::ConstraintCount() const
+std::size_t JoltPhysicsBackend::ConstraintCount() const
 {
     return impl_ != nullptr ? impl_->constraint_count : 0;
 }
 
-PhysicsCharacterHandle PhysicsSystem::CreateCharacter(const PhysicsCharacterDesc &desc)
+PhysicsCharacterHandle JoltPhysicsBackend::CreateCharacter(const PhysicsCharacterDesc &desc)
 {
     if (impl_ == nullptr || !impl_->initialized || !Finite(desc.position) || !std::isfinite(desc.mass) ||
         desc.mass <= 0.0f || !std::isfinite(desc.max_strength) || desc.max_strength < 0.0f ||
@@ -1489,53 +1540,56 @@ PhysicsCharacterHandle PhysicsSystem::CreateCharacter(const PhysicsCharacterDesc
     JPH::Ref<JPH::CharacterVirtual> character = new JPH::CharacterVirtual(
         &settings, ToJoltRVec3(desc.position), JPH::Quat::sIdentity(), impl_->physics_system.get());
 
-    PhysicsCharacterHandle handle;
+    std::uint32_t index = 0;
+    std::uint32_t generation = 1;
     if (!impl_->free_character_handles.empty())
     {
-        handle.index = impl_->free_character_handles.back();
+        index = impl_->free_character_handles.back();
         impl_->free_character_handles.pop_back();
-        Impl::CharacterSlot &slot = impl_->characters[handle.index];
+        Impl::CharacterSlot &slot = impl_->characters[index];
         slot.character = character;
         slot.radius = desc.radius;
         slot.height = desc.height;
         slot.step_height = desc.step_height;
         slot.stick_to_floor_distance = desc.stick_to_floor_distance;
         slot.collision_layer = desc.collision_layer;
-        handle.generation = slot.generation;
+        generation = slot.generation;
     }
     else
     {
-        handle = {static_cast<std::uint32_t>(impl_->characters.size()), 1};
+        index = static_cast<std::uint32_t>(impl_->characters.size());
         impl_->characters.push_back({character, desc.radius, desc.height, desc.step_height,
-                                     desc.stick_to_floor_distance, desc.collision_layer, handle.generation});
+                                     desc.stick_to_floor_distance, desc.collision_layer, generation});
     }
+    const PhysicsCharacterHandle handle{index, generation};
     ++impl_->character_count;
     return handle;
 }
 
-void PhysicsSystem::DestroyCharacter(PhysicsCharacterHandle character)
+void JoltPhysicsBackend::DestroyCharacter(PhysicsCharacterHandle character)
 {
     if (impl_ == nullptr || !impl_->initialized || impl_->GetCharacter(character) == nullptr)
     {
         return;
     }
-    Impl::CharacterSlot &slot = impl_->characters[character.index];
+    const std::uint32_t index = character.Index();
+    Impl::CharacterSlot &slot = impl_->characters[index];
     slot.character = nullptr;
     ++slot.generation;
     if (slot.generation == 0)
     {
         ++slot.generation;
     }
-    impl_->free_character_handles.push_back(character.index);
+    impl_->free_character_handles.push_back(index);
     --impl_->character_count;
 }
 
-bool PhysicsSystem::IsValid(PhysicsCharacterHandle character) const
+bool JoltPhysicsBackend::IsValid(PhysicsCharacterHandle character) const
 {
     return impl_ != nullptr && impl_->GetCharacter(character) != nullptr;
 }
 
-bool PhysicsSystem::SetCharacterVelocity(PhysicsCharacterHandle character, const glm::vec3 &velocity)
+bool JoltPhysicsBackend::SetCharacterVelocity(PhysicsCharacterHandle character, const glm::vec3 &velocity)
 {
     JPH::CharacterVirtual *value = impl_ != nullptr ? impl_->GetCharacter(character) : nullptr;
     if (value == nullptr || !Finite(velocity))
@@ -1546,7 +1600,7 @@ bool PhysicsSystem::SetCharacterVelocity(PhysicsCharacterHandle character, const
     return true;
 }
 
-bool PhysicsSystem::UpdateCharacter(PhysicsCharacterHandle character, float fixed_delta_time)
+bool JoltPhysicsBackend::UpdateCharacter(PhysicsCharacterHandle character, float fixed_delta_time)
 {
     JPH::CharacterVirtual *value = impl_ != nullptr ? impl_->GetCharacter(character) : nullptr;
     if (value == nullptr || !std::isfinite(fixed_delta_time) || fixed_delta_time <= 0.0f ||
@@ -1555,7 +1609,7 @@ bool PhysicsSystem::UpdateCharacter(PhysicsCharacterHandle character, float fixe
         return false;
     }
     value->SetLinearVelocity(value->GetLinearVelocity() + (impl_->physics_system->GetGravity() * fixed_delta_time));
-    const Impl::CharacterSlot &slot = impl_->characters[character.index];
+    const Impl::CharacterSlot &slot = impl_->characters[character.Index()];
     JPH::CharacterVirtual::ExtendedUpdateSettings settings;
     settings.mStickToFloorStepDown = JPH::Vec3(0.0f, 0.0f, -slot.stick_to_floor_distance);
     settings.mWalkStairsStepUp = JPH::Vec3(0.0f, 0.0f, slot.step_height);
@@ -1566,14 +1620,14 @@ bool PhysicsSystem::UpdateCharacter(PhysicsCharacterHandle character, float fixe
     return true;
 }
 
-bool PhysicsSystem::SetCharacterHeight(PhysicsCharacterHandle character, float height)
+bool JoltPhysicsBackend::SetCharacterHeight(PhysicsCharacterHandle character, float height)
 {
     JPH::CharacterVirtual *value = impl_ != nullptr ? impl_->GetCharacter(character) : nullptr;
     if (value == nullptr || impl_->temp_allocator == nullptr)
     {
         return false;
     }
-    Impl::CharacterSlot &slot = impl_->characters[character.index];
+    Impl::CharacterSlot &slot = impl_->characters[character.Index()];
     const JPH::RefConst<JPH::Shape> shape = BuildCharacterShape(slot.radius, height);
     if (shape == nullptr)
     {
@@ -1589,7 +1643,7 @@ bool PhysicsSystem::SetCharacterHeight(PhysicsCharacterHandle character, float h
     return true;
 }
 
-bool PhysicsSystem::GetCharacterState(PhysicsCharacterHandle character, PhysicsCharacterState &state) const
+bool JoltPhysicsBackend::GetCharacterState(PhysicsCharacterHandle character, PhysicsCharacterState &state) const
 {
     state = {};
     JPH::CharacterVirtual *value = impl_ != nullptr ? impl_->GetCharacter(character) : nullptr;
@@ -1607,12 +1661,12 @@ bool PhysicsSystem::GetCharacterState(PhysicsCharacterHandle character, PhysicsC
     return true;
 }
 
-std::size_t PhysicsSystem::CharacterCount() const
+std::size_t JoltPhysicsBackend::CharacterCount() const
 {
     return impl_ != nullptr ? impl_->character_count : 0;
 }
 
-std::size_t PhysicsSystem::BodyCount() const
+std::size_t JoltPhysicsBackend::BodyCount() const
 {
     return impl_ != nullptr ? impl_->body_count : 0;
 }

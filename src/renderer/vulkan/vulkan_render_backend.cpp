@@ -1,6 +1,6 @@
 #include "vulkan_render_backend.h"
 
-#if defined(CENGINE_ENABLE_VULKAN)
+#ifdef CENGINE_ENABLE_VULKAN
 
 #include <GLFW/glfw3.h>
 

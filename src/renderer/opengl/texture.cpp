@@ -1,4 +1,4 @@
-#include "renderer/opengl/opengl_texture.h"
+#include "renderer/opengl/texture.h"
 
 #include "logging/logger.h"
 
@@ -11,7 +11,7 @@
 
 #include <glm/gtc/packing.hpp>
 
-namespace CEngine::Renderer
+namespace CEngine::Renderer::OpenGL
 {
 namespace
 {
@@ -94,7 +94,7 @@ GLuint UploadRgbe(const TextureMip &mip)
 
 } // namespace
 
-GLuint OpenGLTexture::Load(const Texture &source)
+GLuint TextureLoader::Load(const Texture &source)
 {
     if (source.Empty())
     {
@@ -154,7 +154,7 @@ GLuint OpenGLTexture::Load(const Texture &source)
     return texture;
 }
 
-GLuint OpenGLTexture::CreateSolid(GLubyte red, GLubyte green, GLubyte blue, GLubyte alpha)
+GLuint TextureLoader::CreateSolid(GLubyte red, GLubyte green, GLubyte blue, GLubyte alpha)
 {
     const GLubyte pixel[4] = {red, green, blue, alpha};
     GLuint texture = 0;
@@ -168,4 +168,4 @@ GLuint OpenGLTexture::CreateSolid(GLubyte red, GLubyte green, GLubyte blue, GLub
     return texture;
 }
 
-} // namespace CEngine::Renderer
+} // namespace CEngine::Renderer::OpenGL

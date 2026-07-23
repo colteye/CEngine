@@ -1,7 +1,7 @@
 #include "renderer/render_system.h"
 
 #ifdef CENGINE_ENABLE_OPENGL
-#include "renderer/opengl/opengl_render_backend.h"
+#include "renderer/opengl/render_backend.h"
 #endif
 
 #ifdef CENGINE_ENABLE_VULKAN
@@ -10,7 +10,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 
 namespace
 {
@@ -40,12 +39,12 @@ bool RenderSystem::Initialize(GLFWwindow *window, int window_width, int window_h
     Shutdown();
 
 #ifdef CENGINE_ENABLE_OPENGL
-    backend_ = std::make_unique<OpenGLRenderBackend>();
+    backend_ = std::make_unique<OpenGL::RenderBackend>();
 #elif defined(CENGINE_ENABLE_VULKAN)
-    backend = std::make_unique<VulkanRenderBackend>();
+    backend_ = std::make_unique<VulkanRenderBackend>();
 #endif
 
-    if (!backend_->Initialize(*this, window, window_width, window_height))
+    if (backend_ == nullptr || !backend_->Initialize(*this, window, window_width, window_height))
     {
         backend_.reset();
         return false;
@@ -74,7 +73,7 @@ void RenderSystem::Shutdown()
     free_lights_.clear();
     gpu_lights_.clear();
     light_shadow_handles_.clear();
-    frame_constants_ = {};
+    camera_frame_data_ = {};
     active_camera_ = {};
     camera_aspect_ratio_ = 4.0f / 3.0f;
     ambient_lighting_ = {};
@@ -111,36 +110,38 @@ MeshInstanceHandle RenderSystem::RegisterMeshInstance(const MeshInstance &mesh_i
     const Bounds local_bounds = mesh_instance.mesh->local_bounds;
     const Bounds world_bounds = TransformBounds(local_bounds, mesh_instance.transform);
 
-    MeshInstanceHandle handle;
+    std::uint32_t index = 0;
+    std::uint32_t generation = 1;
     if (free_mesh_instances_.empty())
     {
-        handle = {static_cast<std::uint32_t>(mesh_instances_.size()), 1};
+        index = static_cast<std::uint32_t>(mesh_instances_.size());
         mesh_instances_.push_back(mesh_instance);
         mesh_instance_local_bounds_.push_back(local_bounds);
         mesh_instance_world_bounds_.push_back(world_bounds);
-        mesh_instance_generations_.push_back(handle.generation);
+        mesh_instance_generations_.push_back(generation);
     }
     else
     {
-        handle.index = free_mesh_instances_.back();
+        index = free_mesh_instances_.back();
         free_mesh_instances_.pop_back();
-        handle.generation = mesh_instance_generations_[handle.index];
-        mesh_instances_[handle.index] = mesh_instance;
-        mesh_instance_local_bounds_[handle.index] = local_bounds;
-        mesh_instance_world_bounds_[handle.index] = world_bounds;
+        generation = mesh_instance_generations_[index];
+        mesh_instances_[index] = mesh_instance;
+        mesh_instance_local_bounds_[index] = local_bounds;
+        mesh_instance_world_bounds_[index] = world_bounds;
     }
+    const MeshInstanceHandle handle{index, generation};
 
-    if (backend_ != nullptr && !backend_->RegisterMeshInstance(handle.index, mesh_instance, world_bounds))
+    if (backend_ != nullptr && !backend_->RegisterMeshInstance(index, mesh_instance, world_bounds))
     {
-        mesh_instances_[handle.index] = {};
-        mesh_instance_local_bounds_[handle.index] = {};
-        mesh_instance_world_bounds_[handle.index] = {};
-        ++mesh_instance_generations_[handle.index];
-        if (mesh_instance_generations_[handle.index] == 0)
+        mesh_instances_[index] = {};
+        mesh_instance_local_bounds_[index] = {};
+        mesh_instance_world_bounds_[index] = {};
+        ++mesh_instance_generations_[index];
+        if (mesh_instance_generations_[index] == 0)
         {
-            ++mesh_instance_generations_[handle.index];
+            ++mesh_instance_generations_[index];
         }
-        free_mesh_instances_.push_back(handle.index);
+        free_mesh_instances_.push_back(index);
         return {};
     }
 
@@ -154,19 +155,20 @@ void RenderSystem::RemoveMeshInstance(MeshInstanceHandle handle)
     {
         return;
     }
+    const std::uint32_t index = handle.Index();
     if (backend_ != nullptr)
     {
-        backend_->RemoveMeshInstance(handle.index);
+        backend_->RemoveMeshInstance(index);
     }
-    mesh_instances_[handle.index] = {};
-    mesh_instance_local_bounds_[handle.index] = {};
-    mesh_instance_world_bounds_[handle.index] = {};
-    ++mesh_instance_generations_[handle.index];
-    if (mesh_instance_generations_[handle.index] == 0)
+    mesh_instances_[index] = {};
+    mesh_instance_local_bounds_[index] = {};
+    mesh_instance_world_bounds_[index] = {};
+    ++mesh_instance_generations_[index];
+    if (mesh_instance_generations_[index] == 0)
     {
-        ++mesh_instance_generations_[handle.index];
+        ++mesh_instance_generations_[index];
     }
-    free_mesh_instances_.push_back(handle.index);
+    free_mesh_instances_.push_back(index);
     ++mesh_instance_revision_;
 }
 
@@ -177,44 +179,45 @@ void RenderSystem::UpdateMeshInstance(MeshInstanceHandle handle, const glm::mat4
         return;
     }
 
-    MeshInstance &mesh_instance = mesh_instances_[handle.index];
-    if (mesh_instance.flags == flags &&
-        std::memcmp(&mesh_instance.transform[0][0], &transform[0][0], sizeof(glm::mat4)) == 0)
+    const std::uint32_t index = handle.Index();
+    MeshInstance &mesh_instance = mesh_instances_[index];
+    if (mesh_instance.flags == flags && mesh_instance.transform == transform)
     {
         return;
     }
     mesh_instance.transform = transform;
     mesh_instance.flags = flags;
-    mesh_instance_world_bounds_[handle.index] = TransformBounds(mesh_instance_local_bounds_[handle.index], transform);
+    mesh_instance_world_bounds_[index] = TransformBounds(mesh_instance_local_bounds_[index], transform);
     if (backend_ != nullptr)
     {
-        backend_->UpdateMeshInstance(handle.index, transform, mesh_instance_world_bounds_[handle.index], flags);
+        backend_->UpdateMeshInstance(index, transform, mesh_instance_world_bounds_[index], flags);
     }
     ++mesh_instance_revision_;
 }
 
 LightHandle RenderSystem::RegisterLight(const Light &light)
 {
-    LightHandle handle;
+    std::uint32_t index = 0;
+    std::uint32_t generation = 1;
     if (free_lights_.empty())
     {
-        handle = {static_cast<std::uint32_t>(direct_lights_.size()), 1};
+        index = static_cast<std::uint32_t>(direct_lights_.size());
         direct_lights_.push_back(light);
         light_shadow_handles_.emplace_back();
-        light_generations_.push_back(handle.generation);
+        light_generations_.push_back(generation);
     }
     else
     {
-        handle.index = free_lights_.back();
+        index = free_lights_.back();
         free_lights_.pop_back();
-        handle.generation = light_generations_[handle.index];
-        direct_lights_[handle.index] = light;
-        light_shadow_handles_[handle.index] = {};
+        generation = light_generations_[index];
+        direct_lights_[index] = light;
+        light_shadow_handles_[index] = {};
     }
     lights_dirty_ = true;
     ++light_revision_;
     ++light_state_revision_;
-    return handle;
+    return {index, generation};
 }
 
 void RenderSystem::RemoveLight(LightHandle id)
@@ -223,14 +226,15 @@ void RenderSystem::RemoveLight(LightHandle id)
     {
         return;
     }
-    direct_lights_[id.index].enabled = false;
-    light_shadow_handles_[id.index] = {};
-    ++light_generations_[id.index];
-    if (light_generations_[id.index] == 0)
+    const std::uint32_t index = id.Index();
+    direct_lights_[index].enabled = false;
+    light_shadow_handles_[index] = {};
+    ++light_generations_[index];
+    if (light_generations_[index] == 0)
     {
-        ++light_generations_[id.index];
+        ++light_generations_[index];
     }
-    free_lights_.push_back(id.index);
+    free_lights_.push_back(index);
     lights_dirty_ = true;
     ++light_revision_;
     ++light_state_revision_;
@@ -242,11 +246,12 @@ void RenderSystem::UpdateLight(LightHandle id, const Light &light)
     {
         return;
     }
-    if (SameLight(direct_lights_[id.index], light))
+    const std::uint32_t index = id.Index();
+    if (SameLight(direct_lights_[index], light))
     {
         return;
     }
-    direct_lights_[id.index] = light;
+    direct_lights_[index] = light;
     lights_dirty_ = true;
     ++light_revision_;
     ++light_state_revision_;
@@ -269,15 +274,17 @@ const std::vector<Light> &RenderSystem::GetDirectLights() const
 
 const MeshInstance *RenderSystem::ResolveMeshInstance(MeshInstanceHandle handle) const
 {
-    return handle.index < mesh_instances_.size() && mesh_instance_generations_[handle.index] == handle.generation
-               ? &mesh_instances_[handle.index]
+    const std::uint32_t index = handle.Index();
+    return handle && index < mesh_instances_.size() && mesh_instance_generations_[index] == handle.Generation()
+               ? &mesh_instances_[index]
                : nullptr;
 }
 
 const Light *RenderSystem::ResolveLight(LightHandle handle) const
 {
-    return handle.index < direct_lights_.size() && light_generations_[handle.index] == handle.generation
-               ? &direct_lights_[handle.index]
+    const std::uint32_t index = handle.Index();
+    return handle && index < direct_lights_.size() && light_generations_[index] == handle.Generation()
+               ? &direct_lights_[index]
                : nullptr;
 }
 
@@ -317,15 +324,15 @@ void RenderSystem::SetLightShadowHandles(const std::vector<LightShadowBinding> &
     ++light_revision_;
 }
 
-const RenderFrameConstants &RenderSystem::GetFrameConstants() const
+const CameraFrameData &RenderSystem::GetCameraFrameData() const
 {
-    return frame_constants_;
+    return camera_frame_data_;
 }
 
 void RenderSystem::UpdateCamera(const Camera &camera)
 {
     active_camera_ = camera;
-    frame_constants_ = active_camera_.FrameConstants(camera_aspect_ratio_);
+    camera_frame_data_ = active_camera_.BuildFrameData(camera_aspect_ratio_);
 }
 
 void RenderSystem::SetCameraAspectRatio(float aspect_ratio)
@@ -335,7 +342,7 @@ void RenderSystem::SetCameraAspectRatio(float aspect_ratio)
         return;
     }
     camera_aspect_ratio_ = aspect_ratio;
-    frame_constants_ = active_camera_.FrameConstants(camera_aspect_ratio_);
+    camera_frame_data_ = active_camera_.BuildFrameData(camera_aspect_ratio_);
 }
 
 const Camera &RenderSystem::ActiveCamera() const
