@@ -29,10 +29,18 @@ private:
 	GLint projection_id = -1;
 	GLint inverse_projection_id = -1;
 	GLint view_id = -1;
+	GLint radius_id = -1;
+	GLint bias_id = -1;
+	GLint intensity_id = -1;
+	GLint contrast_id = -1;
 	GLint composite_render_id = -1;
 	GLint composite_depth_id = -1;
 	GLint composite_ao_id = -1;
 	GLint texel_size_id = -1;
+	GLint composite_inverse_projection_id = -1;
+	GLint fog_enabled_id = -1;
+	GLint fog_density_id = -1;
+	GLint fog_start_distance_id = -1;
 
 	int texture_width;
 	int texture_height;

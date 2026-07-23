@@ -34,6 +34,20 @@ void Camera::SetAspectRatio(float aspect_ratio)
 	UpdateMatrices();
 }
 
+void Camera::SetNearClip(float distance)
+{
+	if (!std::isfinite(distance) || distance <= 0.001f || distance >= m_far_clip) return;
+	m_near_clip = distance;
+	UpdateMatrices();
+}
+
+void Camera::SetFarClip(float distance)
+{
+	if (!std::isfinite(distance) || distance <= m_near_clip) return;
+	m_far_clip = distance;
+	UpdateMatrices();
+}
+
 void Camera::UpdateMatrices()
 {
 	// Direction : Spherical coordinates to Cartesian coordinates conversion
@@ -50,7 +64,7 @@ void Camera::UpdateMatrices()
 	const glm::vec3 up = glm::cross(right, direction);
 
 	// Projection matrix uses the current framebuffer aspect ratio.
-	m_projection = glm::perspective(glm::radians(m_field_of_view), m_aspect_ratio, 0.1f, 100.0f);
+	m_projection = glm::perspective(glm::radians(m_field_of_view), m_aspect_ratio, m_near_clip, m_far_clip);
 	// Camera matrix
 	m_view = glm::lookAt(
 		m_position,           // Camera is here
@@ -65,5 +79,7 @@ void Camera::UpdateMatrices()
 	constants.view = m_view;
 	constants.proj = m_projection;
 	constants.camera_position = m_position;
+	constants.near_clip = m_near_clip;
+	constants.far_clip = m_far_clip;
 	Renderer::RenderSystem::SetFrameConstants(constants);
 }

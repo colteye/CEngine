@@ -34,6 +34,11 @@ void SSAO::UpdateCompute()
 	glUniformMatrix4fv(projection_id, 1, GL_FALSE, glm::value_ptr(constants.proj));
 	glUniformMatrix4fv(inverse_projection_id, 1, GL_FALSE, glm::value_ptr(inverse_projection));
 	glUniformMatrix4fv(view_id, 1, GL_FALSE, glm::value_ptr(constants.view));
+	const SSAOSettings& settings = RenderSystem::GetSSAOSettings();
+	glUniform1f(radius_id, settings.radius);
+	glUniform1f(bias_id, settings.bias);
+	glUniform1f(intensity_id, settings.enabled ? settings.intensity : 0.0f);
+	glUniform1f(contrast_id, settings.contrast);
 }
 
 void SSAO::UseComposite() const
@@ -53,6 +58,13 @@ void SSAO::UpdateComposite()
 	glBindTexture(GL_TEXTURE_2D, ao_tex);
 	glUniform1i(composite_ao_id, 2);
 	glUniform2f(texel_size_id, 1.0f / texture_width, 1.0f / texture_height);
+	const RenderFrameConstants& constants = RenderSystem::GetFrameConstants();
+	const glm::mat4 inverse_projection = glm::inverse(constants.proj);
+	glUniformMatrix4fv(composite_inverse_projection_id, 1, GL_FALSE, glm::value_ptr(inverse_projection));
+	const ExponentialHeightFog& fog = RenderSystem::GetExponentialHeightFog();
+	glUniform1i(fog_enabled_id, fog.enabled);
+	glUniform1f(fog_density_id, fog.density);
+	glUniform1f(fog_start_distance_id, fog.start_distance);
 }
 
 void SSAO::InitializeParameters()
@@ -63,12 +75,20 @@ void SSAO::InitializeParameters()
 	projection_id = glGetUniformLocation(compute_id, "projection");
 	inverse_projection_id = glGetUniformLocation(compute_id, "inverse_projection");
 	view_id = glGetUniformLocation(compute_id, "view");
+	radius_id = glGetUniformLocation(compute_id, "radius");
+	bias_id = glGetUniformLocation(compute_id, "bias");
+	intensity_id = glGetUniformLocation(compute_id, "intensity");
+	contrast_id = glGetUniformLocation(compute_id, "contrast");
 
 	const GLuint composite_id = composite_program.GetId();
 	composite_render_id = glGetUniformLocation(composite_id, "render_tex");
 	composite_depth_id = glGetUniformLocation(composite_id, "depth_tex");
 	composite_ao_id = glGetUniformLocation(composite_id, "ao_tex");
 	texel_size_id = glGetUniformLocation(composite_id, "texel_size");
+	composite_inverse_projection_id = glGetUniformLocation(composite_id, "inverse_projection");
+	fog_enabled_id = glGetUniformLocation(composite_id, "fog_enabled");
+	fog_density_id = glGetUniformLocation(composite_id, "fog_density");
+	fog_start_distance_id = glGetUniformLocation(composite_id, "fog_start_distance");
 }
 
 void SSAO::SetTextures(GLuint render, GLuint depth, GLuint normal_roughness, GLuint ao, int width, int height)

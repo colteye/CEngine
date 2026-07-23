@@ -15,6 +15,9 @@
 
 #if defined(CENGINE_ENABLE_OPENGL)
 #include <glad/glad.h>
+#include <imgui.h>
+#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_opengl3.h>
 #endif
 #include <GLFW/glfw3.h>
 
@@ -128,6 +131,119 @@ GLFWwindow* CreateWindow()
 	return window;
 }
 
+#if defined(CENGINE_ENABLE_OPENGL)
+void DrawTuningPanel(Camera& camera)
+{
+	ImGui::SetNextWindowBgAlpha(0.82f);
+	if (!ImGui::Begin("Viewer tuning"))
+	{
+		ImGui::End();
+		return;
+	}
+
+	Renderer::ImageBasedLighting sky = Renderer::RenderSystem::GetImageBasedLighting();
+	if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		float fov = camera.GetFOV();
+		float near_clip = camera.GetNearClip();
+		float far_clip = camera.GetFarClip();
+		if (ImGui::SliderFloat("Vertical FOV", &fov, 20.0f, 110.0f)) camera.SetFOV(fov);
+		if (ImGui::SliderFloat("Near clip", &near_clip, 0.01f, 2.0f)) camera.SetNearClip(near_clip);
+		if (ImGui::SliderFloat("Far clip", &far_clip, 10.0f, 500.0f)) camera.SetFarClip(far_clip);
+	}
+
+	if (ImGui::CollapsingHeader("Sky / IBL", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGui::Checkbox("Enabled", &sky.enabled);
+		ImGui::SliderFloat("Visible sky", &sky.sky_intensity, 0.0f, 3.0f);
+		ImGui::SliderFloat("IBL lighting", &sky.lighting_intensity, 0.0f, 3.0f);
+		ImGui::SliderAngle("Sky rotation", &sky.rotation_radians, -180.0f, 180.0f);
+	}
+	Renderer::RenderSystem::SetImageBasedLighting(sky);
+
+	Renderer::ExponentialHeightFog fog = Renderer::RenderSystem::GetExponentialHeightFog();
+	if (ImGui::CollapsingHeader("Exponential height fog", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGui::Checkbox("Enabled##fog", &fog.enabled);
+		ImGui::ColorEdit3("Inscatter color", &fog.inscattering_color.x);
+		ImGui::DragFloat("Density", &fog.density, 0.0001f, 0.0f, 0.25f, "%.4f");
+		ImGui::DragFloat("Height falloff", &fog.height_falloff, 0.005f, 0.0f, 2.0f);
+		ImGui::DragFloat("Base height", &fog.base_height, 0.05f, -50.0f, 50.0f);
+		ImGui::DragFloat("Start distance", &fog.start_distance, 0.1f, 0.0f, 100.0f);
+		ImGui::SliderFloat("Maximum opacity", &fog.max_opacity, 0.0f, 1.0f);
+		ImGui::DragFloat("Cutoff distance", &fog.cutoff_distance, 0.1f, 0.0f, 500.0f);
+	}
+	Renderer::RenderSystem::SetExponentialHeightFog(fog);
+
+	Renderer::PostProcessSettings post = Renderer::RenderSystem::GetPostProcessSettings();
+	Renderer::SSAOSettings ssao = Renderer::RenderSystem::GetSSAOSettings();
+	if (ImGui::CollapsingHeader("Screen-space ambient occlusion", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGui::Checkbox("Enabled##ssao", &ssao.enabled);
+		ImGui::SliderFloat("Radius##ssao", &ssao.radius, 0.05f, 3.0f);
+		ImGui::SliderFloat("Bias##ssao", &ssao.bias, 0.0f, 0.15f);
+		ImGui::SliderFloat("Intensity##ssao", &ssao.intensity, 0.0f, 2.0f);
+		ImGui::SliderFloat("Contrast##ssao", &ssao.contrast, 0.25f, 3.0f);
+	}
+	Renderer::RenderSystem::SetSSAOSettings(ssao);
+
+	if (ImGui::CollapsingHeader("Screen-space effects", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGui::Checkbox("Bloom", &post.bloom_enabled);
+		ImGui::SliderFloat("Bloom threshold", &post.bloom_threshold, 0.0f, 4.0f);
+		ImGui::SliderFloat("Bloom intensity", &post.bloom_intensity, 0.0f, 2.0f);
+		ImGui::Separator();
+		ImGui::Checkbox("Tone mapping", &post.tone_mapping_enabled);
+		ImGui::SliderFloat("Exposure", &post.exposure, 0.0f, 3.0f);
+		ImGui::SliderFloat("Contrast", &post.contrast, 0.5f, 1.5f);
+		ImGui::SliderFloat("Saturation", &post.saturation, 0.0f, 2.0f);
+		ImGui::Separator();
+		ImGui::Checkbox("Depth of field", &post.depth_of_field_enabled);
+		ImGui::SliderFloat("Focus distance", &post.focus_distance, 0.1f, 100.0f);
+		ImGui::SliderFloat("Focus range", &post.focus_range, 0.1f, 50.0f);
+		ImGui::SliderFloat("DoF strength", &post.depth_of_field_strength, 0.0f, 2.0f);
+		ImGui::Separator();
+		ImGui::Checkbox("Sun lens flare", &post.sun_lens_flare_enabled);
+		ImGui::SliderFloat("Flare intensity", &post.sun_lens_flare_intensity, 0.0f, 2.0f);
+		ImGui::SliderFloat("Sun disc size", &post.sun_disc_size, 0.002f, 0.04f);
+		ImGui::SliderFloat("Sun edge softness", &post.sun_disc_softness, 0.001f, 0.03f);
+	}
+	Renderer::RenderSystem::SetPostProcessSettings(post);
+	ImGui::TextUnformatted("Tab: UI/camera control. Shift: show/hide panel. Values are runtime-only.");
+	ImGui::End();
+}
+
+void DrawFpsCounter(float delta_seconds)
+{
+	static float smoothed_fps = 60.0f;
+	const float instant_fps = delta_seconds > 0.00001f ? 1.0f / delta_seconds : smoothed_fps;
+	smoothed_fps += (instant_fps - smoothed_fps) * 0.08f;
+	const ImGuiViewport* viewport = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - 12.0f,
+		viewport->WorkPos.y + 12.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+	ImGui::SetNextWindowBgAlpha(0.45f);
+	const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+		ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
+		ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs;
+	ImGui::Begin("Frame rate", nullptr, flags);
+	ImGui::Text("%.0f FPS", smoothed_fps);
+	ImGui::End();
+}
+
+void BeginTuningFrame()
+{
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+}
+
+void EndTuningFrame()
+{
+	ImGui::Render();
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+#endif
+
 void ApplyActiveCamera(const CEngine::Scene::Scene& scene, Camera& camera)
 {
 	const CEngine::Scene::Entity* entity = scene.GetEntity(scene.Settings().active_camera);
@@ -192,6 +308,22 @@ int RunScene(GLFWwindow* window, const std::filesystem::path& scene_path,
 	}
 
 	Camera camera;
+	// Viewer look: restrained photographic treatment rather than a stylized glow.
+	Renderer::PostProcessSettings post_process;
+	post_process.bloom_enabled = true;
+	post_process.bloom_threshold = 0.85f;
+	post_process.bloom_intensity = 10.0f;
+	post_process.tone_mapping_enabled = true;
+	post_process.exposure = 1.0f;
+	post_process.contrast = 1.02f;
+	post_process.saturation = 1.0f;
+	post_process.depth_of_field_enabled = true;
+	post_process.focus_distance = 14.0f;
+	post_process.focus_range = 6.0f;
+	post_process.depth_of_field_strength = 10.0f;
+	post_process.sun_lens_flare_enabled = true;
+	post_process.sun_lens_flare_intensity = 2.50f;
+	Renderer::RenderSystem::SetPostProcessSettings(post_process);
 	int framebuffer_width = 0;
 	int framebuffer_height = 0;
 	glfwGetFramebufferSize(window, &framebuffer_width, &framebuffer_height);
@@ -205,6 +337,11 @@ int RunScene(GLFWwindow* window, const std::filesystem::path& scene_path,
 		static_cast<float>(framebuffer_height));
 	ApplyActiveCamera(*scene, camera);
 	Controls controls(window);
+	bool ui_input_mode = true;
+	bool show_tuning_panel = true;
+	bool tab_was_down = false;
+	bool shift_was_down = false;
+	controls.SetCameraInputEnabled(false);
 	double previous_time = glfwGetTime();
 	while (glfwWindowShouldClose(window) == GLFW_FALSE &&
 		glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS)
@@ -233,7 +370,24 @@ int RunScene(GLFWwindow* window, const std::filesystem::path& scene_path,
 		const double current_time = glfwGetTime();
 		const float delta_seconds = static_cast<float>(current_time - previous_time);
 		previous_time = current_time;
+		const bool tab_down = glfwGetKey(window, GLFW_KEY_TAB) == GLFW_PRESS;
+		if (tab_down && !tab_was_down)
+		{
+			ui_input_mode = !ui_input_mode;
+			controls.SetCameraInputEnabled(!ui_input_mode);
+		}
+		tab_was_down = tab_down;
+		const bool shift_down = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
+			glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
+		if (shift_down && !shift_was_down) show_tuning_panel = !show_tuning_panel;
+		shift_was_down = shift_down;
+
+#if defined(CENGINE_ENABLE_OPENGL)
+		BeginTuningFrame();
+		if (!ui_input_mode) controls.Update(&camera, delta_seconds);
+#else
 		controls.Update(&camera, delta_seconds);
+#endif
 
 #if defined(CENGINE_ENABLE_JOLT_PHYSICS)
 		physics_state.Step(delta_seconds);
@@ -241,6 +395,12 @@ int RunScene(GLFWwindow* window, const std::filesystem::path& scene_path,
 #endif
 		Renderer::RenderSystem::Render();
 #if defined(CENGINE_ENABLE_OPENGL)
+		if (show_tuning_panel)
+		{
+			DrawFpsCounter(delta_seconds);
+			DrawTuningPanel(camera);
+		}
+		EndTuningFrame();
 		glfwSwapBuffers(window);
 #endif
 		glfwPollEvents();
@@ -280,7 +440,23 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
+#if defined(CENGINE_ENABLE_OPENGL)
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGui::StyleColorsDark();
+	// Let the backend install chained GLFW callbacks so clicks, scroll, and
+	// text entry reach ImGui. The viewer itself polls movement keys directly.
+	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplOpenGL3_Init("#version 330");
+#endif
+
 	const int result = RunScene(window, scene_path, project_root);
+
+#if defined(CENGINE_ENABLE_OPENGL)
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
+#endif
 	Renderer::RenderSystem::Shutdown();
 	glfwDestroyWindow(window);
 	glfwTerminate();

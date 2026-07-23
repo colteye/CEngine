@@ -403,6 +403,26 @@ else()
 endif()
 
 if(CENGINE_BUILD_VIEWER)
+    if(CENGINE_ENABLE_OPENGL)
+        add_library(CEngineViewerImGui STATIC
+            third_party/imgui/imgui.cpp
+            third_party/imgui/imgui_draw.cpp
+            third_party/imgui/imgui_tables.cpp
+            third_party/imgui/imgui_widgets.cpp
+            third_party/imgui/backends/imgui_impl_glfw.cpp
+            third_party/imgui/backends/imgui_impl_opengl3.cpp
+        )
+        target_include_directories(CEngineViewerImGui PUBLIC
+            "${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui"
+            "${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui/backends"
+        )
+        target_link_libraries(CEngineViewerImGui PUBLIC ${CEngine_GLFW_TARGET})
+        target_compile_definitions(CEngineViewerImGui PRIVATE IMGUI_IMPL_OPENGL_LOADER_GLAD)
+        target_include_directories(CEngineViewerImGui SYSTEM PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glad/include"
+        )
+    endif()
+
     add_executable(CEngine
         samples/viewer/main.cpp
     )
@@ -410,7 +430,7 @@ if(CENGINE_BUILD_VIEWER)
     target_link_libraries(CEngine PRIVATE CEngineCore)
     if(CENGINE_ENABLE_OPENGL)
         ce_setup_opengl(CEngine_OPENGL_TARGET)
-        target_link_libraries(CEngine PRIVATE ${CEngine_OPENGL_TARGET})
+        target_link_libraries(CEngine PRIVATE ${CEngine_OPENGL_TARGET} CEngineViewerImGui)
     endif()
 
     set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT CEngine)

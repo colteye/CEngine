@@ -11,13 +11,14 @@ public:
 	FullscreenBlit();
 
 	void Use() const;
-	void Update(GLuint source_texture);
+	void Update(GLuint source_texture, GLuint depth_texture);
 
 private:
 	void InitializeParameters();
 
 	ShaderProgram shader_program;
 	GLint source_texture_id = -1;
+	GLint depth_texture_id = -1;
 };
 
 

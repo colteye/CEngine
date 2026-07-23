@@ -13,7 +13,9 @@ constexpr int kMaxSpotShadows = 16;
 constexpr int kCascadeCount = 4;
 constexpr int kMaxDirectionalLights = 2;
 constexpr int kMaxDirectionalCascades = kCascadeCount * kMaxDirectionalLights;
-constexpr int kMaxPointShadows = 8;
+// Keep four fragment texture units free on the OpenGL 3.3 minimum sampler
+// budget after material, shadow-atlas, and IBL bindings.
+constexpr int kMaxPointShadows = 4;
 constexpr int kTypeNone = 0;
 constexpr int kTypeSpot = 1;
 constexpr int kTypeDirectional = 2;

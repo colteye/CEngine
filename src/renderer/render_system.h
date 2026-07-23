@@ -21,6 +21,8 @@ struct RenderFrameConstants
 	glm::mat4 model = glm::mat4(1.0f);
 	glm::mat4 view = glm::mat4(1.0f);
 	glm::mat4 proj = glm::mat4(1.0f);
+	float near_clip = 0.1f;
+	float far_clip = 100.0f;
 };
 
 struct AmbientLighting
@@ -34,7 +36,10 @@ struct AmbientLighting
 struct ImageBasedLighting
 {
     std::filesystem::path panorama_path;
-    float intensity = 1.0f;
+    // The panorama is both visible background and lighting source; they need
+    // independent exposure controls for practical scene art direction.
+    float sky_intensity = 1.0f;
+    float lighting_intensity = 1.0f;
     float rotation_radians = 0.0f;
     bool enabled = false;
 };
@@ -49,6 +54,36 @@ struct ExponentialHeightFog
     float max_opacity = 1.0f;
     float cutoff_distance = 0.0f;
     bool enabled = false;
+};
+
+// Presentation-only image treatment. This belongs to the game/view setup, not
+// to scene entities, so one game can choose its look without authored data.
+struct PostProcessSettings
+{
+	bool bloom_enabled = true;
+	float bloom_threshold = 1.0f;
+	float bloom_intensity = 0.12f;
+	bool tone_mapping_enabled = true;
+	float exposure = 1.0f;
+	float contrast = 1.0f;
+	float saturation = 1.0f;
+	bool depth_of_field_enabled = false;
+	float focus_distance = 8.0f;
+	float focus_range = 4.0f;
+	float depth_of_field_strength = 1.0f;
+	bool sun_lens_flare_enabled = true;
+	float sun_lens_flare_intensity = 0.35f;
+	float sun_disc_size = 0.012f;
+	float sun_disc_softness = 0.006f;
+};
+
+struct SSAOSettings
+{
+	bool enabled = true;
+	float radius = 0.65f;
+	float bias = 0.025f;
+	float intensity = 0.65f;
+	float contrast = 1.0f;
 };
 
 class RenderSystem
@@ -93,6 +128,10 @@ public:
 	static const ImageBasedLighting& GetImageBasedLighting();
 	static void SetExponentialHeightFog(const ExponentialHeightFog& fog);
 	static const ExponentialHeightFog& GetExponentialHeightFog();
+	static void SetPostProcessSettings(const PostProcessSettings& settings);
+	static const PostProcessSettings& GetPostProcessSettings();
+	static void SetSSAOSettings(const SSAOSettings& settings);
+	static const SSAOSettings& GetSSAOSettings();
 	static bool ConsumeImageBasedLightingResourcesDirty();
 
 private:
@@ -112,6 +151,8 @@ private:
     static AmbientLighting ambient_lighting;
     static ImageBasedLighting image_based_lighting;
     static ExponentialHeightFog exponential_height_fog;
+	static PostProcessSettings post_process_settings;
+	static SSAOSettings ssao_settings;
     static bool image_based_lighting_resources_dirty;
 	static uint64_t light_revision;
 	static bool lights_dirty;

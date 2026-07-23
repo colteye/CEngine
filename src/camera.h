@@ -22,6 +22,10 @@ public:
 	void SetFOV(float fov) { m_field_of_view = fov; UpdateMatrices(); };
 	float GetAspectRatio() const { return m_aspect_ratio; };
 	void SetAspectRatio(float aspect_ratio);
+	float GetNearClip() const { return m_near_clip; }
+	float GetFarClip() const { return m_far_clip; }
+	void SetNearClip(float distance);
+	void SetFarClip(float distance);
 	
 private:
 
@@ -35,6 +39,8 @@ private:
 
 	float m_field_of_view = 45.0f;
 	float m_aspect_ratio = 4.0f / 3.0f;
+	float m_near_clip = 0.1f;
+	float m_far_clip = 100.0f;
 };
 
 #endif

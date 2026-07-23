@@ -14,7 +14,7 @@ uniform sampler2D albedo;
 uniform sampler2D normal;
 uniform sampler2D metallic_roughness_ao;
 uniform sampler2DShadow shadow_atlas;
-uniform samplerCubeShadow point_shadow_maps[8];
+uniform samplerCubeShadow point_shadow_maps[4];
 uniform sampler2D lightmap;
 
 uniform vec3 cam_pos_world;
@@ -76,8 +76,8 @@ layout(std140) uniform ShadowBlock {
     vec4 spot_shadow_params[16];
     vec4 cascade_atlas_rects[8];
     vec4 cascade_shadow_params[8];
-    vec4 point_shadow_params[8];
-    vec4 point_filter_params[8];
+    vec4 point_shadow_params[4];
+    vec4 point_filter_params[4];
     vec4 shadow_counts;
 };
 
@@ -171,10 +171,7 @@ float SamplePointMap(int index, vec3 direction, float reference_depth)
 	if (index == 1) return texture(point_shadow_maps[1], sample_coord);
 	if (index == 2) return texture(point_shadow_maps[2], sample_coord);
 	if (index == 3) return texture(point_shadow_maps[3], sample_coord);
-	if (index == 4) return texture(point_shadow_maps[4], sample_coord);
-	if (index == 5) return texture(point_shadow_maps[5], sample_coord);
-	if (index == 6) return texture(point_shadow_maps[6], sample_coord);
-	return texture(point_shadow_maps[7], sample_coord);
+	return texture(point_shadow_maps[3], sample_coord);
 }
 
 float PointShadow(int index, vec3 world_pos, vec3 N, vec3 L)

@@ -269,6 +269,7 @@ bool OpenGLRenderBackend::Initialize(GLFWwindow* /*window*/, int in_window_width
 	glDepthFunc(GL_LESS);
 
 	glEnable(GL_CULL_FACE);
+	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
 	if (!CreateFrameResources(in_window_width, in_window_height))
 	{
@@ -616,7 +617,7 @@ bool OpenGLRenderBackend::CreateFrameResources(int width, int height)
 	glBindFramebuffer(GL_FRAMEBUFFER, resources.opaque_lit_fbo);
 
 	glGenTextures(1, &resources.opaque_lit_color);
-	ConfigureFramebufferTexture(resources.opaque_lit_color, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, width, height);
+	ConfigureFramebufferTexture(resources.opaque_lit_color, GL_RGBA16F, GL_RGBA, GL_FLOAT, width, height);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, resources.opaque_lit_color, 0);
 
 	const GLenum color_attachment = GL_COLOR_ATTACHMENT0;
@@ -644,7 +645,7 @@ bool OpenGLRenderBackend::CreateFrameResources(int width, int height)
 	glBindFramebuffer(GL_FRAMEBUFFER, resources.scene_color_fbo);
 
 	glGenTextures(1, &resources.scene_color);
-	ConfigureFramebufferTexture(resources.scene_color, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, width, height);
+	ConfigureFramebufferTexture(resources.scene_color, GL_RGBA16F, GL_RGBA, GL_FLOAT, width, height);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, resources.scene_color, 0);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, resources.scene_depth, 0);
 	glDrawBuffers(1, &color_attachment);
@@ -963,7 +964,7 @@ void OpenGLRenderBackend::RenderSkybox()
     const RenderFrameConstants& frame = RenderSystem::GetFrameConstants();
     glUniformMatrix4fv(glGetUniformLocation(program, "view"), 1, GL_FALSE, glm::value_ptr(frame.view));
     glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, GL_FALSE, glm::value_ptr(frame.proj));
-    glUniform1f(glGetUniformLocation(program, "intensity"), lighting.intensity);
+    glUniform1f(glGetUniformLocation(program, "intensity"), lighting.sky_intensity);
     glUniform1f(glGetUniformLocation(program, "rotation_radians"), lighting.rotation_radians);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, environment_resources.environment_map);
@@ -1047,8 +1048,12 @@ void OpenGLRenderBackend::PresentSceneColor()
 	glDisable(GL_BLEND);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	// The HDR scene mip chain is the inexpensive bloom/defocus source. It is
+	// generated only after every scene contribution has been rendered.
+	glBindTexture(GL_TEXTURE_2D, frame_resources.scene_color);
+	glGenerateMipmap(GL_TEXTURE_2D);
 	shader_passes.fullscreen_blit->Use();
-	shader_passes.fullscreen_blit->Update(frame_resources.scene_color);
+	shader_passes.fullscreen_blit->Update(frame_resources.scene_color, frame_resources.scene_depth);
 	RenderScreenSpaceQuad();
 }
 

@@ -32,6 +32,8 @@ RenderFrameConstants RenderSystem::frame_constants;
 AmbientLighting RenderSystem::ambient_lighting;
 ImageBasedLighting RenderSystem::image_based_lighting;
 ExponentialHeightFog RenderSystem::exponential_height_fog;
+PostProcessSettings RenderSystem::post_process_settings;
+SSAOSettings RenderSystem::ssao_settings;
 bool RenderSystem::image_based_lighting_resources_dirty = true;
 uint64_t RenderSystem::light_revision = 1;
 bool RenderSystem::lights_dirty = true;
@@ -72,6 +74,8 @@ void RenderSystem::Shutdown()
 	free_lights.clear();
 	gpu_lights.clear();
 	light_shadow_handles.clear();
+	post_process_settings = {};
+	ssao_settings = {};
 	light_revision = 1;
 	lights_dirty = true;
 }
@@ -358,6 +362,26 @@ void RenderSystem::SetExponentialHeightFog(const ExponentialHeightFog& fog)
 const ExponentialHeightFog& RenderSystem::GetExponentialHeightFog()
 {
 	return exponential_height_fog;
+}
+
+void RenderSystem::SetPostProcessSettings(const PostProcessSettings& settings)
+{
+	post_process_settings = settings;
+}
+
+const PostProcessSettings& RenderSystem::GetPostProcessSettings()
+{
+	return post_process_settings;
+}
+
+void RenderSystem::SetSSAOSettings(const SSAOSettings& settings)
+{
+	ssao_settings = settings;
+}
+
+const SSAOSettings& RenderSystem::GetSSAOSettings()
+{
+	return ssao_settings;
 }
 
 bool RenderSystem::ConsumeImageBasedLightingResourcesDirty()

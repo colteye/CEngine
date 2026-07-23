@@ -7,6 +7,17 @@ uniform sampler2D render_tex;
 uniform sampler2D depth_tex;
 uniform sampler2D ao_tex;
 uniform vec2 texel_size;
+uniform mat4 inverse_projection;
+uniform bool fog_enabled;
+uniform float fog_density;
+uniform float fog_start_distance;
+
+float view_distance(vec2 sample_uv, float depth)
+{
+	vec4 clip_pos = vec4(sample_uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+	vec4 view_pos = inverse_projection * clip_pos;
+	return length(view_pos.xyz / view_pos.w);
+}
 
 void main()
 {
@@ -32,5 +43,13 @@ void main()
 		weight += edge_weight;
 	}
 
-	frag_color = color * (ao / weight);
+	float filtered_ao = ao / weight;
+	// AO is surface-local. As in-scattering replaces the surface color, fade AO
+	// out as the fog becomes optically dense so it cannot darken the fog layer.
+	if (fog_enabled) {
+		float fog_distance = max(0.0, view_distance(uv, center_depth) - fog_start_distance);
+		float fog_amount = 1.0 - exp(-max(fog_density, 0.0) * fog_distance);
+		filtered_ao = mix(filtered_ao, 1.0, fog_amount);
+	}
+	frag_color = color * filtered_ao;
 }

@@ -8,10 +8,20 @@
 Controls::Controls(GLFWwindow* window)
 {
 	glfw_window = window;
-	if (glfw_window == nullptr) return;
-	glfwSetInputMode(glfw_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	SetCameraInputEnabled(true);
+}
+
+void Controls::SetCameraInputEnabled(bool enabled)
+{
+	if (glfw_window == nullptr || camera_input_enabled == enabled) return;
+	camera_input_enabled = enabled;
+	glfwSetInputMode(glfw_window, GLFW_CURSOR,
+		enabled ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
 	if (glfwRawMouseMotionSupported() == GLFW_TRUE)
-		glfwSetInputMode(glfw_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+		glfwSetInputMode(glfw_window, GLFW_RAW_MOUSE_MOTION, enabled ? GLFW_TRUE : GLFW_FALSE);
+	// Ignore the cursor position accumulated while the pointer was free.
+	has_cursor_sample = false;
+	was_focused = false;
 }
 
 void Controls::Update(Camera* cam, float delta_time)

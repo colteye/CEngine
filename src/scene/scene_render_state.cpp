@@ -86,7 +86,8 @@ bool SceneRenderState::Activate(const Scene& scene, Assets::AssetDatabase& asset
             const auto& skybox = static_cast<const Entities::SkyboxEntity&>(*entity);
             if (!skybox.enabled) continue;
             ibl.panorama_path = assets.FullPath(skybox.panorama);
-            ibl.intensity = skybox.intensity;
+            ibl.sky_intensity = skybox.intensity;
+            ibl.lighting_intensity = skybox.intensity;
             ibl.rotation_radians = skybox.rotation_radians;
             ibl.enabled = true;
             ambient.enabled = false;

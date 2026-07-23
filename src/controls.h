@@ -8,6 +8,7 @@ class Controls
 {
 public:
 	Controls(GLFWwindow* window);
+	void SetCameraInputEnabled(bool enabled);
 	void Update(Camera* cam, float delta_time);
 private:
 	GLFWwindow* glfw_window = nullptr;
@@ -15,6 +16,7 @@ private:
 	double previous_cursor_y = 0.0;
 	bool has_cursor_sample = false;
 	bool was_focused = false;
+	bool camera_input_enabled = false;
 };
 
 #endif

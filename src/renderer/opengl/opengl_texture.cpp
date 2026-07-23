@@ -114,6 +114,26 @@ bool ValidateDds2D(const std::string& path, DdsInfo& info, std::string& error) {
     }
     return true;
 }
+
+void ConfigureAnisotropicFiltering()
+{
+	if (GLAD_GL_ARB_texture_filter_anisotropic == 0 &&
+		GLAD_GL_EXT_texture_filter_anisotropic == 0)
+	{
+		return;
+	}
+	GLfloat maximum = 1.0f;
+	glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &maximum);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, std::min(maximum, 8.0f));
+}
+
+GLint FullMipLevelCount(std::uint32_t width, std::uint32_t height)
+{
+	GLint levels = 0;
+	for (std::uint32_t dimension = std::max(width, height); dimension > 1; dimension >>= 1u)
+		++levels;
+	return levels;
+}
 } // namespace
 
 GLuint OpenGLTexture::LoadDDS(const std::string& image_p, bool flip_image) {
@@ -169,11 +189,13 @@ GLuint OpenGLTexture::LoadDDS(const std::string& image_p, bool flip_image) {
         glBindTexture(GL_TEXTURE_2D, TextureID);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, static_cast<GLsizei>(info.width),
                      static_cast<GLsizei>(info.height), 0, GL_RGBA, GL_HALF_FLOAT, pixels.data());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+		glGenerateMipmap(GL_TEXTURE_2D);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, FullMipLevelCount(info.width, info.height));
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		ConfigureAnisotropicFiltering();
         glBindTexture(GL_TEXTURE_2D, 0);
         if (glGetError() != GL_NO_ERROR) {
             glDeleteTextures(1, &TextureID);
@@ -213,12 +235,21 @@ GLuint OpenGLTexture::LoadDDS(const std::string& image_p, bool flip_image) {
                                mipmap.get_height(), 0, mipmap.get_size(), mipmap);
     }
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, image.get_num_mipmaps());
+	const unsigned int source_mipmaps = image.get_num_mipmaps();
+	if (source_mipmaps == 0)
+	{
+		// Most cooked source textures carry only their base DXT level. Generate
+		// a full chain once on the GPU to prevent minification moiré.
+		glGenerateMipmap(GL_TEXTURE_2D);
+	}
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL,
+		source_mipmaps == 0 ? FullMipLevelCount(image.get_width(), image.get_height()) : source_mipmaps);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-                    image.get_num_mipmaps() == 0 ? GL_LINEAR : GL_LINEAR_MIPMAP_LINEAR);
+					GL_LINEAR_MIPMAP_LINEAR);
+	ConfigureAnisotropicFiltering();
     glBindTexture(GL_TEXTURE_2D, 0);
     if (glGetError() != GL_NO_ERROR) {
         glDeleteTextures(1, &TextureID);

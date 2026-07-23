@@ -8,11 +8,10 @@ uniform sampler2D normal_roughness_tex;
 uniform mat4 projection;
 uniform mat4 inverse_projection;
 uniform mat4 view;
-
-const float radius = 0.65;
-const float bias = 0.025;
-const float intensity = 0.65;
-const float contrast = 1.0;
+uniform float radius;
+uniform float bias;
+uniform float intensity;
+uniform float contrast;
 
 const int sample_count = 8;
 const vec3 kernel[sample_count] = vec3[sample_count](

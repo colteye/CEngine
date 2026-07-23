@@ -67,7 +67,7 @@ void DeferredLighting::Update(GLuint albedo, GLuint normal_roughness, GLuint mat
 	glUniform1i(glGetUniformLocation(shader_program.GetId(), "ibl_prefiltered"), 15);
 	glUniform1i(glGetUniformLocation(shader_program.GetId(), "ibl_enabled"),
 		ibl.enabled && irradiance_map != 0 && prefiltered_map != 0);
-	glUniform1f(glGetUniformLocation(shader_program.GetId(), "ibl_intensity"), ibl.intensity);
+	glUniform1f(glGetUniformLocation(shader_program.GetId(), "ibl_intensity"), ibl.lighting_intensity);
 	glUniform1f(glGetUniformLocation(shader_program.GetId(), "ibl_rotation_radians"), ibl.rotation_radians);
 	const ExponentialHeightFog& fog = RenderSystem::GetExponentialHeightFog();
 	glUniform1i(glGetUniformLocation(shader_program.GetId(), "fog_enabled"), fog.enabled);
