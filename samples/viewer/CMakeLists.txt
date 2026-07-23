@@ -56,13 +56,37 @@ if(CENGINE_BUILD_TESTS)
 endif()
 
 if(CENGINE_BUILD_VIEWER)
+    if(CENGINE_ENABLE_OPENGL)
+        add_library(CEngineViewerImGui STATIC
+            "${PROJECT_SOURCE_DIR}/third_party/imgui/imgui.cpp"
+            "${PROJECT_SOURCE_DIR}/third_party/imgui/imgui_draw.cpp"
+            "${PROJECT_SOURCE_DIR}/third_party/imgui/imgui_tables.cpp"
+            "${PROJECT_SOURCE_DIR}/third_party/imgui/imgui_widgets.cpp"
+            "${PROJECT_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_glfw.cpp"
+            "${PROJECT_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_opengl3.cpp"
+        )
+        target_include_directories(CEngineViewerImGui PUBLIC
+            "${PROJECT_SOURCE_DIR}/third_party/imgui"
+            "${PROJECT_SOURCE_DIR}/third_party/imgui/backends"
+        )
+        target_include_directories(CEngineViewerImGui SYSTEM PRIVATE
+            "${PROJECT_SOURCE_DIR}/third_party/glad/include"
+        )
+        target_compile_definitions(CEngineViewerImGui
+            PRIVATE IMGUI_IMPL_OPENGL_LOADER_GLAD)
+        target_link_libraries(CEngineViewerImGui PUBLIC ${CEngine_GLFW_TARGET})
+    endif()
+
     add_executable(CEngine ${VIEWER_GAME_SOURCES} main.cpp)
     add_dependencies(CEngine CEngineViewerSchemas)
     target_include_directories(CEngine PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(CEngine PRIVATE CEngineScene)
     if(CENGINE_ENABLE_OPENGL)
         ce_setup_opengl(VIEWER_OPENGL_TARGET)
-        target_link_libraries(CEngine PRIVATE ${VIEWER_OPENGL_TARGET})
+        target_link_libraries(CEngine PRIVATE
+            ${VIEWER_OPENGL_TARGET}
+            CEngineViewerImGui
+        )
     endif()
 
     set_property(DIRECTORY "${PROJECT_SOURCE_DIR}"
