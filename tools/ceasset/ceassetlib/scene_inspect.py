@@ -1,13 +1,16 @@
 #   _____ ______             _
 #  / ____|  ____|           (_)
 # | |    | |__   _ __   __ _ _ _ __   ___
-# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |    |  __| | '_ \ / _` | | '_ \ / _ |
 # | |____| |____| | | | (_| | | | | |  __/
 #  \_____|______|_| |_|\__, |_|_| |_|\___|
 #                       __/ |
 #                      |___/
 
-"""Inspect schema-decoded scene assets."""
+"""Inspect schema-decoded scene assets.
+
+Author:
+    Erik Coltey"""
 
 from __future__ import annotations
 

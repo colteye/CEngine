@@ -1,4 +1,17 @@
-// Copyright (c) CEngine contributors.
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/ui/ui_system.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
 
 #include "ui/ui_system.h"
 
@@ -64,6 +77,26 @@ bool UISystem::Hide(UiScreenHandle screen)
 bool UISystem::BindClick(UiScreenHandle screen, std::string_view element_id, std::string action)
 {
     return impl_->runtime.BindClick(screen, element_id, std::move(action));
+}
+
+bool UISystem::BindChange(UiScreenHandle screen, std::string_view element_id, std::string action)
+{
+    return impl_->runtime.BindChange(screen, element_id, std::move(action));
+}
+
+bool UISystem::SetText(UiScreenHandle screen, std::string_view element_id, std::string_view text)
+{
+    return impl_->runtime.SetText(screen, element_id, text);
+}
+
+bool UISystem::SetValue(UiScreenHandle screen, std::string_view element_id, float value)
+{
+    return impl_->runtime.SetValue(screen, element_id, value);
+}
+
+bool UISystem::SetChecked(UiScreenHandle screen, std::string_view element_id, bool checked)
+{
+    return impl_->runtime.SetChecked(screen, element_id, checked);
 }
 
 void UISystem::Update(const Input::InputSystem &input)

@@ -1,4 +1,17 @@
-// Copyright (c) CEngine contributors.
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/window/window_backend.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
 
 #ifndef CENGINE_WINDOW_WINDOW_BACKEND_H
 #define CENGINE_WINDOW_WINDOW_BACKEND_H
@@ -29,6 +42,7 @@ struct WindowDesc
 #endif
     bool resizable = true;
     bool high_pixel_density = true;
+    bool maximized = false;
     bool hidden = false;
     bool vertical_sync = true;
 };

@@ -39,6 +39,30 @@ float luminance(vec3 color)
     return dot(color, vec3(0.2126, 0.7152, 0.0722));
 }
 
+// Khronos PBR Neutral maps linear Rec. 709 HDR to linear Rec. 709 display
+// values while preserving base-color appearance and avoiding hue skews.
+vec3 tone_map_pbr_neutral(vec3 color)
+{
+    color = max(color, vec3(0.0));
+    const float start_compression = 0.8 - 0.04;
+    const float desaturation = 0.15;
+    float minimum_channel = min(color.r, min(color.g, color.b));
+    float offset = minimum_channel < 0.08
+        ? minimum_channel - 6.25 * minimum_channel * minimum_channel
+        : 0.04;
+    color -= offset;
+    float peak = max(color.r, max(color.g, color.b));
+    if (peak < start_compression)
+        return color;
+    float compression_range = 1.0 - start_compression;
+    float new_peak = 1.0 - compression_range * compression_range /
+        (peak + compression_range - start_compression);
+    color *= new_peak / peak;
+    float highlight_desaturation =
+        1.0 - 1.0 / (desaturation * (peak - new_peak) + 1.0);
+    return mix(color, vec3(new_peak), highlight_desaturation);
+}
+
 float linear_depth(float depth)
 {
     float z = depth * 2.0 - 1.0;
@@ -132,7 +156,8 @@ void main()
     vec3 color = apply_depth_of_field(coc);
     color = apply_bloom(color);
     color = apply_sun_lens_flare(color);
-    if (tone_mapping_enabled) color = vec3(1.0) - exp(-color * max(exposure, 0.0));
+    color *= max(exposure, 0.0);
+    if (tone_mapping_enabled) color = tone_map_pbr_neutral(color);
     color = (color - 0.5) * contrast + 0.5;
     float luma = luminance(color);
     color = mix(vec3(luma), color, saturation);

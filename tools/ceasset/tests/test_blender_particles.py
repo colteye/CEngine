@@ -1,13 +1,16 @@
 #   _____ ______             _
 #  / ____|  ____|           (_)
 # | |    | |__   _ __   __ _ _ _ __   ___
-# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |    |  __| | '_ \ / _` | | '_ \ / _ |
 # | |____| |____| | | | (_| | | | | |  __/
 #  \_____|______|_| |_|\__, |_|_| |_|\___|
 #                       __/ |
 #                      |___/
 
-"""Tests for schema-driven Blender particle export."""
+"""Tests for schema-driven Blender particle export.
+
+Author:
+    Erik Coltey"""
 
 from __future__ import annotations
 

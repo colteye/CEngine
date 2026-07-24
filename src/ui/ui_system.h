@@ -1,4 +1,17 @@
-// Copyright (c) CEngine contributors.
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/ui/ui_system.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
 
 #ifndef CENGINE_UI_UI_SYSTEM_H
 #define CENGINE_UI_UI_SYSTEM_H
@@ -32,6 +45,8 @@ struct UiEvent
 {
     UiScreenHandle screen;
     std::string action;
+    std::string value;
+    bool checked = false;
 };
 
 /**
@@ -62,6 +77,11 @@ class UISystem
      * Bind a clicked RML element to a game-owned semantic action.
      */
     bool BindClick(UiScreenHandle screen, std::string_view element_id, std::string action);
+    bool BindChange(UiScreenHandle screen, std::string_view element_id, std::string action);
+
+    bool SetText(UiScreenHandle screen, std::string_view element_id, std::string_view text);
+    bool SetValue(UiScreenHandle screen, std::string_view element_id, float value);
+    bool SetChecked(UiScreenHandle screen, std::string_view element_id, bool checked);
 
     /**
      * Consume one normalized client input snapshot and update layout,

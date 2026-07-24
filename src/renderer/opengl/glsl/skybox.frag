@@ -18,6 +18,5 @@ void main() {
     vec3 d = normalize(direction);
     d.xy = mat2(c, -s, s, c) * d.xy;
     vec3 color = texture(environment_map, d).rgb * intensity;
-    color = color / (color + vec3(1.0));
-    frag_color = vec4(pow(color, vec3(1.0 / 2.2)), 1.0);
+    frag_color = vec4(color, 1.0);
 }

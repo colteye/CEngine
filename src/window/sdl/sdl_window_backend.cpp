@@ -1,4 +1,17 @@
-// Copyright (c) CEngine contributors.
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/window/sdl/sdl_window_backend.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
 
 #include "window/sdl/sdl_window_backend.h"
 
@@ -37,6 +50,10 @@ bool SdlWindowBackend::Initialize(const WindowDesc &desc)
     {
         flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
     }
+    if (desc.maximized)
+    {
+        flags |= SDL_WINDOW_MAXIMIZED;
+    }
     if (desc.hidden)
     {
         flags |= SDL_WINDOW_HIDDEN;
@@ -47,6 +64,7 @@ bool SdlWindowBackend::Initialize(const WindowDesc &desc)
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, 1);
 #ifdef __APPLE__
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
 #endif
@@ -67,6 +85,13 @@ bool SdlWindowBackend::Initialize(const WindowDesc &desc)
             !SDL_GL_MakeCurrent(window_, reinterpret_cast<SDL_GLContext>(graphics_context_)))
         {
             std::cerr << "Failed to create the SDL3 OpenGL context: " << SDL_GetError() << '\n';
+            Shutdown();
+            return false;
+        }
+        int srgb_capable = 0;
+        if (!SDL_GL_GetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, &srgb_capable) || srgb_capable != 1)
+        {
+            std::cerr << "OpenGL requires an sRGB-capable default framebuffer.\n";
             Shutdown();
             return false;
         }

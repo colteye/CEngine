@@ -1,4 +1,17 @@
-// Copyright (c) CEngine contributors.
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/opengl/ui_renderer.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
 
 #include "renderer/opengl/ui_renderer.h"
 
@@ -28,6 +41,22 @@ uniform vec2 ui_translation;
 uniform mat4 ui_transform;
 out vec4 vertex_color;
 out vec2 texture_uv;
+
+vec3 srgb_to_linear(vec3 color)
+{
+    vec3 low = color / 12.92;
+    vec3 high = pow((color + 0.055) / 1.055, vec3(2.4));
+    return mix(high, low, lessThanEqual(color, vec3(0.04045)));
+}
+
+vec4 premultiplied_srgb_to_linear(vec4 color)
+{
+    if (color.a <= 0.0)
+        return vec4(0.0);
+    vec3 straight = clamp(color.rgb / color.a, vec3(0.0), vec3(1.0));
+    return vec4(srgb_to_linear(straight) * color.a, color.a);
+}
+
 void main()
 {
     vec4 transformed = ui_transform * vec4(in_position + ui_translation, 0.0, 1.0);
@@ -35,7 +64,7 @@ void main()
     vec2 clip = vec2(pixel.x * 2.0 / ui_viewport.x - 1.0,
                      1.0 - pixel.y * 2.0 / ui_viewport.y);
     gl_Position = vec4(clip, 0.0, 1.0);
-    vertex_color = in_color;
+    vertex_color = premultiplied_srgb_to_linear(in_color);
     texture_uv = in_uv;
 }
 )glsl";
@@ -101,6 +130,36 @@ GLuint BuildProgram()
     Logging::Logger::Get().Error("renderer", "UI shader link failed: " + std::string(log.data()));
     glDeleteProgram(program);
     return 0;
+}
+
+float SrgbToLinear(float value)
+{
+    return value <= 0.04045f ? value / 12.92f : std::pow((value + 0.055f) / 1.055f, 2.4f);
+}
+
+std::vector<GLfloat> LinearPremultipliedPixels(const UiTexture &texture)
+{
+    constexpr float ByteToFloat = 1.0f / 255.0f;
+    std::vector<GLfloat> result(texture.rgba.size());
+    for (std::size_t index = 0; index < texture.rgba.size(); index += 4u)
+    {
+        const float alpha = static_cast<float>(texture.rgba[index + 3]) * ByteToFloat;
+        result[index + 3] = alpha;
+        if (alpha <= 0.0f)
+        {
+            result[index] = 0.0f;
+            result[index + 1] = 0.0f;
+            result[index + 2] = 0.0f;
+            continue;
+        }
+        for (std::size_t channel = 0; channel < 3u; ++channel)
+        {
+            const float encoded_premultiplied = static_cast<float>(texture.rgba[index + channel]) * ByteToFloat;
+            const float encoded_straight = std::clamp(encoded_premultiplied / alpha, 0.0f, 1.0f);
+            result[index + channel] = SrgbToLinear(encoded_straight) * alpha;
+        }
+    }
+    return result;
 }
 
 } // namespace
@@ -193,8 +252,9 @@ GLuint UiRenderer::ResolveTexture(const std::shared_ptr<const UiTexture> &textur
     GLint unpack_alignment = 0;
     glGetIntegerv(GL_UNPACK_ALIGNMENT, &unpack_alignment);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, texture->width, texture->height, 0, GL_RGBA,
-                 GL_UNSIGNED_BYTE, texture->rgba.data());
+    const std::vector<GLfloat> linear_pixels = LinearPremultipliedPixels(*texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, texture->width, texture->height, 0, GL_RGBA, GL_FLOAT,
+                 linear_pixels.data());
     glPixelStorei(GL_UNPACK_ALIGNMENT, unpack_alignment);
     textures_.emplace(texture.get(), resource);
     return resource.id;
@@ -217,13 +277,12 @@ void UiRenderer::PruneTextures()
 void UiRenderer::Render(const UiFrame &frame, int drawable_width, int drawable_height)
 {
     PruneTextures();
-    if (program_ == 0 || frame.Empty() || frame.width <= 0 || frame.height <= 0 ||
-        drawable_width <= 0 || drawable_height <= 0)
+    if (program_ == 0 || frame.Empty() || frame.width <= 0 || frame.height <= 0 || drawable_width <= 0 ||
+        drawable_height <= 0)
         return;
 
-    std::array<GLboolean, 4> enabled = {
-        glIsEnabled(GL_BLEND), glIsEnabled(GL_CULL_FACE), glIsEnabled(GL_DEPTH_TEST),
-        glIsEnabled(GL_SCISSOR_TEST)};
+    std::array<GLboolean, 5> enabled = {glIsEnabled(GL_BLEND), glIsEnabled(GL_CULL_FACE), glIsEnabled(GL_DEPTH_TEST),
+                                        glIsEnabled(GL_SCISSOR_TEST), glIsEnabled(GL_FRAMEBUFFER_SRGB)};
     GLint previous_program = 0;
     GLint previous_vertex_array = 0;
     GLint previous_active_texture = 0;
@@ -245,6 +304,7 @@ void UiRenderer::Render(const UiFrame &frame, int drawable_width, int drawable_h
     glDisable(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
+    glEnable(GL_FRAMEBUFFER_SRGB);
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     glUseProgram(program_);
     glUniform2f(viewport_location_, static_cast<float>(frame.width), static_cast<float>(frame.height));
@@ -253,8 +313,7 @@ void UiRenderer::Render(const UiFrame &frame, int drawable_width, int drawable_h
     glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(frame.vertices.size() * sizeof(UiVertex)),
                  frame.vertices.data(), GL_STREAM_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                 static_cast<GLsizeiptr>(frame.indices.size() * sizeof(std::uint32_t)),
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(frame.indices.size() * sizeof(std::uint32_t)),
                  frame.indices.data(), GL_STREAM_DRAW);
 
     const float scale_x = static_cast<float>(drawable_width) / static_cast<float>(frame.width);
@@ -268,18 +327,14 @@ void UiRenderer::Render(const UiFrame &frame, int drawable_width, int drawable_h
 
         if (batch.scissor_enabled)
         {
-            const int left = std::clamp(static_cast<int>(std::floor(batch.scissor.x * scale_x)), 0,
-                                        drawable_width);
-            const int right =
-                std::clamp(static_cast<int>(std::ceil((batch.scissor.x + batch.scissor.width) * scale_x)),
-                           0, drawable_width);
-            const int bottom =
-                std::clamp(static_cast<int>(std::floor(
-                               (frame.height - batch.scissor.y - batch.scissor.height) * scale_y)),
-                           0, drawable_height);
+            const int left = std::clamp(static_cast<int>(std::floor(batch.scissor.x * scale_x)), 0, drawable_width);
+            const int right = std::clamp(static_cast<int>(std::ceil((batch.scissor.x + batch.scissor.width) * scale_x)),
+                                         0, drawable_width);
+            const int bottom = std::clamp(
+                static_cast<int>(std::floor((frame.height - batch.scissor.y - batch.scissor.height) * scale_y)), 0,
+                drawable_height);
             const int top =
-                std::clamp(static_cast<int>(std::ceil((frame.height - batch.scissor.y) * scale_y)), 0,
-                           drawable_height);
+                std::clamp(static_cast<int>(std::ceil((frame.height - batch.scissor.y) * scale_y)), 0, drawable_height);
             glEnable(GL_SCISSOR_TEST);
             glScissor(left, bottom, std::max(right - left, 0), std::max(top - bottom, 0));
         }
@@ -294,22 +349,21 @@ void UiRenderer::Render(const UiFrame &frame, int drawable_width, int drawable_h
         glUniform2fv(translation_location_, 1, &batch.translation.x);
         glUniformMatrix4fv(transform_location_, 1, GL_FALSE, glm::value_ptr(batch.transform));
         glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(batch.index_count), GL_UNSIGNED_INT,
-                       reinterpret_cast<void *>(static_cast<std::size_t>(batch.first_index) *
-                                                sizeof(std::uint32_t)));
+                       reinterpret_cast<void *>(static_cast<std::size_t>(batch.first_index) * sizeof(std::uint32_t)));
     }
 
     glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previous_texture));
     glActiveTexture(static_cast<GLenum>(previous_active_texture));
     glBindVertexArray(static_cast<GLuint>(previous_vertex_array));
     glUseProgram(static_cast<GLuint>(previous_program));
-    glBlendFunc(static_cast<GLenum>(previous_blend_source),
-                static_cast<GLenum>(previous_blend_destination));
+    glBlendFunc(static_cast<GLenum>(previous_blend_source), static_cast<GLenum>(previous_blend_destination));
     glViewport(previous_viewport[0], previous_viewport[1], previous_viewport[2], previous_viewport[3]);
     glScissor(previous_scissor[0], previous_scissor[1], previous_scissor[2], previous_scissor[3]);
     enabled[0] ? glEnable(GL_BLEND) : glDisable(GL_BLEND);
     enabled[1] ? glEnable(GL_CULL_FACE) : glDisable(GL_CULL_FACE);
     enabled[2] ? glEnable(GL_DEPTH_TEST) : glDisable(GL_DEPTH_TEST);
     enabled[3] ? glEnable(GL_SCISSOR_TEST) : glDisable(GL_SCISSOR_TEST);
+    enabled[4] ? glEnable(GL_FRAMEBUFFER_SRGB) : glDisable(GL_FRAMEBUFFER_SRGB);
 }
 
 } // namespace CEngine::Renderer::OpenGL

@@ -1,4 +1,17 @@
-// Copyright (c) CEngine contributors.
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/input/sdl/sdl_input_backend.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
 
 #include "input/sdl/sdl_input_backend.h"
 
@@ -219,8 +232,7 @@ void SdlInputBackend::ProcessPlatformEvent(const void *opaque_event)
     const auto &event = *static_cast<const SDL_Event *>(opaque_event);
     switch (event.type)
     {
-    case SDL_EVENT_MOUSE_MOTION:
-    {
+    case SDL_EVENT_MOUSE_MOTION: {
         InputEvent normalized;
         normalized.type = InputEventType::PointerMove;
         normalized.position = glm::vec2(event.motion.x, event.motion.y);
@@ -232,16 +244,14 @@ void SdlInputBackend::ProcessPlatformEvent(const void *opaque_event)
         if (const std::optional<PointerButton> button = EnginePointerButton(event.button.button))
         {
             InputEvent normalized;
-            normalized.type = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN
-                                  ? InputEventType::PointerButtonDown
-                                  : InputEventType::PointerButtonUp;
+            normalized.type = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? InputEventType::PointerButtonDown
+                                                                        : InputEventType::PointerButtonUp;
             normalized.button = *button;
             normalized.position = glm::vec2(event.button.x, event.button.y);
             pending_events_.push_back(std::move(normalized));
         }
         break;
-    case SDL_EVENT_MOUSE_WHEEL:
-    {
+    case SDL_EVENT_MOUSE_WHEEL: {
         glm::vec2 wheel(event.wheel.x, event.wheel.y);
         if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED)
         {
@@ -250,11 +260,11 @@ void SdlInputBackend::ProcessPlatformEvent(const void *opaque_event)
         InputEvent normalized;
         normalized.type = InputEventType::PointerWheel;
         normalized.wheel = wheel;
+        normalized.position = glm::vec2(event.wheel.mouse_x, event.wheel.mouse_y);
         pending_events_.push_back(std::move(normalized));
         break;
     }
-    case SDL_EVENT_WINDOW_MOUSE_LEAVE:
-    {
+    case SDL_EVENT_WINDOW_MOUSE_LEAVE: {
         InputEvent normalized;
         normalized.type = InputEventType::PointerLeave;
         pending_events_.push_back(std::move(normalized));
@@ -265,14 +275,12 @@ void SdlInputBackend::ProcessPlatformEvent(const void *opaque_event)
         if (const std::optional<Key> key = EngineKey(event.key.scancode))
         {
             InputEvent normalized;
-            normalized.type =
-                event.type == SDL_EVENT_KEY_DOWN ? InputEventType::KeyDown : InputEventType::KeyUp;
+            normalized.type = event.type == SDL_EVENT_KEY_DOWN ? InputEventType::KeyDown : InputEventType::KeyUp;
             normalized.key = *key;
             pending_events_.push_back(std::move(normalized));
         }
         break;
-    case SDL_EVENT_TEXT_INPUT:
-    {
+    case SDL_EVENT_TEXT_INPUT: {
         InputEvent normalized;
         normalized.type = InputEventType::TextInput;
         normalized.text = event.text.text;

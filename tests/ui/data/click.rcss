@@ -7,9 +7,9 @@ body {
 
 #start {
     position: absolute;
-    left: 20px;
-    top: 20px;
-    width: 120px;
-    height: 60px;
+    left: 20dp;
+    top: 20dp;
+    width: 120dp;
+    height: 60dp;
     background-color: #d6a85f;
 }

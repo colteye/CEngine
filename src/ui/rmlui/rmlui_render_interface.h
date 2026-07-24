@@ -1,4 +1,17 @@
-// Copyright (c) CEngine contributors.
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/ui/rmlui/rmlui_render_interface.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
 
 #ifndef CENGINE_UI_RMLUI_RENDER_INTERFACE_H
 #define CENGINE_UI_RMLUI_RENDER_INTERFACE_H
@@ -26,8 +39,7 @@ class RmlUiRenderInterface final : public Rml::RenderInterface
     void ReleaseGeometry(Rml::CompiledGeometryHandle geometry) override;
 
     Rml::TextureHandle LoadTexture(Rml::Vector2i &texture_dimensions, const Rml::String &source) override;
-    Rml::TextureHandle GenerateTexture(Rml::Span<const Rml::byte> source,
-                                       Rml::Vector2i source_dimensions) override;
+    Rml::TextureHandle GenerateTexture(Rml::Span<const Rml::byte> source, Rml::Vector2i source_dimensions) override;
     void ReleaseTexture(Rml::TextureHandle texture) override;
 
     void EnableScissorRegion(bool enable) override;

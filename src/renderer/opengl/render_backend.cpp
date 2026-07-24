@@ -1,7 +1,7 @@
 //   _____ ______             _
 //  / ____|  ____|           (_)
 // | |    | |__   _ __   __ _ _ _ __   ___
-// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
 // | |____| |____| | | | (_| | | | | |  __/
 //  \_____|______|_| |_|\__, |_|_| |_|\___|
 //                       __/ |
@@ -713,10 +713,15 @@ bool RenderBackend::RegisterMaterial(const Material *material)
     resources.owns_albedo_tex = !material->albedo.Empty();
     resources.owns_normal_tex = !material->normal.Empty();
     resources.owns_metallic_roughness_ao_tex = !material->metallic_roughness_ao.Empty();
-    resources.albedo_tex = resources.owns_albedo_tex ? TextureLoader::Load(material->albedo) : default_white_texture_;
-    resources.normal_tex = resources.owns_normal_tex ? TextureLoader::Load(material->normal) : default_normal_texture_;
+    resources.albedo_tex = resources.owns_albedo_tex
+                               ? TextureLoader::Load(material->albedo, TextureColorSpace::Srgb)
+                               : default_white_texture_;
+    resources.normal_tex = resources.owns_normal_tex
+                               ? TextureLoader::Load(material->normal, TextureColorSpace::Linear)
+                               : default_normal_texture_;
     resources.metallic_roughness_ao_tex = resources.owns_metallic_roughness_ao_tex
-                                              ? TextureLoader::Load(material->metallic_roughness_ao)
+                                              ? TextureLoader::Load(material->metallic_roughness_ao,
+                                                                    TextureColorSpace::Linear)
                                               : default_white_texture_;
     if (resources.albedo_tex == 0 || resources.normal_tex == 0 || resources.metallic_roughness_ao_tex == 0)
     {
@@ -764,7 +769,7 @@ bool RenderBackend::RegisterLightmap(const Texture *lightmap)
         return true;
     }
 
-    const GLuint texture = TextureLoader::Load(*lightmap);
+    const GLuint texture = TextureLoader::Load(*lightmap, TextureColorSpace::Linear);
     if (texture == 0)
     {
         return false;
@@ -835,7 +840,7 @@ bool RenderBackend::CreateFrameResources(int width, int height)
     glBindFramebuffer(GL_FRAMEBUFFER, resources.g_buffer_fbo);
 
     glGenTextures(1, &resources.g_albedo);
-    ConfigureFramebufferTexture(resources.g_albedo, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, width, height);
+    ConfigureFramebufferTexture(resources.g_albedo, GL_SRGB8_ALPHA8, GL_RGBA, GL_UNSIGNED_BYTE, width, height);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, resources.g_albedo, 0);
 
     glGenTextures(1, &resources.g_normal_roughness);
@@ -1091,7 +1096,7 @@ bool RenderBackend::BuildEnvironmentResources()
     {
         return false;
     }
-    resources.panorama = TextureLoader::Load(*lighting.panorama);
+    resources.panorama = TextureLoader::Load(*lighting.panorama, TextureColorSpace::Linear);
     if (resources.panorama == 0)
     {
         return false;
@@ -1429,6 +1434,7 @@ bool RenderBackend::DrawsShadowCaster(const DrawItem &item)
  */
 void RenderBackend::Render()
 {
+    glEnable(GL_FRAMEBUFFER_SRGB);
     SyncEnvironmentResources();
     BuildRenderQueues();
     shadow_system_.Render(draw_items_, render_queues_);

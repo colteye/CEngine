@@ -1,4 +1,17 @@
-// Copyright (c) CEngine contributors.
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file tests/audio/audio_system_tests.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
 
 #include "audio/audio_backend.h"
 #include "audio/audio_system.h"

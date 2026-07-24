@@ -1,4 +1,17 @@
-// Copyright (c) CEngine contributors.
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/ui/rmlui/rmlui_runtime.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
 
 #ifndef CENGINE_UI_RMLUI_RUNTIME_H
 #define CENGINE_UI_RMLUI_RUNTIME_H
@@ -45,6 +58,10 @@ class RmlUiRuntime
     bool Show(UiScreenHandle screen, bool modal);
     bool Hide(UiScreenHandle screen);
     bool BindClick(UiScreenHandle screen, std::string_view element_id, std::string action);
+    bool BindChange(UiScreenHandle screen, std::string_view element_id, std::string action);
+    bool SetText(UiScreenHandle screen, std::string_view element_id, std::string_view text);
+    bool SetValue(UiScreenHandle screen, std::string_view element_id, float value);
+    bool SetChecked(UiScreenHandle screen, std::string_view element_id, bool checked);
     void Update(const Input::InputSystem &input);
     Renderer::UiFrame Compose();
     std::vector<UiEvent> DrainEvents();

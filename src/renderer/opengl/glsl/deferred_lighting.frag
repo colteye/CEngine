@@ -134,7 +134,5 @@ void main()
 	// mixed light must not erase the independent baked-indirect contribution.
 	vec3 color = apply_height_fog(ambient + ibl + baked_indirect + runtime_direct, world_pos);
 
-	color = color / (color + vec3(1.0));
-	color = pow(color, vec3(1.0 / 2.2));
 	frag_color = vec4(color, 1.0);
 }

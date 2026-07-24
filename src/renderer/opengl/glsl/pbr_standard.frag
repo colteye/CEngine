@@ -128,8 +128,7 @@ void main()
     float ao = mra.b;
 
     if (render_mode == RENDER_MODE_UNLIT) {
-        vec3 unlit_color = albedo / (albedo + vec3(1.0));
-        frag_color = vec4(pow(unlit_color, vec3(1.0 / 2.2)), albedo_sample.a);
+        frag_color = vec4(albedo, albedo_sample.a);
         return;
     }
 
@@ -171,9 +170,6 @@ void main()
 	// visible when a mixed light's realtime direct term is fully shadowed.
     vec3 color = apply_height_fog(
         ambient + ibl + baked_indirect + Lo, vertex_pos_world);
-	
-    color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0/2.2));  
-   
+
     frag_color = vec4(color, albedo_sample.a);
 }  

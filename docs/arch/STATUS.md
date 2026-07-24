@@ -40,8 +40,8 @@ Cooked asset payloads use one schema-owned version-one format.
   OpenGL context setup, Vulkan surface prerequisites, presentation, and time.
 - Render backends initialize from `WindowSystem`; no window-library type is in
   the renderer facade.
-- The viewer's ordinary window/event loop uses the engine facade. Only its
-  explicit ImGui adapter sees opaque SDL event/window values.
+- The viewer's window, input, game UI, FPS HUD, and runtime tuning flow use
+  engine facades; it no longer has an ImGui platform or renderer adapter.
 - The pinned SDL3 static build enables video, events, the selected graphics
   surface, and optional audio; unused subsystems are disabled.
 
@@ -64,6 +64,10 @@ Cooked asset payloads use one schema-owned version-one format.
   same four-weight matrix skinning in deferred, forward, depth, and point
   shadow passes. Vulkan explicitly rejects skinning while its mesh path remains
   incomplete.
+- OpenGL treats base-color textures as sRGB and material-data, lightmap, and HDR
+  textures as linear. Lighting and scene composition remain linear in
+  floating-point targets; Khronos PBR Neutral tone mapping runs once before
+  hardware sRGB output, and UI blends in linear display space.
 - OpenGL implementation types live under `Renderer::OpenGL`; cascade fitting
   and shadow resource management are consolidated in `ShadowSystem`.
 - `.cparticle` is a separate generated asset type; a renderer simulation path
@@ -155,6 +159,29 @@ Cooked asset payloads use one schema-owned version-one format.
   navigation, locks, F1-F24, keypad keys, modifiers, super keys, world keys,
   and menu. The legacy F25 value safely remains unmapped because SDL3 has no
   corresponding scancode.
+- The SDL3 adapter also normalizes pointer motion/buttons/wheel, key
+  transitions, window leave, and text input at client-frame cadence without
+  exposing SDL types.
+
+### UI
+
+- `UISystem` owns generation-checked screen handles, font loading, modal
+  visibility, semantic click/change bindings, narrow text/form updates,
+  display-frame updates, and event draining.
+- RmlUi 6.2 and FreeType 2.14.3 are pinned to immutable revisions and remain
+  private implementation dependencies. Lua, SVG, Lottie, and dependency
+  samples are disabled.
+- A read-only content-rooted file adapter rejects absolute paths and parent
+  traversal. RmlUi focus, hit testing, layout, and generated font atlases feed
+  a renderer-neutral `UiFrame`.
+- RmlUi composes at full drawable resolution with a density-independent layout
+  ratio. OpenGL draws `UiFrame` last with generated texture caching and
+  premultiplied alpha; RmlUi types do not cross the renderer boundary.
+- UI pointer input has one authority: ordered normalized SDL events. Motion,
+  button, and wheel events carry logical-window coordinates which are converted
+  once at the RmlUi boundary; pressed state remains inside RmlUi across frames.
+- The viewer owns a modal start menu, a persistent FPS HUD, and an RmlUi
+  runtime tuning panel. ImGui is no longer linked into the viewer.
 
 ### Audio
 
@@ -214,6 +241,11 @@ Cooked asset payloads use one schema-owned version-one format.
 - Mobile and console target packages and graphics backends are not currently
   built in CI. Console SDL packages remain platform-SDK inputs.
 - Audio has one listener and one global sound-effects environment.
+- Vulkan accepts the neutral UI frame at the `RenderSystem` boundary but does
+  not draw it while that backend's general mesh path remains incomplete.
+- RML external image URLs are rejected until they can resolve through cooked
+  `Store` textures. The UI facade exposes semantic click/change actions and
+  narrow text/form updates, not scripting or a browser DOM.
 
 These are explicit limits, not placeholder interfaces.
 
@@ -240,8 +272,22 @@ git diff --check
   with no Ozz data or type in assets, schemas, Blender export, scenes, or
   rendering.
 
-The repository-wide gate must be rerun after the concurrent UI/input worktree
-settles. Its current configure requires an unavailable new FreeType download,
-and the already-built CTest set reports 12/13 because the concurrently
-regenerated Sponza scene no longer matches the existing mesh fixture. Neither
-failure is in the animation slice.
+The UI/input slice and repository-wide gate were verified on 2026-07-23 with:
+
+```sh
+cmake --preset mac-debug
+cmake --build --preset mac-debug -j 8
+ctest --test-dir build/mac-debug --output-on-failure
+python3 -m unittest discover -s tools/ceasset/tests
+./build/mac-debug/CEngineUiRendererTests
+git diff --check
+```
+
+- all 15 CTest cases passed; the OpenGL UI renderer test is skipped in the
+  sandbox when a graphics display is unavailable;
+- the same OpenGL test passed separately with a hidden native context and
+  exact textured-pixel readback;
+- the UI lifecycle test composes at 2x drawable density; verifies click holds
+  across event-free frames, inside/outside release rules, range and checkbox
+  payloads, unloading, and stale-handle rejection;
+- all 131 Python asset tests passed with one intentional skip.

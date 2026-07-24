@@ -1,7 +1,7 @@
 #   _____ ______             _
 #  / ____|  ____|           (_)
 # | |    | |__   _ __   __ _ _ _ __   ___
-# | |    |  __| | '_ \ / _` | | '_ \ / _ \
+# | |    |  __| | '_ \ / _` | | '_ \ / _ |
 # | |____| |____| | | | (_| | | | | |  __/
 #  \_____|______|_| |_|\__, |_|_| |_|\___|
 #                       __/ |
@@ -66,36 +66,16 @@ if(CENGINE_BUILD_TESTS)
 endif()
 
 if(CENGINE_BUILD_VIEWER)
-    if(CENGINE_ENABLE_OPENGL)
-        add_library(CEngineViewerImGui STATIC
-            "${PROJECT_SOURCE_DIR}/third_party/imgui/imgui.cpp"
-            "${PROJECT_SOURCE_DIR}/third_party/imgui/imgui_draw.cpp"
-            "${PROJECT_SOURCE_DIR}/third_party/imgui/imgui_tables.cpp"
-            "${PROJECT_SOURCE_DIR}/third_party/imgui/imgui_widgets.cpp"
-            "${PROJECT_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_sdl3.cpp"
-            "${PROJECT_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_opengl3.cpp"
-        )
-        target_include_directories(CEngineViewerImGui PUBLIC
-            "${PROJECT_SOURCE_DIR}/third_party/imgui"
-            "${PROJECT_SOURCE_DIR}/third_party/imgui/backends"
-        )
-        target_include_directories(CEngineViewerImGui SYSTEM PRIVATE
-            "${PROJECT_SOURCE_DIR}/third_party/glad/include"
-        )
-        target_compile_definitions(CEngineViewerImGui
-            PRIVATE IMGUI_IMPL_OPENGL_LOADER_GLAD)
-        target_link_libraries(CEngineViewerImGui PUBLIC ${CENGINE_SDL3_TARGET})
-    endif()
-
     set(VIEWER_EXECUTABLE_SOURCES
         ${VIEWER_GAME_SOURCES}
         main.cpp
+        ui/hud.rml
+        ui/hud.rcss
         ui/start_menu.rml
         ui/start_menu.rcss
+        ui/tuning.rml
+        ui/tuning.rcss
     )
-    if(CENGINE_ENABLE_OPENGL)
-        list(APPEND VIEWER_EXECUTABLE_SOURCES imgui_platform.cpp)
-    endif()
     add_executable(CEngine ${VIEWER_EXECUTABLE_SOURCES})
     add_dependencies(CEngine CEngineViewerSchemas)
     target_include_directories(CEngine PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -104,7 +84,6 @@ if(CENGINE_BUILD_VIEWER)
         ce_setup_opengl(VIEWER_OPENGL_TARGET)
         target_link_libraries(CEngine PRIVATE
             ${VIEWER_OPENGL_TARGET}
-            CEngineViewerImGui
         )
     endif()
 
@@ -139,11 +118,18 @@ if(CENGINE_BUILD_VIEWER)
             "${rmlui_SOURCE_DIR}/Samples/assets/LatoLatin-Regular.ttf"
             "$<TARGET_FILE_DIR:CEngine>/ui/fonts/LatoLatin-Regular.ttf"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${rmlui_SOURCE_DIR}/Samples/assets/LatoLatin-Bold.ttf"
+            "$<TARGET_FILE_DIR:CEngine>/ui/fonts/LatoLatin-Bold.ttf"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
             "${rmlui_SOURCE_DIR}/Samples/assets/LICENSE.txt"
             "$<TARGET_FILE_DIR:CEngine>/ui/fonts/LICENSE.txt"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
             "${CMAKE_CURRENT_SOURCE_DIR}/ui/start_menu.rml"
             "${CMAKE_CURRENT_SOURCE_DIR}/ui/start_menu.rcss"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/hud.rml"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/hud.rcss"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/tuning.rml"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/tuning.rcss"
             "$<TARGET_FILE_DIR:CEngine>/ui/viewer"
         VERBATIM
     )

@@ -31,6 +31,7 @@ InputSystem
 PhysicsSystem
 RenderSystem
 AudioSystem
+UISystem
 Scene
 ```
 
@@ -164,6 +165,14 @@ and `ShadowBuffer` without repeating `OpenGL` in every filename and type.
 Directional cascade fitting is part of `shadow_system.h/.cpp`, not a parallel
 subsystem.
 
+The OpenGL image pipeline is linear Rec. 709 from material sampling through
+lighting, fog, bloom, transparency, and HDR scene composition. Base-color
+textures decode from sRGB; normal, material-data, lightmap, and environment
+textures remain linear. Exposure is applied once immediately before Khronos
+PBR Neutral tone mapping at presentation, the sRGB framebuffer performs the
+output transfer, and premultiplied sRGBA UI inputs convert to linear before
+blending.
+
 ## Physics
 
 `PhysicsSystem` is the engine-facing physics facade and owns one
@@ -208,8 +217,28 @@ or tools without physics.
 
 `InputSystem` owns one platform backend and maps device state to append-only
 actions. `Key` covers the standard keyboard set and the SDL3 backend maps it to
-scancodes. Game code consumes `ActionHandle` values; SDL values do not cross the
-backend.
+scancodes. It also publishes client-frame pointer, key, wheel, and text events
+in platform-neutral values. Game and UI code consume engine types; SDL values
+do not cross the backend.
+
+## UI
+
+`UISystem` is the engine-facing in-game UI facade and is available through
+`Context` like the other application-owned systems. Screen lifetime uses
+generation-checked handles. Element clicks and form changes become semantic
+`UiEvent` actions; narrow text, numeric-value, and checked-state setters support
+live HUDs and game-owned tuning. Game code does not receive DOM pointers or
+RmlUi callbacks.
+
+RmlUi is a private implementation under `src/ui/rmlui`, not a renderer backend
+and not a public engine dependency. It consumes one ordered normalized
+`InputSystem` event stream; pointer positions are converted once from logical
+window coordinates to full drawable pixels. RmlUi retains hover, focus, and
+pressed state across event-free frames, owns RML/RCSS layout and FreeType atlas
+generation, then emits one renderer-neutral `UiFrame`. `RenderSystem` owns the
+submitted frame. The compiled graphics backend draws it as the final 2D pass;
+OpenGL implements that pass now. See [`../ui.md`](../ui.md) for the exact API
+and current limits.
 
 ## Window and platform
 
@@ -219,8 +248,8 @@ or Vulkan surface prerequisites, drawable sizing, presentation, and monotonic
 time. Renderer initialization consumes `WindowSystem`, not an SDL window.
 
 Opaque native access exists only for compiled integrations such as Vulkan
-surface creation and ImGui's SDL adapter. Game/entity code and the sample's
-ordinary control flow use CEngine window values.
+surface creation. Game/entity code and the sample's ordinary control flow use
+CEngine window values.
 
 SDL3 is the sole platform/device dependency. Its fetched static build enables
 video, events, the selected graphics surface, and optional audio while disabling

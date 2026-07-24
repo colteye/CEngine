@@ -70,6 +70,7 @@ Build products live under `build/`, which is ignored by git.
 - OpenGL
 - SDL 3.4
 - miniaudio 0.11.25 when audio is enabled
+- RmlUi 6.2 and FreeType 2.14.3
 
 By default, CMake downloads and statically builds an immutable SDL 3.4.10
 revision. To use an installed SDL3 package instead, configure with
@@ -77,6 +78,11 @@ revision. To use an installed SDL3 package instead, configure with
 event, selected graphics-surface, and optional audio subsystems CEngine uses;
 SDL GPU, renderer, camera, joystick, haptic, HID, sensor, dialog, tray, and
 power support are disabled.
+
+RmlUi and FreeType are fetched at immutable revisions and built statically for
+the in-game [`UISystem`](docs/ui.md). RmlUi remains private to the UI
+implementation; game and renderer APIs exchange only CEngine handles, events,
+and neutral draw data.
 
 Audio is enabled by default with `-DCENGINE_ENABLE_AUDIO=ON`. CEngine vendors
 only miniaudio's single-header implementation, the Vorbis decoder, and its
@@ -97,6 +103,8 @@ be supplied as the first argument. Target-asset references resolve against the
 project containing the scene's `assets/` directory, while renderer shaders are
 loaded beside the executable. There is one graphics backend per build; OpenGL
 is enabled by the checked-in presets.
+Its RML/RCSS start menu leaves fixed-step simulation paused until **Start
+Game** is clicked.
 
 ## Architecture and asset pipeline
 

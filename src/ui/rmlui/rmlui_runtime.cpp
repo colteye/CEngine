@@ -1,4 +1,17 @@
-// Copyright (c) CEngine contributors.
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/ui/rmlui/rmlui_runtime.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
 
 #include "ui/rmlui/rmlui_runtime.h"
 
@@ -11,9 +24,12 @@
 
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/ElementDocument.h>
+#include <RmlUi/Core/ElementText.h>
 #include <RmlUi/Core/Event.h>
 #include <RmlUi/Core/EventListener.h>
 #include <RmlUi/Core/Input.h>
+#include <RmlUi/Core/StringUtilities.h>
+#include <RmlUi/Core/Elements/ElementFormControlInput.h>
 
 #include <algorithm>
 #include <cmath>
@@ -28,6 +44,30 @@ namespace
 {
 
 bool RuntimeActive = false;
+
+struct UiMetrics
+{
+    glm::ivec2 dimensions{1};
+    glm::vec2 pointer_scale{1.0f};
+    float dp_ratio = 1.0f;
+};
+
+UiMetrics WindowUiMetrics(const Window::WindowSystem &window)
+{
+    const glm::ivec2 logical = glm::max(window.Size(), glm::ivec2(1));
+    const glm::ivec2 drawable = glm::max(window.DrawableSize(), glm::ivec2(1));
+    UiMetrics result;
+    result.dimensions = drawable;
+    result.pointer_scale = glm::vec2(drawable) / glm::vec2(logical);
+    result.dp_ratio = (result.pointer_scale.x + result.pointer_scale.y) * 0.5f;
+    return result;
+}
+
+Rml::Vector2i RmlPointerPosition(glm::vec2 position, glm::vec2 scale)
+{
+    const glm::vec2 pixels = position * scale;
+    return {static_cast<int>(std::lround(pixels.x)), static_cast<int>(std::lround(pixels.y))};
+}
 
 Rml::Input::KeyIdentifier RmlKey(Input::Key key)
 {
@@ -199,27 +239,37 @@ int RmlPointerButton(Input::PointerButton button)
 class RmlUiRuntime::Impl
 {
   public:
-    struct ClickListener final : Rml::EventListener
+    struct ActionListener final : Rml::EventListener
     {
-        ClickListener(Impl &owner, UiScreenHandle screen, std::string action)
-            : owner(owner), screen(screen), action(std::move(action))
+        ActionListener(Impl &owner, UiScreenHandle screen, std::string action, bool include_value)
+            : owner(owner), screen(screen), action(std::move(action)), include_value(include_value)
         {
         }
 
-        void ProcessEvent(Rml::Event &) override
+        void ProcessEvent(Rml::Event &event) override
         {
-            owner.events.push_back({screen, action});
+            UiEvent result;
+            result.screen = screen;
+            result.action = action;
+            if (include_value)
+            {
+                result.value = event.GetParameter<Rml::String>("value", "");
+                result.checked = event.GetParameter<bool>("checked", false);
+            }
+            owner.events.push_back(std::move(result));
         }
 
         Impl &owner;
         UiScreenHandle screen;
         std::string action;
+        bool include_value = false;
     };
 
     struct Binding
     {
         Rml::Element *element = nullptr;
-        std::unique_ptr<ClickListener> listener;
+        Rml::EventId event_id = Rml::EventId::Invalid;
+        std::unique_ptr<ActionListener> listener;
     };
 
     struct Screen
@@ -250,7 +300,7 @@ class RmlUiRuntime::Impl
         {
             if (binding.element != nullptr && binding.listener != nullptr)
             {
-                binding.element->RemoveEventListener(Rml::EventId::Click, binding.listener.get());
+                binding.element->RemoveEventListener(binding.event_id, binding.listener.get());
             }
         }
         screen.bindings.clear();
@@ -264,6 +314,7 @@ class RmlUiRuntime::Impl
     std::vector<Screen> screens;
     std::vector<std::uint32_t> free_screens;
     std::vector<UiEvent> events;
+    bool needs_update_before_compose = false;
     bool initialized = false;
 };
 
@@ -281,8 +332,8 @@ bool RmlUiRuntime::Initialize(Window::WindowSystem &window, std::filesystem::pat
     Shutdown();
     if (RuntimeActive || !std::filesystem::is_directory(content_root))
     {
-        Logging::Logger::Get().Error(
-            "ui", RuntimeActive ? "only one RmlUi runtime may be active" : "UI content root does not exist");
+        Logging::Logger::Get().Error("ui", RuntimeActive ? "only one RmlUi runtime may be active"
+                                                         : "UI content root does not exist");
         return false;
     }
 
@@ -306,8 +357,8 @@ bool RmlUiRuntime::Initialize(Window::WindowSystem &window, std::filesystem::pat
         return false;
     }
 
-    const glm::ivec2 size = window.Size();
-    impl_->context = Rml::CreateContext("cengine-game-ui", {std::max(size.x, 1), std::max(size.y, 1)});
+    const UiMetrics metrics = WindowUiMetrics(window);
+    impl_->context = Rml::CreateContext("cengine-game-ui", {metrics.dimensions.x, metrics.dimensions.y});
     if (impl_->context == nullptr)
     {
         Logging::Logger::Get().Error("ui", "failed to create the RmlUi context");
@@ -321,6 +372,7 @@ bool RmlUiRuntime::Initialize(Window::WindowSystem &window, std::filesystem::pat
         impl_->window = nullptr;
         return false;
     }
+    impl_->context->SetDensityIndependentPixelRatio(metrics.dp_ratio);
 
     RuntimeActive = true;
     impl_->initialized = true;
@@ -405,6 +457,7 @@ UiScreenHandle RmlUiRuntime::LoadScreen(std::string_view path)
     }
     Impl::Screen &screen = impl_->screens[index];
     screen.document = document;
+    impl_->needs_update_before_compose = true;
     return {index, screen.generation};
 }
 
@@ -424,6 +477,7 @@ bool RmlUiRuntime::UnloadScreen(UiScreenHandle handle)
         ++screen->generation;
     }
     impl_->free_screens.push_back(handle.Index());
+    impl_->needs_update_before_compose = true;
     return true;
 }
 
@@ -435,6 +489,7 @@ bool RmlUiRuntime::Show(UiScreenHandle handle, bool modal)
         return false;
     }
     screen->document->Show(modal ? Rml::ModalFlag::Modal : Rml::ModalFlag::None, Rml::FocusFlag::Auto);
+    impl_->needs_update_before_compose = true;
     return true;
 }
 
@@ -446,6 +501,7 @@ bool RmlUiRuntime::Hide(UiScreenHandle handle)
         return false;
     }
     screen->document->Hide();
+    impl_->needs_update_before_compose = true;
     return true;
 }
 
@@ -461,9 +517,92 @@ bool RmlUiRuntime::BindClick(UiScreenHandle handle, std::string_view element_id,
     {
         return false;
     }
-    auto listener = std::make_unique<Impl::ClickListener>(*impl_, handle, std::move(action));
+    auto listener = std::make_unique<Impl::ActionListener>(*impl_, handle, std::move(action), false);
     element->AddEventListener(Rml::EventId::Click, listener.get());
-    screen->bindings.push_back({element, std::move(listener)});
+    screen->bindings.push_back({element, Rml::EventId::Click, std::move(listener)});
+    return true;
+}
+
+bool RmlUiRuntime::BindChange(UiScreenHandle handle, std::string_view element_id, std::string action)
+{
+    Impl::Screen *screen = impl_->Resolve(handle);
+    if (screen == nullptr || element_id.empty() || action.empty())
+    {
+        return false;
+    }
+    Rml::Element *element = screen->document->GetElementById(Rml::String(element_id));
+    if (element == nullptr)
+    {
+        return false;
+    }
+    auto listener = std::make_unique<Impl::ActionListener>(*impl_, handle, std::move(action), true);
+    element->AddEventListener(Rml::EventId::Change, listener.get());
+    screen->bindings.push_back({element, Rml::EventId::Change, std::move(listener)});
+    return true;
+}
+
+bool RmlUiRuntime::SetText(UiScreenHandle handle, std::string_view element_id, std::string_view text)
+{
+    Impl::Screen *screen = impl_->Resolve(handle);
+    Rml::Element *element =
+        screen != nullptr ? screen->document->GetElementById(Rml::String(element_id)) : nullptr;
+    if (element == nullptr)
+    {
+        return false;
+    }
+
+    auto *text_element = rmlui_dynamic_cast<Rml::ElementText *>(element->GetFirstChild());
+    if (text_element == nullptr || element->GetNumChildren() != 1)
+    {
+        element->SetInnerRML(Rml::StringUtilities::EncodeRml(Rml::String(text)));
+        text_element = rmlui_dynamic_cast<Rml::ElementText *>(element->GetFirstChild());
+        if (text_element == nullptr)
+        {
+            return false;
+        }
+    }
+
+    // Preserve the text node so a changing readout never destroys and recreates
+    // its DOM subtree. Compose performs a second, input-free update when needed,
+    // making the new glyph geometry visible in this same rendered frame.
+    text_element->SetText(Rml::String(text));
+    impl_->needs_update_before_compose = true;
+    return true;
+}
+
+bool RmlUiRuntime::SetValue(UiScreenHandle handle, std::string_view element_id, float value)
+{
+    Impl::Screen *screen = impl_->Resolve(handle);
+    Rml::Element *element =
+        screen != nullptr ? screen->document->GetElementById(Rml::String(element_id)) : nullptr;
+    auto *input = rmlui_dynamic_cast<Rml::ElementFormControlInput *>(element);
+    if (input == nullptr || !std::isfinite(value))
+    {
+        return false;
+    }
+    input->SetValue(std::to_string(value));
+    impl_->needs_update_before_compose = true;
+    return true;
+}
+
+bool RmlUiRuntime::SetChecked(UiScreenHandle handle, std::string_view element_id, bool checked)
+{
+    Impl::Screen *screen = impl_->Resolve(handle);
+    Rml::Element *element =
+        screen != nullptr ? screen->document->GetElementById(Rml::String(element_id)) : nullptr;
+    if (element == nullptr)
+    {
+        return false;
+    }
+    if (checked)
+    {
+        element->SetAttribute("checked", "");
+    }
+    else
+    {
+        element->RemoveAttribute("checked");
+    }
+    impl_->needs_update_before_compose = true;
     return true;
 }
 
@@ -473,33 +612,48 @@ void RmlUiRuntime::Update(const Input::InputSystem &input)
     {
         return;
     }
-    const glm::ivec2 size = impl_->window->Size();
-    const Rml::Vector2i dimensions(std::max(size.x, 1), std::max(size.y, 1));
+    const UiMetrics metrics = WindowUiMetrics(*impl_->window);
+    const Rml::Vector2i dimensions(metrics.dimensions.x, metrics.dimensions.y);
     if (impl_->context->GetDimensions() != dimensions)
     {
         impl_->context->SetDimensions(dimensions);
     }
+    if (impl_->context->GetDensityIndependentPixelRatio() != metrics.dp_ratio)
+    {
+        impl_->context->SetDensityIndependentPixelRatio(metrics.dp_ratio);
+    }
 
     const int modifiers = RmlModifiers(input);
-    const glm::vec2 pointer = input.PointerPosition();
-    impl_->context->ProcessMouseMove(static_cast<int>(std::lround(pointer.x)),
-                                    static_cast<int>(std::lround(pointer.y)), modifiers);
     for (const Input::InputEvent &event : input.Events())
     {
         switch (event.type)
         {
         case Input::InputEventType::PointerMove:
-            impl_->context->ProcessMouseMove(static_cast<int>(std::lround(event.position.x)),
-                                             static_cast<int>(std::lround(event.position.y)), modifiers);
+            {
+                const Rml::Vector2i position = RmlPointerPosition(event.position, metrics.pointer_scale);
+                impl_->context->ProcessMouseMove(position.x, position.y, modifiers);
+            }
             break;
         case Input::InputEventType::PointerButtonDown:
+            {
+                const Rml::Vector2i position = RmlPointerPosition(event.position, metrics.pointer_scale);
+                impl_->context->ProcessMouseMove(position.x, position.y, modifiers);
+            }
             impl_->context->ProcessMouseButtonDown(RmlPointerButton(event.button), modifiers);
             break;
         case Input::InputEventType::PointerButtonUp:
+            {
+                const Rml::Vector2i position = RmlPointerPosition(event.position, metrics.pointer_scale);
+                impl_->context->ProcessMouseMove(position.x, position.y, modifiers);
+            }
             impl_->context->ProcessMouseButtonUp(RmlPointerButton(event.button), modifiers);
             break;
         case Input::InputEventType::PointerWheel:
-            impl_->context->ProcessMouseWheel({-event.wheel.x, -event.wheel.y}, modifiers);
+            {
+                const Rml::Vector2i position = RmlPointerPosition(event.position, metrics.pointer_scale);
+                impl_->context->ProcessMouseMove(position.x, position.y, modifiers);
+            }
+            impl_->context->ProcessMouseWheel({event.wheel.x, event.wheel.y}, modifiers);
             break;
         case Input::InputEventType::PointerLeave:
             impl_->context->ProcessMouseLeave();
@@ -520,6 +674,7 @@ void RmlUiRuntime::Update(const Input::InputSystem &input)
         }
     }
     impl_->context->Update();
+    impl_->needs_update_before_compose = false;
 }
 
 Renderer::UiFrame RmlUiRuntime::Compose()
@@ -527,6 +682,11 @@ Renderer::UiFrame RmlUiRuntime::Compose()
     if (!impl_->initialized)
     {
         return {};
+    }
+    if (impl_->needs_update_before_compose)
+    {
+        impl_->context->Update();
+        impl_->needs_update_before_compose = false;
     }
     const Rml::Vector2i size = impl_->context->GetDimensions();
     impl_->render_interface->BeginFrame(size.x, size.y);

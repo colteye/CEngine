@@ -1,4 +1,17 @@
-// Copyright (c) CEngine contributors.
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/ui/rmlui/rmlui_render_interface.cpp
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
 
 #include "ui/rmlui/rmlui_render_interface.h"
 
@@ -126,12 +139,11 @@ void RmlUiRenderInterface::ReleaseGeometry(Rml::CompiledGeometryHandle handle)
     delete reinterpret_cast<Geometry *>(handle);
 }
 
-Rml::TextureHandle RmlUiRenderInterface::LoadTexture(Rml::Vector2i &texture_dimensions,
-                                                     const Rml::String &source)
+Rml::TextureHandle RmlUiRenderInterface::LoadTexture(Rml::Vector2i &texture_dimensions, const Rml::String &source)
 {
     texture_dimensions = {};
-    Logging::Logger::Get().Warning(
-        "ui", "RmlUi image source is not a cooked CEngine texture and was rejected: " + source);
+    Logging::Logger::Get().Warning("ui",
+                                   "RmlUi image source is not a cooked CEngine texture and was rejected: " + source);
     return {};
 }
 
@@ -142,8 +154,8 @@ Rml::TextureHandle RmlUiRenderInterface::GenerateTexture(Rml::Span<const Rml::by
     {
         return {};
     }
-    const std::size_t expected = static_cast<std::size_t>(source_dimensions.x) *
-                                 static_cast<std::size_t>(source_dimensions.y) * 4u;
+    const std::size_t expected =
+        static_cast<std::size_t>(source_dimensions.x) * static_cast<std::size_t>(source_dimensions.y) * 4u;
     if (source.size() != expected)
     {
         Logging::Logger::Get().Error("ui", "RmlUi generated an invalid RGBA texture");

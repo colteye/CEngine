@@ -1,4 +1,17 @@
-// Copyright (c) CEngine contributors.
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file samples/viewer/game/game_coordinator.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
 
 #ifndef CENGINE_SAMPLES_VIEWER_GAME_GAME_COORDINATOR_H
 #define CENGINE_SAMPLES_VIEWER_GAME_GAME_COORDINATOR_H

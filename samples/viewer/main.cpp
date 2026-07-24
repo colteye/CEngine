@@ -1,7 +1,7 @@
 //   _____ ______             _
 //  / ____|  ____|           (_)
 // | |    | |__   _ __   __ _ _ _ __   ___
-// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
 // | |____| |____| | | | (_| | | | | |  __/
 //  \_____|______|_| |_|\__, |_|_| |_|\___|
 //                       __/ |
@@ -13,9 +13,9 @@
  * @author Erik Coltey
  */
 
-#include "assets/store.h"
-#include "assets/scene_asset.h"
 #include "animation/animation_system.h"
+#include "assets/scene_asset.h"
+#include "assets/store.h"
 #ifdef CENGINE_ENABLE_AUDIO
 #include "audio/audio_system.h"
 #endif
@@ -23,10 +23,9 @@
 #include "entity/entity_factory.h"
 #include "entity/player_entity.h"
 #include "game/game_coordinator.h"
-#include "imgui_platform.h"
 #include "input/actions.h"
-#include "input/sdl/sdl_input_backend.h"
 #include "input/input_system.h"
+#include "input/sdl/sdl_input_backend.h"
 #include "physics/physics_system.h"
 #include "renderer/camera.h"
 #include "renderer/render_system.h"
@@ -34,13 +33,11 @@
 #include "ui/ui_system.h"
 #include "window/window_system.h"
 
-#ifdef CENGINE_ENABLE_OPENGL
-#include <backends/imgui_impl_opengl3.h>
-#include <imgui.h>
-#endif
-
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -65,9 +62,6 @@ void ProcessPlatformEvent(const void *event, void *user_data)
     {
         targets->input->ProcessPlatformEvent(event);
     }
-#ifdef CENGINE_ENABLE_OPENGL
-    Viewer::ImGuiPlatform::ProcessEvent(event, nullptr);
-#endif
 }
 
 /**
@@ -185,150 +179,240 @@ std::filesystem::path ProjectRootForScene(const std::filesystem::path &scene_pat
     return std::filesystem::current_path();
 }
 
-#ifdef CENGINE_ENABLE_OPENGL
-/**
- * @brief TODO: Describe DrawTuningPanel.
- *
- * @param renderer TODO: Describe this parameter.
- * @param player TODO: Describe this parameter.
- */
-void DrawTuningPanel(Renderer::RenderSystem &renderer, Viewer::PlayerEntity *player)
+std::string DisplayFloat(float value)
 {
-    ImGui::SetNextWindowBgAlpha(0.82f);
-    if (!ImGui::Begin("Viewer tuning"))
-    {
-        ImGui::End();
-        return;
-    }
+    char buffer[32]{};
+    const float magnitude = std::abs(value);
+    const char *format = magnitude < 0.01f ? "%.4f" : (magnitude < 10.0f ? "%.2f" : "%.0f");
+    std::snprintf(buffer, sizeof(buffer), format, value);
+    return buffer;
+}
 
-    Renderer::Camera camera = renderer.ActiveCamera();
-    float vertical_fov = player != nullptr ? player->vertical_fov_radians : camera.vertical_fov_radians;
-    float near_clip = player != nullptr ? player->near_clip : camera.near_clip;
-    float far_clip = player != nullptr ? player->far_clip : camera.far_clip;
-    bool camera_changed = false;
-    if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen))
+float EventFloat(const CEngine::UI::UiEvent &event, float fallback)
+{
+    char *end = nullptr;
+    const float value = std::strtof(event.value.c_str(), &end);
+    return end != event.value.c_str() && std::isfinite(value) ? value : fallback;
+}
+
+bool SetTuningValue(CEngine::UI::UISystem &ui, CEngine::UI::UiScreenHandle screen,
+                    std::string_view id, float value)
+{
+    const std::string label_id = std::string(id) + "-value";
+    return ui.SetValue(screen, id, value) && ui.SetText(screen, label_id, DisplayFloat(value));
+}
+
+struct FpsDisplay
+{
+    void Update(CEngine::UI::UISystem &ui, CEngine::UI::UiScreenHandle hud, float delta_seconds)
     {
-        camera_changed |= ImGui::SliderAngle("Vertical FOV", &vertical_fov, 20.0f, 110.0f);
-        camera_changed |= ImGui::SliderFloat("Near clip", &near_clip, 0.01f, 2.0f);
-        camera_changed |= ImGui::SliderFloat("Far clip", &far_clip, 10.0f, 5000.0f);
-    }
-    if (camera_changed)
-    {
-        camera.vertical_fov_radians = vertical_fov;
-        camera.near_clip = near_clip;
-        camera.far_clip = far_clip;
-        renderer.UpdateCamera(camera);
-        if (player != nullptr)
+        const float instant = delta_seconds > 0.00001f ? 1.0f / delta_seconds : smoothed;
+        smoothed += (instant - smoothed) * 0.08f;
+        update_elapsed += delta_seconds;
+        if (update_elapsed >= 0.25f)
         {
-            player->vertical_fov_radians = vertical_fov;
-            player->near_clip = near_clip;
-            player->far_clip = far_clip;
+            const int current = static_cast<int>(std::lround(smoothed));
+            if (current != displayed)
+            {
+                ui.SetText(hud, "fps-value", std::to_string(current));
+                displayed = current;
+            }
+            update_elapsed = 0.0f;
         }
     }
 
-    Renderer::ImageBasedLighting sky = renderer.GetImageBasedLighting();
-    if (ImGui::CollapsingHeader("Sky / IBL", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::Checkbox("Enabled", &sky.enabled);
-        ImGui::SliderFloat("Visible sky", &sky.sky_intensity, 0.0f, 3.0f);
-        ImGui::SliderFloat("IBL lighting", &sky.lighting_intensity, 0.0f, 3.0f);
-        ImGui::SliderAngle("Sky rotation", &sky.rotation_radians, -180.0f, 180.0f);
-    }
-    renderer.SetImageBasedLighting(sky);
+    float smoothed = 60.0f;
+    float update_elapsed = 1.0f;
+    int displayed = -1;
+};
 
-    Renderer::ExponentialHeightFog fog = renderer.GetExponentialHeightFog();
-    if (ImGui::CollapsingHeader("Exponential height fog", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::Checkbox("Enabled##fog", &fog.enabled);
-        ImGui::ColorEdit3("Inscatter color", &fog.inscattering_color.x);
-        ImGui::DragFloat("Density", &fog.density, 0.0001f, 0.0f, 0.25f, "%.4f");
-        ImGui::DragFloat("Height falloff", &fog.height_falloff, 0.005f, 0.0f, 2.0f);
-        ImGui::DragFloat("Base height", &fog.base_height, 0.05f, -50.0f, 50.0f);
-        ImGui::DragFloat("Start distance", &fog.start_distance, 0.1f, 0.0f, 100.0f);
-        ImGui::SliderFloat("Maximum opacity", &fog.max_opacity, 0.0f, 1.0f);
-        ImGui::DragFloat("Cutoff distance", &fog.cutoff_distance, 0.1f, 0.0f, 500.0f);
-    }
-    renderer.SetExponentialHeightFog(fog);
+#ifdef CENGINE_ENABLE_OPENGL
+constexpr std::array<std::string_view, 37> TuningControls = {
+    "camera-fov",       "camera-near",      "camera-far",       "sky-enabled",
+    "sky-visible",      "sky-lighting",     "sky-rotation",     "fog-enabled",
+    "fog-red",          "fog-green",        "fog-blue",         "fog-density",
+    "fog-falloff",      "fog-base",         "fog-start",        "fog-opacity",
+    "fog-cutoff",       "ssao-enabled",     "ssao-radius",      "ssao-bias",
+    "ssao-intensity",   "ssao-contrast",    "bloom-enabled",    "bloom-threshold",
+    "bloom-intensity",  "tone-enabled",     "tone-exposure",    "tone-contrast",
+    "tone-saturation",  "dof-enabled",      "dof-distance",     "dof-range",
+    "dof-strength",     "flare-enabled",    "flare-intensity",  "flare-size",
+    "flare-softness",
+};
 
-    Renderer::PostProcessSettings post = renderer.GetPostProcessSettings();
-    Renderer::SSAOSettings ssao = renderer.GetSSAOSettings();
-    if (ImGui::CollapsingHeader("Screen-space ambient occlusion", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::Checkbox("Enabled##ssao", &ssao.enabled);
-        ImGui::SliderFloat("Radius##ssao", &ssao.radius, 0.05f, 3.0f);
-        ImGui::SliderFloat("Bias##ssao", &ssao.bias, 0.0f, 0.15f);
-        ImGui::SliderFloat("Intensity##ssao", &ssao.intensity, 0.0f, 2.0f);
-        ImGui::SliderFloat("Contrast##ssao", &ssao.contrast, 0.25f, 3.0f);
-    }
-    renderer.SetSSAOSettings(ssao);
-
-    if (ImGui::CollapsingHeader("Screen-space effects", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::Checkbox("Bloom", &post.bloom_enabled);
-        ImGui::SliderFloat("Bloom threshold", &post.bloom_threshold, 0.0f, 4.0f);
-        ImGui::SliderFloat("Bloom intensity", &post.bloom_intensity, 0.0f, 2.0f);
-        ImGui::Separator();
-        ImGui::Checkbox("Tone mapping", &post.tone_mapping_enabled);
-        ImGui::SliderFloat("Exposure", &post.exposure, 0.0f, 3.0f);
-        ImGui::SliderFloat("Contrast", &post.contrast, 0.5f, 1.5f);
-        ImGui::SliderFloat("Saturation", &post.saturation, 0.0f, 2.0f);
-        ImGui::Separator();
-        ImGui::Checkbox("Depth of field", &post.depth_of_field_enabled);
-        ImGui::SliderFloat("Focus distance", &post.focus_distance, 0.1f, 100.0f);
-        ImGui::SliderFloat("Focus range", &post.focus_range, 0.1f, 50.0f);
-        ImGui::SliderFloat("DoF strength", &post.depth_of_field_strength, 0.0f, 2.0f);
-        ImGui::Separator();
-        ImGui::Checkbox("Sun lens flare", &post.sun_lens_flare_enabled);
-        ImGui::SliderFloat("Flare intensity", &post.sun_lens_flare_intensity, 0.0f, 2.0f);
-        ImGui::SliderFloat("Sun disc size", &post.sun_disc_size, 0.002f, 0.04f);
-        ImGui::SliderFloat("Sun edge softness", &post.sun_disc_softness, 0.001f, 0.03f);
-    }
-    renderer.SetPostProcessSettings(post);
-    ImGui::TextUnformatted("Tab: UI/camera control. Shift: show/hide panel. Values are runtime-only.");
-    ImGui::End();
-}
-
-/**
- * @brief TODO: Describe DrawFpsCounter.
- *
- * @param delta_seconds TODO: Describe this parameter.
- */
-void DrawFpsCounter(float delta_seconds)
+bool ConfigureTuningUi(CEngine::UI::UISystem &ui, CEngine::UI::UiScreenHandle screen,
+                       Renderer::RenderSystem &renderer, Viewer::PlayerEntity *player)
 {
-    static float smoothed_fps = 60.0f;
-    const float instant_fps = delta_seconds > 0.00001f ? 1.0f / delta_seconds : smoothed_fps;
-    smoothed_fps += (instant_fps - smoothed_fps) * 0.08f;
-    const ImGuiViewport *viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - 12.0f, viewport->WorkPos.y + 12.0f),
-                            ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-    ImGui::SetNextWindowBgAlpha(0.45f);
-    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-                                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
-                                   ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs;
-    ImGui::Begin("Frame rate", nullptr, flags);
-    ImGui::Text("%.0f FPS", smoothed_fps);
-    ImGui::End();
+    const Renderer::Camera camera = renderer.ActiveCamera();
+    const Renderer::ImageBasedLighting sky = renderer.GetImageBasedLighting();
+    const Renderer::ExponentialHeightFog fog = renderer.GetExponentialHeightFog();
+    const Renderer::SSAOSettings ssao = renderer.GetSSAOSettings();
+    const Renderer::PostProcessSettings post = renderer.GetPostProcessSettings();
+
+    bool result = true;
+    result &= SetTuningValue(ui, screen, "camera-fov",
+                             glm::degrees(player != nullptr ? player->vertical_fov_radians
+                                                            : camera.vertical_fov_radians));
+    result &= SetTuningValue(ui, screen, "camera-near", player != nullptr ? player->near_clip : camera.near_clip);
+    result &= SetTuningValue(ui, screen, "camera-far", player != nullptr ? player->far_clip : camera.far_clip);
+    result &= ui.SetChecked(screen, "sky-enabled", sky.enabled);
+    result &= SetTuningValue(ui, screen, "sky-visible", sky.sky_intensity);
+    result &= SetTuningValue(ui, screen, "sky-lighting", sky.lighting_intensity);
+    result &= SetTuningValue(ui, screen, "sky-rotation", glm::degrees(sky.rotation_radians));
+    result &= ui.SetChecked(screen, "fog-enabled", fog.enabled);
+    result &= SetTuningValue(ui, screen, "fog-red", fog.inscattering_color.r);
+    result &= SetTuningValue(ui, screen, "fog-green", fog.inscattering_color.g);
+    result &= SetTuningValue(ui, screen, "fog-blue", fog.inscattering_color.b);
+    result &= SetTuningValue(ui, screen, "fog-density", fog.density);
+    result &= SetTuningValue(ui, screen, "fog-falloff", fog.height_falloff);
+    result &= SetTuningValue(ui, screen, "fog-base", fog.base_height);
+    result &= SetTuningValue(ui, screen, "fog-start", fog.start_distance);
+    result &= SetTuningValue(ui, screen, "fog-opacity", fog.max_opacity);
+    result &= SetTuningValue(ui, screen, "fog-cutoff", fog.cutoff_distance);
+    result &= ui.SetChecked(screen, "ssao-enabled", ssao.enabled);
+    result &= SetTuningValue(ui, screen, "ssao-radius", ssao.radius);
+    result &= SetTuningValue(ui, screen, "ssao-bias", ssao.bias);
+    result &= SetTuningValue(ui, screen, "ssao-intensity", ssao.intensity);
+    result &= SetTuningValue(ui, screen, "ssao-contrast", ssao.contrast);
+    result &= ui.SetChecked(screen, "bloom-enabled", post.bloom_enabled);
+    result &= SetTuningValue(ui, screen, "bloom-threshold", post.bloom_threshold);
+    result &= SetTuningValue(ui, screen, "bloom-intensity", post.bloom_intensity);
+    result &= ui.SetChecked(screen, "tone-enabled", post.tone_mapping_enabled);
+    result &= SetTuningValue(ui, screen, "tone-exposure", post.exposure);
+    result &= SetTuningValue(ui, screen, "tone-contrast", post.contrast);
+    result &= SetTuningValue(ui, screen, "tone-saturation", post.saturation);
+    result &= ui.SetChecked(screen, "dof-enabled", post.depth_of_field_enabled);
+    result &= SetTuningValue(ui, screen, "dof-distance", post.focus_distance);
+    result &= SetTuningValue(ui, screen, "dof-range", post.focus_range);
+    result &= SetTuningValue(ui, screen, "dof-strength", post.depth_of_field_strength);
+    result &= ui.SetChecked(screen, "flare-enabled", post.sun_lens_flare_enabled);
+    result &= SetTuningValue(ui, screen, "flare-intensity", post.sun_lens_flare_intensity);
+    result &= SetTuningValue(ui, screen, "flare-size", post.sun_disc_size);
+    result &= SetTuningValue(ui, screen, "flare-softness", post.sun_disc_softness);
+
+    for (std::string_view id : TuningControls)
+    {
+        result &= ui.BindChange(screen, id, std::string(id));
+    }
+    return result;
 }
 
-/**
- * @brief TODO: Describe BeginTuningFrame.
- */
-void BeginTuningFrame()
+void ApplyTuningEvent(const CEngine::UI::UiEvent &event, CEngine::UI::UISystem &ui,
+                      CEngine::UI::UiScreenHandle screen, Renderer::RenderSystem &renderer,
+                      Viewer::PlayerEntity *player)
 {
-    ImGui_ImplOpenGL3_NewFrame();
-    Viewer::ImGuiPlatform::NewFrame();
-    ImGui::NewFrame();
-}
+    const std::string_view action = event.action;
+    if (action.starts_with("camera-"))
+    {
+        Renderer::Camera camera = renderer.ActiveCamera();
+        if (action == "camera-fov")
+            camera.vertical_fov_radians = glm::radians(EventFloat(event, glm::degrees(camera.vertical_fov_radians)));
+        else if (action == "camera-near")
+            camera.near_clip = EventFloat(event, camera.near_clip);
+        else if (action == "camera-far")
+            camera.far_clip = EventFloat(event, camera.far_clip);
+        renderer.UpdateCamera(camera);
+        if (player != nullptr)
+        {
+            player->vertical_fov_radians = camera.vertical_fov_radians;
+            player->near_clip = camera.near_clip;
+            player->far_clip = camera.far_clip;
+        }
+    }
+    else if (action.starts_with("sky-"))
+    {
+        Renderer::ImageBasedLighting sky = renderer.GetImageBasedLighting();
+        if (action == "sky-enabled")
+            sky.enabled = event.checked;
+        else if (action == "sky-visible")
+            sky.sky_intensity = EventFloat(event, sky.sky_intensity);
+        else if (action == "sky-lighting")
+            sky.lighting_intensity = EventFloat(event, sky.lighting_intensity);
+        else if (action == "sky-rotation")
+            sky.rotation_radians = glm::radians(EventFloat(event, glm::degrees(sky.rotation_radians)));
+        renderer.SetImageBasedLighting(sky);
+    }
+    else if (action.starts_with("fog-"))
+    {
+        Renderer::ExponentialHeightFog fog = renderer.GetExponentialHeightFog();
+        if (action == "fog-enabled")
+            fog.enabled = event.checked;
+        else if (action == "fog-red")
+            fog.inscattering_color.r = EventFloat(event, fog.inscattering_color.r);
+        else if (action == "fog-green")
+            fog.inscattering_color.g = EventFloat(event, fog.inscattering_color.g);
+        else if (action == "fog-blue")
+            fog.inscattering_color.b = EventFloat(event, fog.inscattering_color.b);
+        else if (action == "fog-density")
+            fog.density = EventFloat(event, fog.density);
+        else if (action == "fog-falloff")
+            fog.height_falloff = EventFloat(event, fog.height_falloff);
+        else if (action == "fog-base")
+            fog.base_height = EventFloat(event, fog.base_height);
+        else if (action == "fog-start")
+            fog.start_distance = EventFloat(event, fog.start_distance);
+        else if (action == "fog-opacity")
+            fog.max_opacity = EventFloat(event, fog.max_opacity);
+        else if (action == "fog-cutoff")
+            fog.cutoff_distance = EventFloat(event, fog.cutoff_distance);
+        renderer.SetExponentialHeightFog(fog);
+    }
+    else if (action.starts_with("ssao-"))
+    {
+        Renderer::SSAOSettings ssao = renderer.GetSSAOSettings();
+        if (action == "ssao-enabled")
+            ssao.enabled = event.checked;
+        else if (action == "ssao-radius")
+            ssao.radius = EventFloat(event, ssao.radius);
+        else if (action == "ssao-bias")
+            ssao.bias = EventFloat(event, ssao.bias);
+        else if (action == "ssao-intensity")
+            ssao.intensity = EventFloat(event, ssao.intensity);
+        else if (action == "ssao-contrast")
+            ssao.contrast = EventFloat(event, ssao.contrast);
+        renderer.SetSSAOSettings(ssao);
+    }
+    else
+    {
+        Renderer::PostProcessSettings post = renderer.GetPostProcessSettings();
+        if (action == "bloom-enabled")
+            post.bloom_enabled = event.checked;
+        else if (action == "bloom-threshold")
+            post.bloom_threshold = EventFloat(event, post.bloom_threshold);
+        else if (action == "bloom-intensity")
+            post.bloom_intensity = EventFloat(event, post.bloom_intensity);
+        else if (action == "tone-enabled")
+            post.tone_mapping_enabled = event.checked;
+        else if (action == "tone-exposure")
+            post.exposure = EventFloat(event, post.exposure);
+        else if (action == "tone-contrast")
+            post.contrast = EventFloat(event, post.contrast);
+        else if (action == "tone-saturation")
+            post.saturation = EventFloat(event, post.saturation);
+        else if (action == "dof-enabled")
+            post.depth_of_field_enabled = event.checked;
+        else if (action == "dof-distance")
+            post.focus_distance = EventFloat(event, post.focus_distance);
+        else if (action == "dof-range")
+            post.focus_range = EventFloat(event, post.focus_range);
+        else if (action == "dof-strength")
+            post.depth_of_field_strength = EventFloat(event, post.depth_of_field_strength);
+        else if (action == "flare-enabled")
+            post.sun_lens_flare_enabled = event.checked;
+        else if (action == "flare-intensity")
+            post.sun_lens_flare_intensity = EventFloat(event, post.sun_lens_flare_intensity);
+        else if (action == "flare-size")
+            post.sun_disc_size = EventFloat(event, post.sun_disc_size);
+        else if (action == "flare-softness")
+            post.sun_disc_softness = EventFloat(event, post.sun_disc_softness);
+        renderer.SetPostProcessSettings(post);
+    }
 
-/**
- * @brief TODO: Describe EndTuningFrame.
- */
-void EndTuningFrame()
-{
-    ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    if (!event.value.empty())
+    {
+        ui.SetText(screen, std::string(action) + "-value", DisplayFloat(EventFloat(event, 0.0f)));
+    }
 }
-
 #endif
 
 /**
@@ -354,16 +438,25 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
     const Viewer::Actions actions = Viewer::RegisterActions(input);
     CEngine::UI::UISystem ui;
     if (!ui.Initialize(window, std::filesystem::current_path()) ||
-        !ui.LoadFont("ui/fonts/LatoLatin-Regular.ttf"))
+        !ui.LoadFont("ui/fonts/LatoLatin-Regular.ttf") ||
+        !ui.LoadFont("ui/fonts/LatoLatin-Bold.ttf"))
     {
         std::cerr << "Failed to initialize game UI.\n";
         return 1;
     }
     const CEngine::UI::UiScreenHandle start_menu = ui.LoadScreen("ui/viewer/start_menu.rml");
-    if (!start_menu || !ui.BindClick(start_menu, "start-button", "start_game") ||
-        !ui.Show(start_menu, true))
+    const CEngine::UI::UiScreenHandle hud = ui.LoadScreen("ui/viewer/hud.rml");
+#ifdef CENGINE_ENABLE_OPENGL
+    const CEngine::UI::UiScreenHandle tuning_menu = ui.LoadScreen("ui/viewer/tuning.rml");
+#endif
+    if (!start_menu || !hud ||
+#ifdef CENGINE_ENABLE_OPENGL
+        !tuning_menu ||
+#endif
+        !ui.BindClick(start_menu, "start-button", "start_game") || !ui.Show(start_menu, true) ||
+        !ui.Show(hud))
     {
-        std::cerr << "Failed to load the viewer start menu.\n";
+        std::cerr << "Failed to load the viewer UI.\n";
         return 1;
     }
 #ifdef CENGINE_ENABLE_AUDIO
@@ -397,8 +490,7 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
         // transient player at the authored active entity, or just above the
         // origin when the scene has no active viewpoint.
         Viewer::PlayerRuntimeConfig fallback;
-        if (const CEngine::Scene::Entity *active =
-                scene->GetEntity(scene->Settings().active_entity))
+        if (const CEngine::Scene::Entity *active = scene->GetEntity(scene->Settings().active_entity))
         {
             fallback.transform = active->GetTransform();
         }
@@ -437,6 +529,7 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
     context.animations = &animations;
     context.rendering = &renderer;
     context.input = &input;
+    context.ui = &ui;
 #ifdef CENGINE_ENABLE_AUDIO
     context.audio = &audio;
 #endif
@@ -469,12 +562,18 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
     renderer.SetCameraAspectRatio(static_cast<float>(framebuffer_width) / static_cast<float>(framebuffer_height));
 #ifdef CENGINE_ENABLE_OPENGL
     Viewer::PlayerEntity *player = game.PrimaryViewPlayer(*scene);
+    if (!ConfigureTuningUi(ui, tuning_menu, renderer, player))
+    {
+        std::cerr << "Failed to configure the viewer tuning UI.\n";
+        return 1;
+    }
     bool ui_input_mode = false;
     bool show_tuning_panel = false;
     bool tab_was_down = false;
     bool shift_was_down = false;
 #endif
     bool game_started = false;
+    FpsDisplay fps_display;
     input.SetPointerCaptured(false);
     PlatformEventTargets event_targets{&input};
     double previous_time = window.TimeSeconds();
@@ -521,6 +620,12 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
                 previous_time = window.TimeSeconds();
                 simulation_accumulator = 0.0;
             }
+#ifdef CENGINE_ENABLE_OPENGL
+            else if (event.screen == tuning_menu)
+            {
+                ApplyTuningEvent(event, ui, tuning_menu, renderer, player);
+            }
+#endif
         }
         if (input.IsDown(CEngine::Input::Key::Escape))
         {
@@ -541,6 +646,16 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
         if (game_started && shift_down && !shift_was_down)
         {
             show_tuning_panel = !show_tuning_panel;
+            ui_input_mode = show_tuning_panel;
+            if (show_tuning_panel)
+            {
+                ui.Show(tuning_menu);
+            }
+            else
+            {
+                ui.Hide(tuning_menu);
+            }
+            input.SetPointerCaptured(!ui_input_mode);
         }
         shift_was_down = shift_down;
         if (!game_started || ui_input_mode)
@@ -574,18 +689,10 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
         audio.Update();
 #endif
 
-#ifdef CENGINE_ENABLE_OPENGL
-        BeginTuningFrame();
-        if (show_tuning_panel)
-        {
-            DrawFpsCounter(delta_seconds);
-            DrawTuningPanel(renderer, player);
-        }
-#endif
+        fps_display.Update(ui, hud, delta_seconds);
         renderer.SetUiFrame(ui.Compose());
         renderer.Render();
 #ifdef CENGINE_ENABLE_OPENGL
-        EndTuningFrame();
         window.SwapBuffers();
 #endif
     }
@@ -622,6 +729,7 @@ int main(int argc, char **argv)
 
     CEngine::Window::WindowSystem window;
     CEngine::Window::WindowDesc window_desc;
+    window_desc.maximized = true;
 #ifdef CENGINE_ENABLE_VULKAN
     window_desc.title = "CEngine - Vulkan";
     window_desc.graphics_api = CEngine::Window::GraphicsApi::Vulkan;
@@ -638,34 +746,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-#ifdef CENGINE_ENABLE_OPENGL
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui::StyleColorsDark();
-    if (!Viewer::ImGuiPlatform::Initialize(window))
-    {
-        std::cerr << "Failed to initialize the ImGui SDL3 backend.\n";
-        ImGui::DestroyContext();
-        renderer.Shutdown();
-        return 1;
-    }
-    if (!ImGui_ImplOpenGL3_Init("#version 330"))
-    {
-        std::cerr << "Failed to initialize the ImGui OpenGL backend.\n";
-        Viewer::ImGuiPlatform::Shutdown();
-        ImGui::DestroyContext();
-        renderer.Shutdown();
-        return 1;
-    }
-#endif
-
     const int result = RunScene(window, scene_path, project_root, renderer);
-
-#ifdef CENGINE_ENABLE_OPENGL
-    ImGui_ImplOpenGL3_Shutdown();
-    Viewer::ImGuiPlatform::Shutdown();
-    ImGui::DestroyContext();
-#endif
     renderer.Shutdown();
     window.Shutdown();
     return result;

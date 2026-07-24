@@ -2,70 +2,86 @@ body {
     width: 100%;
     height: 100%;
     margin: 0;
-    color: #f4f0e7;
+    color: #eef2f3;
     font-family: LatoLatin;
 }
 
 #backdrop {
     width: 100%;
     height: 100%;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: rgba(7, 11, 15, 0.72);
+    background-color: #05090da8;
 }
 
 #menu {
-    width: 520px;
-    padding: 52px 58px 46px 58px;
-    text-align: center;
-    background-color: rgba(17, 24, 31, 0.96);
-    border: 1px #69747d;
+    width: 470dp;
+    box-sizing: border-box;
+    padding: 44dp 46dp 38dp 46dp;
+    text-align: left;
+    background-color: #0c141af2;
+    border: 1dp #718087;
+    border-top: 3dp #d7ad69;
 }
 
 #eyebrow {
-    margin-bottom: 14px;
-    color: #d6a85f;
-    font-size: 14px;
-    letter-spacing: 4px;
+    display: block;
+    margin-bottom: 13dp;
+    color: #d7ad69;
+    font-size: 9dp;
+    letter-spacing: 2dp;
 }
 
 h1 {
-    margin: 0 0 12px 0;
+    display: block;
+    margin: 0 0 10dp 0;
     color: #ffffff;
-    font-size: 54px;
+    font-size: 58dp;
+    font-weight: bold;
+    letter-spacing: 4dp;
 }
 
 p {
-    margin: 0 0 38px 0;
-    color: #aeb7bd;
-    font-size: 19px;
+    display: block;
+    width: 100%;
+    margin: 0 0 32dp 0;
+    color: #aeb9bd;
+    font-size: 15dp;
 }
 
 #start-button {
-    width: 250px;
-    height: 62px;
-    margin: 0 auto 30px auto;
-    color: #17130d;
+    display: block;
+    width: 100%;
+    height: 58dp;
+    box-sizing: border-box;
+    margin: 0 0 28dp 0;
+    color: #15130f;
     font-family: LatoLatin;
-    font-size: 20px;
-    background-color: #d6a85f;
-    border: 2px #efd19a;
+    font-weight: bold;
+    font-size: 14dp;
+    letter-spacing: 2dp;
+    background-color: #d7ad69;
+    border: 1dp #f0d096;
+    cursor: pointer;
 }
 
-#start-button:hover,
-#start-button:focus {
-    color: #07090b;
-    background-color: #f0c77f;
-    border-color: #fff0cf;
+#start-button:hover {
+    background-color: #edc57f;
+    border-color: #fff0d0;
 }
 
 #start-button:active {
-    background-color: #b9853d;
-    border-color: #d6a85f;
+    background-color: #bf8f4d;
+    border-color: #d7ad69;
 }
 
 #controls {
-    color: #7f8b92;
-    font-size: 13px;
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    color: #89979c;
+    font-size: 9dp;
+    letter-spacing: 0.7dp;
 }

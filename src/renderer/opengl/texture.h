@@ -1,7 +1,7 @@
 //   _____ ______             _
 //  / ____|  ____|           (_)
 // | |    | |__   _ __   __ _ _ _ __   ___
-// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
 // | |____| |____| | | | (_| | | | | |  __/
 //  \_____|______|_| |_|\__, |_|_| |_|\___|
 //                       __/ |
@@ -23,6 +23,14 @@
 namespace CEngine::Renderer::OpenGL
 {
 
+// Sampling transfer function is a binding semantic. Base-color texels use
+// sRGB; normals, material data, lightmaps, and HDR environments stay linear.
+enum class TextureColorSpace
+{
+    Linear,
+    Srgb,
+};
+
 /**
  * @brief TODO: Describe TextureLoader.
  */
@@ -33,9 +41,10 @@ class TextureLoader
      * @brief TODO: Describe Load.
      *
      * @param source TODO: Describe this parameter.
+     * @param color_space TODO: Describe this parameter.
      * @return TODO: Describe the return value.
      */
-    static GLuint Load(const Texture &source);
+    static GLuint Load(const Texture &source, TextureColorSpace color_space);
     /**
      * @brief TODO: Describe CreateSolid.
      *

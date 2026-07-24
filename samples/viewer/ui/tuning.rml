@@ -1,0 +1,175 @@
+<rml>
+<head>
+    <title>Viewer Tuning</title>
+    <link type="text/rcss" href="tuning.rcss"/>
+</head>
+<body>
+    <div id="panel">
+        <div id="panel-header">
+            <div id="panel-title">
+                <div id="panel-eyebrow">RUNTIME TOOLS</div>
+                <h1>Viewer tuning</h1>
+            </div>
+            <div id="panel-shortcut">SHIFT</div>
+        </div>
+
+        <div id="panel-scroll">
+            <section>
+                <h2>Camera</h2>
+                <div class="setting">
+                    <div class="setting-head"><label>Vertical FOV</label><span id="camera-fov-value"></span></div>
+                    <input id="camera-fov" type="range" min="20" max="110" step="1"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Near clip</label><span id="camera-near-value"></span></div>
+                    <input id="camera-near" type="range" min="0.01" max="2" step="0.01"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Far clip</label><span id="camera-far-value"></span></div>
+                    <input id="camera-far" type="range" min="10" max="5000" step="10"/>
+                </div>
+            </section>
+
+            <section>
+                <h2>Sky / IBL</h2>
+                <label class="toggle"><input id="sky-enabled" type="checkbox" value="on"/><span>Enabled</span></label>
+                <div class="setting">
+                    <div class="setting-head"><label>Visible sky</label><span id="sky-visible-value"></span></div>
+                    <input id="sky-visible" type="range" min="0" max="3" step="0.05"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>IBL lighting</label><span id="sky-lighting-value"></span></div>
+                    <input id="sky-lighting" type="range" min="0" max="3" step="0.05"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Rotation</label><span id="sky-rotation-value"></span></div>
+                    <input id="sky-rotation" type="range" min="-180" max="180" step="1"/>
+                </div>
+            </section>
+
+            <section>
+                <h2>Height fog</h2>
+                <label class="toggle"><input id="fog-enabled" type="checkbox" value="on"/><span>Enabled</span></label>
+                <div class="setting compact">
+                    <div class="setting-head"><label>Inscatter red</label><span id="fog-red-value"></span></div>
+                    <input id="fog-red" type="range" min="0" max="1" step="0.01"/>
+                </div>
+                <div class="setting compact">
+                    <div class="setting-head"><label>Inscatter green</label><span id="fog-green-value"></span></div>
+                    <input id="fog-green" type="range" min="0" max="1" step="0.01"/>
+                </div>
+                <div class="setting compact">
+                    <div class="setting-head"><label>Inscatter blue</label><span id="fog-blue-value"></span></div>
+                    <input id="fog-blue" type="range" min="0" max="1" step="0.01"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Density</label><span id="fog-density-value"></span></div>
+                    <input id="fog-density" type="range" min="0" max="0.25" step="0.0001"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Height falloff</label><span id="fog-falloff-value"></span></div>
+                    <input id="fog-falloff" type="range" min="0" max="2" step="0.005"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Base height</label><span id="fog-base-value"></span></div>
+                    <input id="fog-base" type="range" min="-50" max="50" step="0.1"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Start distance</label><span id="fog-start-value"></span></div>
+                    <input id="fog-start" type="range" min="0" max="100" step="0.1"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Maximum opacity</label><span id="fog-opacity-value"></span></div>
+                    <input id="fog-opacity" type="range" min="0" max="1" step="0.01"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Cutoff distance</label><span id="fog-cutoff-value"></span></div>
+                    <input id="fog-cutoff" type="range" min="0" max="500" step="0.5"/>
+                </div>
+            </section>
+
+            <section>
+                <h2>Ambient occlusion</h2>
+                <label class="toggle"><input id="ssao-enabled" type="checkbox" value="on"/><span>Enabled</span></label>
+                <div class="setting">
+                    <div class="setting-head"><label>Radius</label><span id="ssao-radius-value"></span></div>
+                    <input id="ssao-radius" type="range" min="0.05" max="3" step="0.05"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Bias</label><span id="ssao-bias-value"></span></div>
+                    <input id="ssao-bias" type="range" min="0" max="0.15" step="0.005"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Intensity</label><span id="ssao-intensity-value"></span></div>
+                    <input id="ssao-intensity" type="range" min="0" max="2" step="0.05"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Contrast</label><span id="ssao-contrast-value"></span></div>
+                    <input id="ssao-contrast" type="range" min="0.25" max="3" step="0.05"/>
+                </div>
+            </section>
+
+            <section>
+                <h2>Post processing</h2>
+                <h3>Bloom</h3>
+                <label class="toggle"><input id="bloom-enabled" type="checkbox" value="on"/><span>Enabled</span></label>
+                <div class="setting">
+                    <div class="setting-head"><label>Threshold</label><span id="bloom-threshold-value"></span></div>
+                    <input id="bloom-threshold" type="range" min="0" max="4" step="0.05"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Intensity</label><span id="bloom-intensity-value"></span></div>
+                    <input id="bloom-intensity" type="range" min="0" max="2" step="0.05"/>
+                </div>
+
+                <h3>Tone mapping</h3>
+                <label class="toggle"><input id="tone-enabled" type="checkbox" value="on"/><span>Enabled</span></label>
+                <div class="setting">
+                    <div class="setting-head"><label>Exposure</label><span id="tone-exposure-value"></span></div>
+                    <input id="tone-exposure" type="range" min="0" max="3" step="0.05"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Contrast</label><span id="tone-contrast-value"></span></div>
+                    <input id="tone-contrast" type="range" min="0.5" max="1.5" step="0.01"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Saturation</label><span id="tone-saturation-value"></span></div>
+                    <input id="tone-saturation" type="range" min="0" max="2" step="0.02"/>
+                </div>
+
+                <h3>Depth of field</h3>
+                <label class="toggle"><input id="dof-enabled" type="checkbox" value="on"/><span>Enabled</span></label>
+                <div class="setting">
+                    <div class="setting-head"><label>Focus distance</label><span id="dof-distance-value"></span></div>
+                    <input id="dof-distance" type="range" min="0.1" max="100" step="0.1"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Focus range</label><span id="dof-range-value"></span></div>
+                    <input id="dof-range" type="range" min="0.1" max="50" step="0.1"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Strength</label><span id="dof-strength-value"></span></div>
+                    <input id="dof-strength" type="range" min="0" max="2" step="0.02"/>
+                </div>
+
+                <h3>Sun lens flare</h3>
+                <label class="toggle"><input id="flare-enabled" type="checkbox" value="on"/><span>Enabled</span></label>
+                <div class="setting">
+                    <div class="setting-head"><label>Intensity</label><span id="flare-intensity-value"></span></div>
+                    <input id="flare-intensity" type="range" min="0" max="2" step="0.02"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Sun disc size</label><span id="flare-size-value"></span></div>
+                    <input id="flare-size" type="range" min="0.002" max="0.04" step="0.001"/>
+                </div>
+                <div class="setting">
+                    <div class="setting-head"><label>Edge softness</label><span id="flare-softness-value"></span></div>
+                    <input id="flare-softness" type="range" min="0.001" max="0.03" step="0.001"/>
+                </div>
+            </section>
+        </div>
+
+        <div id="panel-footer">TAB releases the cursor&nbsp;&nbsp;/&nbsp;&nbsp;Changes are runtime-only</div>
+    </div>
+</body>
+</rml>

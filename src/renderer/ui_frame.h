@@ -1,4 +1,17 @@
-// Copyright (c) CEngine contributors.
+//   _____ ______             _
+//  / ____|  ____|           (_)
+// | |    | |__   _ __   __ _ _ _ __   ___
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
+// | |____| |____| | | | (_| | | | | |  __/
+//  \_____|______|_| |_|\__, |_|_| |_|\___|
+//                       __/ |
+//                      |___/
+
+/**
+ * @file src/renderer/ui_frame.h
+ * @brief TODO: Describe the purpose of this file.
+ * @author Erik Coltey
+ */
 
 #ifndef CENGINE_RENDERER_UI_FRAME_H
 #define CENGINE_RENDERER_UI_FRAME_H
@@ -15,7 +28,8 @@ namespace CEngine::Renderer
 {
 
 /**
- * Immutable RGBA8 pixels retained by a UI frame. UI runtimes may generate
+ * Immutable premultiplied sRGBA8 pixels retained by a UI frame. RGB channels
+ * use the sRGB transfer function and alpha is linear. UI runtimes may generate
  * these dynamically for font atlases without publishing backend texture IDs.
  */
 struct UiTexture
@@ -33,7 +47,8 @@ struct UiTexture
 
 /**
  * Packed two-dimensional vertex in top-left-origin drawable pixel space.
- * Colors use premultiplied RGBA, matching RmlUi and the UI blend pass.
+ * Colors use premultiplied sRGBA8, matching RmlUi. The renderer converts them
+ * to linear premultiplied values before interpolation and blending.
  */
 struct UiVertex
 {

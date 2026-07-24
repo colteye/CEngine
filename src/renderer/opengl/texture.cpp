@@ -1,7 +1,7 @@
 //   _____ ______             _
 //  / ____|  ____|           (_)
 // | |    | |__   _ __   __ _ _ _ __   ___
-// | |    |  __| | '_ \ / _` | | '_ \ / _ \
+// | |    |  __| | '_ \ / _` | | '_ \ / _ |
 // | |____| |____| | | | (_| | | | | |  __/
 //  \_____|______|_| |_|\__, |_|_| |_|\___|
 //                       __/ |
@@ -69,16 +69,17 @@ GLint FullMipLevelCount(std::uint32_t width, std::uint32_t height)
  * @param format TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-GLenum CompressedFormat(TextureFormat format)
+GLenum CompressedFormat(TextureFormat format, TextureColorSpace color_space)
 {
+    const bool srgb = color_space == TextureColorSpace::Srgb;
     switch (format)
     {
     case TextureFormat::Dxt1:
-        return GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+        return srgb ? GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT : GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
     case TextureFormat::Dxt3:
-        return GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
+        return srgb ? GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT : GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
     case TextureFormat::Dxt5:
-        return GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+        return srgb ? GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT : GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
     case TextureFormat::Rgbe8:
         return 0;
     }
@@ -139,10 +140,15 @@ GLuint UploadRgbe(const Texture &source)
  * @param source TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-GLuint TextureLoader::Load(const Texture &source)
+GLuint TextureLoader::Load(const Texture &source, TextureColorSpace color_space)
 {
     if (source.Empty())
     {
+        return 0;
+    }
+    if (source.format == TextureFormat::Rgbe8 && color_space != TextureColorSpace::Linear)
+    {
+        Logging::Logger::Get().Error("renderer", "HDR textures must use linear color space");
         return 0;
     }
 
@@ -164,10 +170,12 @@ GLuint TextureLoader::Load(const Texture &source)
     }
     else
     {
-        const GLenum format = CompressedFormat(source.format);
+        const GLenum format = CompressedFormat(source.format, color_space);
         glGenTextures(1, &texture);
         glBindTexture(GL_TEXTURE_2D, texture);
-        for (std::size_t level = 0; level < source.mips.size(); ++level)
+        const std::size_t source_level_count =
+            color_space == TextureColorSpace::Srgb ? 1u : source.mips.size();
+        for (std::size_t level = 0; level < source_level_count; ++level)
         {
             const TextureMip &mip = source.mips[level];
             glCompressedTexImage2D(GL_TEXTURE_2D, static_cast<GLint>(level), format, static_cast<GLsizei>(mip.width),
@@ -175,12 +183,13 @@ GLuint TextureLoader::Load(const Texture &source)
                                    mip.data.data());
         }
     }
-    if (source.mips.size() == 1)
+    const bool generate_mips = color_space == TextureColorSpace::Srgb || source.mips.size() == 1;
+    if (generate_mips)
     {
         glGenerateMipmap(GL_TEXTURE_2D);
     }
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL,
-                    source.mips.size() == 1
+                    generate_mips
                         ? FullMipLevelCount(source.mips.front().width, source.mips.front().height)
                         : static_cast<GLint>(source.mips.size() - 1));
 

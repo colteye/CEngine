@@ -1,0 +1,12 @@
+<rml>
+<head>
+    <title>Viewer HUD</title>
+    <link type="text/rcss" href="hud.rcss"/>
+</head>
+<body>
+    <div id="performance">
+        <span id="fps-value">--</span>
+        <span id="fps-label">FPS</span>
+    </div>
+</body>
+</rml>
