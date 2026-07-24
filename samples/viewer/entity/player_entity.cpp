@@ -66,12 +66,12 @@ std::string_view PlayerEntity::Classname() const
 void PlayerEntity::Initialize(CEngine::Context &context)
 {
     const glm::vec3 direction =
-        glm::normalize(glm::vec3(GetTransform().world_matrix * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)));
+        glm::normalize(glm::vec3(GetTransform().world_matrix * glm::vec4(1.0f, 0.0f, 0.0f, 0.0f)));
     look_angles_ = {std::atan2(direction.y, direction.x), std::asin(std::clamp(direction.z, -1.0f, 1.0f))};
     if (context.physics != nullptr)
     {
         PhysicsCharacterDesc desc;
-        desc.position = GetTransform().position - glm::vec3(0.0f, 0.0f, eye_height);
+        desc.position = GetTransform().position;
         desc.radius = character_radius;
         desc.height = character_height;
         desc.mass = character_mass;
@@ -141,7 +141,7 @@ void PlayerEntity::Update(CEngine::Context &context, float delta_seconds)
             context.physics->UpdateCharacter(character_, delta_seconds);
             if (context.physics->GetCharacterState(character_, state))
             {
-                transform.position = state.position + glm::vec3(0.0f, 0.0f, eye_height);
+                transform.position = state.position;
             }
         }
     }
@@ -149,7 +149,9 @@ void PlayerEntity::Update(CEngine::Context &context, float delta_seconds)
     {
         transform.position += movement * speed * delta_seconds;
     }
-    transform.rotation = glm::quatLookAt(glm::normalize(forward), glm::vec3(0.0f, 0.0f, 1.0f));
+    transform.rotation =
+        glm::angleAxis(look_angles_.x, up) *
+        glm::angleAxis(-look_angles_.y, glm::vec3(0.0f, 1.0f, 0.0f));
     transform.dirty = true;
     transform.UpdateWorldMatrix();
 
@@ -157,7 +159,7 @@ void PlayerEntity::Update(CEngine::Context &context, float delta_seconds)
         context.scene->Settings().active_entity == GetHandle())
     {
         CEngine::Renderer::Camera camera;
-        camera.position = transform.position;
+        camera.position = transform.position + up * eye_height;
         if (view_mode == Generated::PlayerViewMode::ThirdPerson)
         {
             camera.position -= forward * std::max(third_person_distance, 0.0f);

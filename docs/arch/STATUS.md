@@ -60,14 +60,18 @@ Cooked asset payloads use one schema-owned version-one format.
   and revisions.
 - OpenGL shares/refcounts GPU mesh, material, and lightmap resources and draws
   indexed geometry.
+- Blender lightmaps add separate indirect and baked-direct Cycles passes.
+  Mixed lights contribute baked indirect only, the World contributes
+  visibility-aware direct and indirect diffuse, and lightmapped surfaces do
+  not receive the unoccluded global runtime IBL.
 - OpenGL owns backend-private skinning palette texture buffers and applies the
   same four-weight matrix skinning in deferred, forward, depth, and point
   shadow passes. Vulkan explicitly rejects skinning while its mesh path remains
   incomplete.
 - OpenGL treats base-color textures as sRGB and material-data, lightmap, and HDR
   textures as linear. Lighting and scene composition remain linear in
-  floating-point targets; Khronos PBR Neutral tone mapping runs once before
-  hardware sRGB output, and UI blends in linear display space.
+  floating-point targets; Blender-compatible AgX Base tone mapping runs once
+  before hardware sRGB output, and UI blends in linear display space.
 - OpenGL implementation types live under `Renderer::OpenGL`; cascade fitting
   and shadow resource management are consolidated in `ShadowSystem`.
 - `.cparticle` is a separate generated asset type; a renderer simulation path
@@ -98,8 +102,9 @@ Cooked asset payloads use one schema-owned version-one format.
 - Skeleton and animation assets contain only engine records: canonical
   hierarchy/rest/inverse-bind data and evaluated local TRS tracks/events. No
   Ozz type or archive is part of `CEngineAssets` or the exported format.
-- Sponza scene, material, and mesh files are recooked to the new format; its
-  existing `Sponza_0.dds` lightmap is preserved.
+- Sponza scene, material, and mesh files are cooked in the current format. Its
+  4096-square `Sponza_0.dds` lightmap contains the combined World/baked direct
+  and World/baked/mixed indirect Cycles passes.
 
 ### Identity and pointers
 

@@ -691,6 +691,7 @@ class BlenderAddonTests(unittest.TestCase):
             self.assertIn("meshes.py", names)
             self.assertIn("lightmaps.py", names)
             self.assertIn("authoring.py", names)
+            self.assertIn("physics_mesh.py", names)
             self.assertIn("ui.py", names)
             self.assertIn("ceassetlib/assetfile.py", names)
             self.assertIn("ceassetlib/game.json", names)

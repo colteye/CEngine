@@ -59,6 +59,8 @@ void main()
 	}
 
 	vec3 mra = texture(metallic_roughness_ao, uv).rgb * metallic_roughness_ao_factors;
+	mra = clamp(mra, vec3(0.0), vec3(1.0));
+	mra.g = max(mra.g, 0.04);
 	vec3 world_normal = calculate_normal();
 	float flags = receives_shadows ? 1.0 : 0.0;
 

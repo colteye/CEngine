@@ -42,7 +42,6 @@ from .authoring import (
 )
 from .lightmaps import (
     DEFAULT_DENOISE,
-    DEFAULT_INCLUDE_DIRECT,
     DEFAULT_PADDING,
     DEFAULT_RESOLUTION,
     DEFAULT_SAMPLES,
@@ -50,6 +49,7 @@ from .lightmaps import (
     bake_scene_lightmaps,
     ensure_lightmap_uvs,
 )
+from .physics_mesh import PhysicsMeshSettings, generate_physics_mesh
 
 _ENUM_ITEM_CACHE: dict[tuple[str, str], tuple[tuple[str, str, str], ...]] = {}
 
@@ -129,7 +129,6 @@ def _lightmap_settings(context) -> LightmapSettings:
         padding=settings.lightmap_padding,
         samples=settings.lightmap_samples,
         denoise=settings.lightmap_denoise,
-        include_direct=settings.lightmap_include_direct,
     )
 
 
@@ -329,6 +328,9 @@ def _draw_entity_fields(layout, obj, schema: dict[str, object]) -> None:
         _draw_object_reference(
             layout, obj, "ce_collision_object", "Collision Object")
         layout.operator(
+            CENGINE_OT_generate_physics_mesh.bl_idname,
+            text="Generate Physics Mesh", icon="MOD_PHYSICS")
+        layout.operator(
             CENGINE_OT_preview_collider.bl_idname,
             text="Toggle Collider Preview", icon="SHADING_WIRE")
     elif classname == "light":
@@ -520,10 +522,6 @@ if bpy is not None:
             name="Samples", default=DEFAULT_SAMPLES, min=1, max=16384)
         lightmap_denoise: bpy.props.BoolProperty(  # type: ignore[valid-type]
             name="Denoise", default=DEFAULT_DENOISE)
-        lightmap_include_direct: bpy.props.BoolProperty(  # type: ignore[valid-type]
-            name="Include Direct Lighting", default=DEFAULT_INCLUDE_DIRECT)
-
-
     class CENGINE_OT_export_assets(bpy.types.Operator):
         """TODO: Describe `CENGINE_OT_export_assets`."""
 
@@ -1018,6 +1016,90 @@ if bpy is not None:
             return {"FINISHED"}
 
 
+    class CENGINE_OT_generate_physics_mesh(bpy.types.Operator):
+        """Generate one hull or split concave geometry into convex hulls."""
+
+        bl_idname = "cengine.generate_physics_mesh"
+        bl_label = "Generate Physics Mesh"
+        bl_description = (
+            "Create editable Blender-native convex collision helpers "
+            "from the active mesh"
+        )
+        bl_options = {"REGISTER", "UNDO"}
+
+        concave: bpy.props.BoolProperty(  # type: ignore[valid-type]
+            name="Concave Mesh",
+            description=(
+                "Split the source into a bounded compound of convex hulls; "
+                "leave disabled to generate one convex hull"
+            ),
+            default=False,
+        )
+        accuracy: bpy.props.FloatProperty(  # type: ignore[valid-type]
+            name="Accuracy",
+            description=(
+                "Higher values preserve more concave detail and may use "
+                "more hulls"
+            ),
+            default=0.75,
+            min=0.0,
+            max=1.0,
+            subtype="FACTOR",
+        )
+        max_hulls: bpy.props.IntProperty(  # type: ignore[valid-type]
+            name="Max Hulls",
+            description="Hard limit for generated convex pieces",
+            default=16,
+            min=1,
+            max=64,
+        )
+
+        @classmethod
+        def poll(cls, context):
+            obj = getattr(context, "active_object", None)
+            return obj is not None and obj.type == "MESH" and \
+                entity_classname(obj) in {
+                    "prop", "collider", "trigger_volume"}
+
+        def draw(self, _context):
+            layout = self.layout
+            layout.prop(self, "concave")
+            if self.concave:
+                layout.prop(self, "accuracy")
+                layout.prop(self, "max_hulls")
+            else:
+                layout.label(
+                    text="Generates one enclosing convex hull",
+                    icon="INFO")
+
+        def invoke(self, context, _event):
+            return context.window_manager.invoke_props_dialog(
+                self, width=360)
+
+        def execute(self, context):
+            obj = context.active_object
+            try:
+                generated = generate_physics_mesh(
+                    context,
+                    obj,
+                    PhysicsMeshSettings(
+                        concave=self.concave,
+                        accuracy=self.accuracy,
+                        max_hulls=self.max_hulls,
+                    ),
+                )
+            except (RuntimeError, ValueError) as error:
+                self.report({"ERROR"}, str(error))
+                return {"CANCELLED"}
+            self.report(
+                {"INFO"},
+                f"Generated {len(generated)} convex physics "
+                f"{'hull' if len(generated) == 1 else 'hulls'} as "
+                f"{obj.get('ce_collision_object', 'collision helper')}",
+            )
+            return {"FINISHED"}
+
+
     class CENGINE_OT_preview_collider(bpy.types.Operator):
         """TODO: Describe `CENGINE_OT_preview_collider`."""
 
@@ -1216,7 +1298,6 @@ if bpy is not None:
             layout.prop(settings, "lightmap_padding")
             layout.prop(settings, "lightmap_samples")
             layout.prop(settings, "lightmap_denoise")
-            layout.prop(settings, "lightmap_include_direct")
             layout.operator(
                 CENGINE_OT_prepare_lightmaps.bl_idname, icon="GROUP_UVS")
             layout.operator(
@@ -1376,6 +1457,7 @@ if bpy is not None:
         CENGINE_OT_bake_lightmaps,
         CENGINE_OT_clear_lightmaps,
         CENGINE_OT_validate_asset,
+        CENGINE_OT_generate_physics_mesh,
         CENGINE_OT_preview_collider,
         CENGINE_OT_preview_entity,
         CENGINE_PT_asset_workspace,

@@ -123,9 +123,9 @@ void main()
     vec3 albedo = albedo_sample.rgb;
 	
     vec3 mra = texture(metallic_roughness_ao, uv).rgb * metallic_roughness_ao_factors;
-    float metallic = mra.r;
-    float roughness = mra.g;
-    float ao = mra.b;
+    float metallic = clamp(mra.r, 0.0, 1.0);
+    float roughness = clamp(mra.g, 0.04, 1.0);
+    float ao = clamp(mra.b, 0.0, 1.0);
 
     if (render_mode == RENDER_MODE_UNLIT) {
         frag_color = vec4(albedo, albedo_sample.a);
@@ -158,7 +158,12 @@ void main()
             roughness * 4.0).rgb;
 		vec2 brdf = environment_brdf(ndotv, roughness);
 		vec3 specular_ibl = prefiltered * (f * brdf.x + brdf.y);
-		ibl = ((has_lightmap ? vec3(0.0) : kd * diffuse_ibl * ao) + specular_ibl * ao) * ibl_intensity;
+		// The global environment has no local visibility. Lightmapped surfaces
+		// contain their World diffuse transport already and receive no global
+		// runtime IBL; spatial reflection probes can add specular separately.
+		ibl = has_lightmap
+			? vec3(0.0)
+			: (kd * diffuse_ibl * ao + specular_ibl * ao) * ibl_intensity;
 	}
 	vec3 baked_irradiance = vec3(0.0);
 	if (has_lightmap) {

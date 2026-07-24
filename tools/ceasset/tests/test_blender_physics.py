@@ -35,6 +35,12 @@ from cengine_asset_exporter.physics import (  # noqa: E402
     write_physics_asset,
     write_physics_assets,
 )
+from cengine_asset_exporter.physics_mesh import (  # noqa: E402
+    coalesce_triangle_components,
+    connected_triangle_components,
+    key_vertex_indices,
+    split_triangle_cluster,
+)
 from ceassetlib.game_schema import load_bundled_game
 from ceassetlib.wire import unpack_record
 
@@ -238,6 +244,76 @@ class BlenderPhysicsTests(unittest.TestCase):
             self.assertEqual(len(outputs), 1)
             self.assertIs(outputs[0].source, body)
             self.assertEqual(outputs[0].output.name, "Body.cphys")
+
+    def test_physics_mesh_groups_connected_triangles(self) -> None:
+        """Connected-component discovery handles multiple loose pieces."""
+        triangles = [
+            (0, 1, 2), (0, 3, 1), (0, 2, 3), (1, 3, 2),
+            (4, 5, 6), (4, 7, 5), (4, 6, 7), (5, 7, 6),
+        ]
+
+        self.assertEqual(
+            connected_triangle_components(triangles),
+            [list(range(4)), list(range(4, 8))],
+        )
+
+    def test_physics_mesh_coalesces_excess_loose_pieces(self) -> None:
+        """Loose geometry stays under the hard compound hull limit."""
+        vertices = [
+            (float(index), float(y), float(z))
+            for index in range(6)
+            for y, z in ((0, 0), (1, 0), (0, 1))
+        ]
+        triangles = [
+            (index * 3, index * 3 + 1, index * 3 + 2)
+            for index in range(6)
+        ]
+        components = [[index] for index in range(6)]
+
+        grouped = coalesce_triangle_components(
+            vertices, triangles, components, 2)
+
+        self.assertEqual(len(grouped), 2)
+        self.assertEqual(
+            sorted(index for group in grouped for index in group),
+            list(range(6)),
+        )
+
+    def test_physics_mesh_cluster_split_is_balanced(self) -> None:
+        """Median spatial splitting does not duplicate or lose triangles."""
+        vertices = [
+            (float(index), float(y), float(z))
+            for index in range(8)
+            for y, z in ((0, 0), (1, 0), (0, 1))
+        ]
+        triangles = [
+            (index * 3, index * 3 + 1, index * 3 + 2)
+            for index in range(8)
+        ]
+
+        split = split_triangle_cluster(
+            vertices, triangles, list(range(8)))
+
+        self.assertIsNotNone(split)
+        assert split is not None
+        self.assertEqual((len(split[0]), len(split[1])), (4, 4))
+        self.assertEqual(sorted((*split[0], *split[1])), list(range(8)))
+
+    def test_physics_mesh_key_vertices_are_bounded_for_huge_sources(
+            self) -> None:
+        """Hull construction receives a fixed-size representative sample."""
+        vertices = [
+            (float(index), float(index % 17), float(index % 31))
+            for index in range(100_000)
+        ]
+
+        selected = key_vertex_indices(
+            vertices, list(range(len(vertices))), maximum=256)
+
+        self.assertLessEqual(len(selected), 256)
+        self.assertEqual(len(selected), len(set(selected)))
+        self.assertIn(0, selected)
+        self.assertIn(len(vertices) - 1, selected)
 
 
 if __name__ == "__main__":

@@ -20,11 +20,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "blender_addon"))
 
 from cengine_asset_exporter.materials import (  # noqa: E402
+    TextureBinding,
     material_factors,
     material_output_path,
     material_payload,
@@ -33,6 +35,7 @@ from cengine_asset_exporter.materials import (  # noqa: E402
     object_materials,
     supported_material_images,
     write_material_asset,
+    write_mra_texture,
 )
 from ceassetlib.game_schema import load_bundled_game  # noqa: E402
 from ceassetlib.wire import unpack_record  # noqa: E402
@@ -190,6 +193,33 @@ class BlenderMaterialsTests(unittest.TestCase):
         output = material_output_path(Path("hero.blend"), Path("compiled"), "Hero Skin")
 
         self.assertEqual(output, Path("compiled/hero/materials/Hero_Skin.cmat"))
+
+    def test_packed_mra_missing_channels_default_to_dielectric_rough(self) -> None:
+        """Missing authored channels use metallic zero and roughness one."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is unavailable")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ao = root / "ao.png"
+            Image.new("L", (1, 1), 128).save(ao)
+            captured: list[tuple[int, int, int, int]] = []
+
+            def capture(image: object, _output: Path, _format: str) -> None:
+                captured.append(image.getpixel((0, 0)))
+
+            with patch(
+                "cengine_asset_exporter.materials.write_image_to_dds",
+                side_effect=capture,
+            ):
+                write_mra_texture(
+                    [TextureBinding("ao", ao, ao)],
+                    root / "packed.dds",
+                )
+
+        self.assertEqual(captured, [(0, 255, 128, 255)])
 
     def test_object_materials_are_unique_and_sorted(self) -> None:
         """TODO: Describe `test_object_materials_are_unique_and_sorted`."""

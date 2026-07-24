@@ -397,7 +397,7 @@ def write_mra_texture(bindings: list[TextureBinding], output: Path) -> None:
         alpha = Image.new("L", size, 255)
         channels.append(alpha)
         packed = Image.merge("RGBA", (
-            channel(metallic, 255),
+            channel(metallic, 0),
             channel(roughness, 255),
             channel(ao, 255),
             alpha,

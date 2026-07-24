@@ -18,20 +18,16 @@ float distribution_ggx(
 	return a2 / max(PI * denominator * denominator, 0.0001);
 }
 
-float geometry_schlick_ggx(float ndotv, float roughness)
+float visibility_smith_ggx_correlated(
+	float ndotv, float ndotl, float roughness)
 {
-	float r = roughness + 1.0;
-	float k = (r * r) / 8.0;
-	return ndotv / max(ndotv * (1.0 - k) + k, 0.0001);
-}
-
-float geometry_smith(
-	vec3 normal, vec3 view_dir, vec3 light_dir, float roughness)
-{
-	return geometry_schlick_ggx(
-		max(dot(normal, view_dir), 0.0), roughness) *
-		geometry_schlick_ggx(
-			max(dot(normal, light_dir), 0.0), roughness);
+	float alpha = roughness * roughness;
+	float alpha2 = alpha * alpha;
+	float lambda_view = ndotl * sqrt(
+		max((ndotv - alpha2 * ndotv) * ndotv + alpha2, 0.0));
+	float lambda_light = ndotv * sqrt(
+		max((ndotl - alpha2 * ndotl) * ndotl + alpha2, 0.0));
+	return 0.5 / max(lambda_view + lambda_light, 0.0001);
 }
 
 vec3 fresnel_schlick(float hdotv, vec3 f0)
@@ -145,23 +141,22 @@ vec3 evaluate_direct_lights(
 		vec3 half_vector = normalize(view_dir + light_dir);
 		vec3 radiance = light.color_intensity.rgb * attenuation *
 			light.color_intensity.a * spot_factor;
+		float ndotv = max(dot(normal, view_dir), 0.0);
+		float ndotl = max(dot(normal, light_dir), 0.0);
 		float shadow = receives_shadows ?
 			light_shadow(
 				light, world_pos, normal, light_dir) : 1.0;
 		float ndf =
 			distribution_ggx(normal, half_vector, roughness);
-		float geometry =
-			geometry_smith(normal, view_dir, light_dir, roughness);
+		float visibility = visibility_smith_ggx_correlated(
+			ndotv, ndotl, roughness);
 		vec3 fresnel = fresnel_schlick(
 			max(dot(half_vector, view_dir), 0.0), f0);
-		vec3 specular = ndf * geometry * fresnel / max(
-			4.0 * max(dot(normal, view_dir), 0.0) *
-				max(dot(normal, light_dir), 0.0),
-			0.001);
+		vec3 specular = ndf * visibility * fresnel;
 		vec3 diffuse = (vec3(1.0) - fresnel) *
 			(1.0 - metallic) * albedo / PI;
 		outgoing += (diffuse + specular) * radiance *
-			max(dot(normal, light_dir), 0.0) * shadow;
+			ndotl * shadow;
 	}
 	return outgoing;
 }

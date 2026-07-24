@@ -77,13 +77,13 @@ int main()
 
     CEngine::Scene::Scene scene;
     AddSpawn(
-        scene, "RedA", {10.0f, 0.0f, 1.65f},
+        scene, "RedA", {10.0f, 0.0f, 0.0f},
         Viewer::Generated::PlayerTeam::Red, 10);
     AddSpawn(
-        scene, "RedB", {20.0f, 0.0f, 1.65f},
+        scene, "RedB", {20.0f, 0.0f, 0.0f},
         Viewer::Generated::PlayerTeam::Red, 5);
     AddSpawn(
-        scene, "BlueA", {-10.0f, 0.0f, 1.65f},
+        scene, "BlueA", {-10.0f, 0.0f, 0.0f},
         Viewer::Generated::PlayerTeam::Blue, 10);
 
     Viewer::PlayerRequest local;
@@ -175,8 +175,13 @@ int main()
             remote_red_entity->GetTransform().position == remote_position,
             "second local player should not consume the first action set") ||
         !Expect(
-            camera.position == local_entity->GetTransform().position,
-            "only the coordinator-selected player should publish the view") ||
+            camera.position ==
+                local_entity->GetTransform().position +
+                    glm::vec3(0.0f, 0.0f, local_entity->eye_height),
+            "the coordinator-selected player should publish an eye-height view") ||
+        !Expect(
+            camera.direction == glm::vec3(1.0f, 0.0f, 0.0f),
+            "an identity player spawn should look horizontally forward") ||
         !Expect(
             Near(
                 camera.vertical_fov_radians,

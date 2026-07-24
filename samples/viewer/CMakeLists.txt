@@ -99,14 +99,21 @@ if(CENGINE_BUILD_VIEWER)
     endif()
 
     if(CENGINE_ENABLE_OPENGL)
-        add_custom_command(TARGET CEngine POST_BUILD
+        set(VIEWER_OPENGL_SHADER_SOURCES)
+        foreach(SHADER_SOURCE IN LISTS CENGINE_OPENGL_SHADER_SOURCES)
+            list(APPEND VIEWER_OPENGL_SHADER_SOURCES
+                "${PROJECT_SOURCE_DIR}/${SHADER_SOURCE}")
+        endforeach()
+        add_custom_target(CEngineOpenGLShaders
             COMMAND "${CMAKE_COMMAND}" -E make_directory
                 "$<TARGET_FILE_DIR:CEngine>/shaders/opengl"
             COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-                ${CENGINE_OPENGL_SHADER_SOURCES}
+                ${VIEWER_OPENGL_SHADER_SOURCES}
                 "$<TARGET_FILE_DIR:CEngine>/shaders/opengl"
-            WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+            DEPENDS ${VIEWER_OPENGL_SHADER_SOURCES}
+            VERBATIM
         )
+        add_dependencies(CEngine CEngineOpenGLShaders)
     endif()
 
     add_custom_command(TARGET CEngine POST_BUILD

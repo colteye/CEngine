@@ -41,6 +41,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -240,6 +241,26 @@ constexpr std::array<std::string_view, 37> TuningControls = {
     "flare-softness",
 };
 
+struct TuningOverrides
+{
+    void Apply(Renderer::RenderSystem &renderer) const
+    {
+        if (sky)
+            renderer.SetImageBasedLighting(*sky);
+        if (fog)
+            renderer.SetExponentialHeightFog(*fog);
+        if (ssao)
+            renderer.SetSSAOSettings(*ssao);
+        if (post_process)
+            renderer.SetPostProcessSettings(*post_process);
+    }
+
+    std::optional<Renderer::ImageBasedLighting> sky;
+    std::optional<Renderer::ExponentialHeightFog> fog;
+    std::optional<Renderer::SSAOSettings> ssao;
+    std::optional<Renderer::PostProcessSettings> post_process;
+};
+
 bool ConfigureTuningUi(CEngine::UI::UISystem &ui, CEngine::UI::UiScreenHandle screen,
                        Renderer::RenderSystem &renderer, Viewer::PlayerEntity *player)
 {
@@ -297,9 +318,8 @@ bool ConfigureTuningUi(CEngine::UI::UISystem &ui, CEngine::UI::UiScreenHandle sc
     return result;
 }
 
-void ApplyTuningEvent(const CEngine::UI::UiEvent &event, CEngine::UI::UISystem &ui,
-                      CEngine::UI::UiScreenHandle screen, Renderer::RenderSystem &renderer,
-                      Viewer::PlayerEntity *player)
+void ApplyTuningEvent(const CEngine::UI::UiEvent &event, CEngine::UI::UISystem &ui, CEngine::UI::UiScreenHandle screen,
+                      Renderer::RenderSystem &renderer, Viewer::PlayerEntity *player, TuningOverrides &overrides)
 {
     const std::string_view action = event.action;
     if (action.starts_with("camera-"))
@@ -321,7 +341,7 @@ void ApplyTuningEvent(const CEngine::UI::UiEvent &event, CEngine::UI::UISystem &
     }
     else if (action.starts_with("sky-"))
     {
-        Renderer::ImageBasedLighting sky = renderer.GetImageBasedLighting();
+        Renderer::ImageBasedLighting sky = overrides.sky.value_or(renderer.GetImageBasedLighting());
         if (action == "sky-enabled")
             sky.enabled = event.checked;
         else if (action == "sky-visible")
@@ -330,11 +350,12 @@ void ApplyTuningEvent(const CEngine::UI::UiEvent &event, CEngine::UI::UISystem &
             sky.lighting_intensity = EventFloat(event, sky.lighting_intensity);
         else if (action == "sky-rotation")
             sky.rotation_radians = glm::radians(EventFloat(event, glm::degrees(sky.rotation_radians)));
+        overrides.sky = sky;
         renderer.SetImageBasedLighting(sky);
     }
     else if (action.starts_with("fog-"))
     {
-        Renderer::ExponentialHeightFog fog = renderer.GetExponentialHeightFog();
+        Renderer::ExponentialHeightFog fog = overrides.fog.value_or(renderer.GetExponentialHeightFog());
         if (action == "fog-enabled")
             fog.enabled = event.checked;
         else if (action == "fog-red")
@@ -355,11 +376,12 @@ void ApplyTuningEvent(const CEngine::UI::UiEvent &event, CEngine::UI::UISystem &
             fog.max_opacity = EventFloat(event, fog.max_opacity);
         else if (action == "fog-cutoff")
             fog.cutoff_distance = EventFloat(event, fog.cutoff_distance);
+        overrides.fog = fog;
         renderer.SetExponentialHeightFog(fog);
     }
     else if (action.starts_with("ssao-"))
     {
-        Renderer::SSAOSettings ssao = renderer.GetSSAOSettings();
+        Renderer::SSAOSettings ssao = overrides.ssao.value_or(renderer.GetSSAOSettings());
         if (action == "ssao-enabled")
             ssao.enabled = event.checked;
         else if (action == "ssao-radius")
@@ -370,11 +392,12 @@ void ApplyTuningEvent(const CEngine::UI::UiEvent &event, CEngine::UI::UISystem &
             ssao.intensity = EventFloat(event, ssao.intensity);
         else if (action == "ssao-contrast")
             ssao.contrast = EventFloat(event, ssao.contrast);
+        overrides.ssao = ssao;
         renderer.SetSSAOSettings(ssao);
     }
     else
     {
-        Renderer::PostProcessSettings post = renderer.GetPostProcessSettings();
+        Renderer::PostProcessSettings post = overrides.post_process.value_or(renderer.GetPostProcessSettings());
         if (action == "bloom-enabled")
             post.bloom_enabled = event.checked;
         else if (action == "bloom-threshold")
@@ -405,6 +428,7 @@ void ApplyTuningEvent(const CEngine::UI::UiEvent &event, CEngine::UI::UISystem &
             post.sun_disc_size = EventFloat(event, post.sun_disc_size);
         else if (action == "flare-softness")
             post.sun_disc_softness = EventFloat(event, post.sun_disc_softness);
+        overrides.post_process = post;
         renderer.SetPostProcessSettings(post);
     }
 
@@ -487,8 +511,8 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
     if (!game.AdoptOrAddPlayer(*scene, local_player))
     {
         // Geometry-only viewer scenes still need a camera controller. Seed a
-        // transient player at the authored active entity, or just above the
-        // origin when the scene has no active viewpoint.
+        // transient player at the authored active entity, or at the origin
+        // when the scene has no active viewpoint.
         Viewer::PlayerRuntimeConfig fallback;
         if (const CEngine::Scene::Entity *active = scene->GetEntity(scene->Settings().active_entity))
         {
@@ -496,7 +520,7 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
         }
         else
         {
-            fallback.transform.position = {0.0f, 0.0f, 1.65f};
+            fallback.transform.position = {0.0f, 0.0f, 0.0f};
             fallback.transform.UpdateWorldMatrix();
         }
         scene->CreateEntity<Viewer::PlayerEntity>("RuntimePlayer", actions, fallback);
@@ -574,6 +598,7 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
     bool show_tuning_panel = false;
     bool tab_was_down = false;
     bool shift_was_down = false;
+    TuningOverrides tuning_overrides;
 #endif
     bool game_started = false;
     FpsDisplay fps_display;
@@ -626,7 +651,7 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
 #ifdef CENGINE_ENABLE_OPENGL
             else if (event.screen == tuning_menu)
             {
-                ApplyTuningEvent(event, ui, tuning_menu, renderer, player);
+                ApplyTuningEvent(event, ui, tuning_menu, renderer, player, tuning_overrides);
             }
 #endif
         }
@@ -687,6 +712,12 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
         {
             simulation_accumulator = std::fmod(simulation_accumulator, FixedDelta);
         }
+
+#ifdef CENGINE_ENABLE_OPENGL
+        // Scene entities publish their authored values during Update(). Runtime
+        // tuning is an explicit viewer override and must be applied afterward.
+        tuning_overrides.Apply(renderer);
+#endif
 
 #ifdef CENGINE_ENABLE_AUDIO
         audio.Update();

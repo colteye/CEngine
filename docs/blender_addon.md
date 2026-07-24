@@ -66,6 +66,24 @@ collision source. The helper is omitted from render export, and its transform is
 cooked relative to the body. **Toggle Collider Preview** shows the authored
 collider without changing the exported asset.
 
+**Generate Physics Mesh** creates that helper directly from the selected mesh:
+
+- Leave **Concave Mesh** disabled for one enclosing Blender convex hull.
+- Enable it to split the source into a compound of convex hulls. **Accuracy**
+  controls how aggressively concave regions are refined, while **Max Hulls**
+  is a hard performance and file-size limit.
+- Generated `COL_*` objects use shaded solid display with a wire edge overlay
+  and remain editable. Running the command again replaces only the helper
+  previously generated for that object.
+
+Generation evaluates modifiers and triangulates n-gons without modifying the
+render mesh. Large sources use a single connectivity pass, split oversized
+triangle clusters before hull construction, and select at most 512
+representative key vertices per hull. Exported hulls are capped at 256 vertices
+for the physics backend. Source import and connectivity memory remain linear in
+mesh size, while the expensive repeated convex-hull work stays bounded even
+when the render mesh is much larger than a sensible collider.
+
 Constraints are ordinary schema-defined scene entities. Their object-reference
 fields select two physics-enabled props; export resolves those object names to
 stable scene entity indices. The add-on rejects missing bodies, self-links,
@@ -78,7 +96,7 @@ Lightmap work is a separate, persistent workflow:
 1. Set baked or mixed mode on at least one Blender light.
 2. Use **Prepare Lightmap UVs** to create/rebuild the `Lightmap` UV layer
    without rendering.
-3. Adjust resolution, padding, samples, direct-light inclusion, and denoising.
+3. Adjust resolution, padding, samples, and denoising.
 4. Use **Bake Lightmaps** when lighting or static geometry changes.
 5. Save the `.blend` file.
 6. Export as often as needed. Export reuses the stored atlas path and each
@@ -89,6 +107,14 @@ and stores portable `//`-relative bindings on receiving mesh objects. Export
 fails with a direct object-specific error if a bound atlas disappeared or its
 `Lightmap` UV layer was removed. **Clear Lightmap Bindings** detaches the
 metadata without deleting the atlas or UV layers.
+
+Each command renders two scene-linear Cycles images and adds them before
+denoising and encoding the single final atlas. The indirect pass includes
+Blender's World plus baked and mixed lights. The direct pass keeps the World
+and baked lights but hides mixed and realtime lights. Consequently, the
+lightmap stores geometry-occluded environment diffuse, all baked-light
+transport, and mixed-light bounce lighting; mixed direct lighting and shadows
+remain runtime work.
 
 This separation keeps ordinary iteration fast: material, entity, transform, or
 gameplay-property changes do not force a lighting render. Rebake only after a

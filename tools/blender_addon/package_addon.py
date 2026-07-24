@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ADDON_DIR = ROOT / "tools" / "blender_addon" / "cengine_asset_exporter"
 CEASSETLIB_DIR = ROOT / "tools" / "ceasset" / "ceassetlib"
-DEFAULT_OUTPUT = ROOT / "build" / "blender_addon" / "cengine_asset_exporter-0.2.0.zip"
+DEFAULT_OUTPUT = ROOT / "build" / "blender_addon" / "cengine_asset_exporter-0.2.2.zip"
 PILLOW_WHEELS = {
     "windows-x64": ADDON_DIR / "wheels" / "pillow-12.3.0-cp311-cp311-win_amd64.whl",
     "macos-arm64": ADDON_DIR / "wheels" / "pillow-12.3.0-cp313-cp313-macosx_11_0_arm64.whl",

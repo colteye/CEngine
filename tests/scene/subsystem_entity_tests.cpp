@@ -280,11 +280,23 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
         return false;
     }
     CEngine::Renderer::RenderSystem renderer;
+#ifdef CENGINE_ENABLE_JOLT_PHYSICS
+    PhysicsSystem physics;
+#endif
     std::unique_ptr<CEngine::Scene::Scene> scene = CEngine::Assets::LoadScene(scene_path, assets, factory);
     if (!Expect(scene != nullptr, "scene should load"))
     {
         return false;
     }
+#ifdef CENGINE_ENABLE_JOLT_PHYSICS
+    PhysicsSystemDesc physics_desc;
+    physics_desc.gravity = scene->Settings().gravity;
+    if (!Expect(physics.Initialize(physics_desc),
+                "Sponza validation should initialize Jolt"))
+    {
+        return false;
+    }
+#endif
 
     CEngine::Renderer::AmbientLighting initial_ambient;
     initial_ambient.sky_color = scene->Settings().ambient_color;
@@ -357,12 +369,15 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
             found_fog = true;
         }
     }
+    CEngine::Context context;
     try
     {
-        CEngine::Context context;
         context.assets = &assets;
         context.rendering = &renderer;
         context.input = &input;
+#ifdef CENGINE_ENABLE_JOLT_PHYSICS
+        context.physics = &physics;
+#endif
         scene->Activate(context);
     }
     catch (const std::exception &exception)
@@ -373,6 +388,39 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
     const auto &ibl = renderer.GetImageBasedLighting();
     const auto &fog = renderer.GetExponentialHeightFog();
     const auto &lights = renderer.GetDirectLights();
+#ifdef CENGINE_ENABLE_JOLT_PHYSICS
+    bool collision_result =
+        Expect(physics.BodyCount() == 1,
+               "Sponza should create one static structural collision body");
+    Viewer::PlayerRequest player_request;
+    player_request.id = 1;
+    player_request.name = "SponzaTestPlayer";
+    player_request.locally_controlled = true;
+    player_request.primary_view = true;
+    collision_result =
+        Expect(game.AddPlayer(*scene, player_request),
+               "Sponza should spawn the viewer character") &&
+        collision_result;
+    Viewer::PlayerEntity *player = game.PrimaryViewPlayer(*scene);
+    collision_result =
+        Expect(player != nullptr && physics.CharacterCount() == 1,
+               "Sponza should create one Jolt character") &&
+        collision_result;
+    if (player != nullptr)
+    {
+        constexpr float FixedDelta = 1.0f / 60.0f;
+        for (int tick = 0; tick < 120; ++tick)
+        {
+            scene->Update(context, FixedDelta);
+        }
+        collision_result =
+            Expect(std::abs(player->GetTransform().position.z) < 0.15f,
+                   "Sponza collision should keep the viewer's feet at the spawn") &&
+            collision_result;
+    }
+#else
+    const bool collision_result = true;
+#endif
     std::size_t shadow_only_mesh_instance_count = 0;
     std::size_t active_mesh_instance_count = 0;
     bool shadow_only_flags_are_valid = true;
@@ -429,7 +477,8 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
                   "light world transform should produce a normalized renderer direction") &&
            Expect(found_realtime_sun && sun != nullptr &&
                       glm::length(sun->direction - expected_sun_direction) < 0.0001f,
-                  "renderer light direction should match the imported entity world transform");
+                  "renderer light direction should match the imported entity world transform") &&
+           collision_result;
 }
 } // namespace
 

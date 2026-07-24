@@ -102,9 +102,9 @@ void main()
 
 	vec3 albedo = albedo_sample.rgb;
 	vec3 normal = normalize(normal_roughness.rgb * 2.0 - 1.0);
-	float roughness = max(normal_roughness.a, 0.04);
-	float metallic = material.r;
-	float ao = material.g;
+	float roughness = clamp(normal_roughness.a, 0.04, 1.0);
+	float metallic = clamp(material.r, 0.0, 1.0);
+	float ao = clamp(material.g, 0.0, 1.0);
 	bool receives_shadows = material.b > 0.5;
 	bool has_lightmap = material.a > 0.5;
 	vec3 world_pos = world_position_from_depth(depth);
@@ -125,7 +125,12 @@ void main()
 		vec3 prefiltered = textureLod(ibl_prefiltered, rotate_environment(reflection), roughness * 4.0).rgb;
 		vec2 brdf = environment_brdf(ndotv, roughness);
 		vec3 specular_ibl = prefiltered * (f * brdf.x + brdf.y);
-		ibl = ((has_lightmap ? vec3(0.0) : kd * diffuse_ibl * ao) + specular_ibl * ao) * ibl_intensity;
+		// The global environment has no local visibility. Lightmapped surfaces
+		// contain their World diffuse transport already and receive no global
+		// runtime IBL; spatial reflection probes can add specular separately.
+		ibl = has_lightmap
+			? vec3(0.0)
+			: (kd * diffuse_ibl * ao + specular_ibl * ao) * ibl_intensity;
 	}
 	vec3 baked_indirect = albedo * texture(g_baked_light, uv).rgb;
 	vec3 runtime_direct = evaluate_direct_lights(world_pos, normal, view_dir, albedo,

@@ -26,11 +26,11 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ADDON))
 
 from cengine_asset_exporter.lightmaps import (
-    ALPHA_CLIP_ENABLED, DEFAULT_INCLUDE_DIRECT, DEFAULT_PADDING,
-    DEFAULT_RESOLUTION, DEFAULT_SAMPLES, INDIRECT_BAKE_LIGHT_MODES,
-    LIGHTMAP_PACK_MARGIN, NORMAL_SEAM_DOT_THRESHOLD, _bake_targets,
-    _maximum_rgb, _static_meshes, _trimmed_density_ratio, encode_rgbexp32,
-    encode_rgbm, plan_atlas,
+    ALPHA_CLIP_ENABLED, DEFAULT_PADDING, DEFAULT_RESOLUTION, DEFAULT_SAMPLES,
+    DIRECT_BAKE_LIGHT_MODES, INDIRECT_BAKE_LIGHT_MODES, LIGHTMAP_PACK_MARGIN,
+    NORMAL_SEAM_DOT_THRESHOLD, _bake_targets, _maximum_rgb,
+    _set_bake_light_visibility, _static_meshes, _trimmed_density_ratio,
+    encode_rgbexp32, encode_rgbm, plan_atlas,
 )
 
 
@@ -59,6 +59,22 @@ class FakeMeshObject:
         Returns:
             TODO: Describe the produced value.
         """
+        return self.properties.get(key, default)
+
+
+class FakeLight:
+    """Minimal Blender light carrying CEngine mode and render visibility."""
+
+    def __init__(
+        self,
+        mode: str,
+        hide_render: bool = False,
+    ) -> None:
+        self.properties = {"ce_light_mode": mode}
+        self.hide_render = hide_render
+
+    def get(self, key: str, default: object = None) -> object:
+        """Return a custom property."""
         return self.properties.get(key, default)
 
 
@@ -105,14 +121,39 @@ class LightmapTests(unittest.TestCase):
     def test_light_modes_have_explicit_bake_semantics(self) -> None:
         """TODO: Describe `test_light_modes_have_explicit_bake_semantics`."""
         self.assertEqual(INDIRECT_BAKE_LIGHT_MODES, {"baked", "mixed"})
+        self.assertEqual(DIRECT_BAKE_LIGHT_MODES, {"baked"})
         self.assertNotIn("realtime", INDIRECT_BAKE_LIGHT_MODES)
+
+    def test_bake_pass_visibility_preserves_hidden_lights(self) -> None:
+        """Each pass exposes only originally-visible participating lights."""
+        baked = FakeLight("Baked")
+        mixed = FakeLight("Mixed")
+        realtime = FakeLight("Realtime")
+        hidden_baked = FakeLight("Baked", hide_render=True)
+        states = [
+            (baked, baked.hide_render),
+            (mixed, mixed.hide_render),
+            (realtime, realtime.hide_render),
+            (hidden_baked, hidden_baked.hide_render),
+        ]
+
+        _set_bake_light_visibility(states, INDIRECT_BAKE_LIGHT_MODES)
+        self.assertFalse(baked.hide_render)
+        self.assertFalse(mixed.hide_render)
+        self.assertTrue(realtime.hide_render)
+        self.assertTrue(hidden_baked.hide_render)
+
+        _set_bake_light_visibility(states, DIRECT_BAKE_LIGHT_MODES)
+        self.assertFalse(baked.hide_render)
+        self.assertTrue(mixed.hide_render)
+        self.assertTrue(realtime.hide_render)
+        self.assertTrue(hidden_baked.hide_render)
 
     def test_offline_bake_quality_does_not_inherit_preview_defaults(self) -> None:
         """TODO: Describe `test_offline_bake_quality_does_not_inherit_preview_defaults`."""
         self.assertEqual(DEFAULT_RESOLUTION, 4096)
         self.assertEqual(DEFAULT_PADDING, 8)
         self.assertEqual(DEFAULT_SAMPLES, 1024)
-        self.assertFalse(DEFAULT_INCLUDE_DIRECT)
         self.assertFalse(ALPHA_CLIP_ENABLED)
 
     def test_lightmap_pack_margin_is_fixed_for_bakes(self) -> None:

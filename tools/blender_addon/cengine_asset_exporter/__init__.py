@@ -22,7 +22,7 @@ from pathlib import Path
 bl_info = {
     "name": "CEngine Asset Authoring",
     "author": "CEngine",
-    "version": (0, 2, 0),
+    "version": (0, 2, 2),
     "blender": (4, 5, 0),
     "location": "3D View > CEngine",
     "description": "Author, preview, bake, and export CEngine assets.",

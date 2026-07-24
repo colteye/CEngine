@@ -168,10 +168,17 @@ subsystem.
 The OpenGL image pipeline is linear Rec. 709 from material sampling through
 lighting, fog, bloom, transparency, and HDR scene composition. Base-color
 textures decode from sRGB; normal, material-data, lightmap, and environment
-textures remain linear. Exposure is applied once immediately before Khronos
-PBR Neutral tone mapping at presentation, the sRGB framebuffer performs the
-output transfer, and premultiplied sRGBA UI inputs convert to linear before
-blending.
+textures remain linear. Exposure is applied once immediately before the
+Blender-compatible AgX Base display transform at presentation, the sRGB
+framebuffer performs the output transfer, and premultiplied sRGBA UI inputs
+convert to linear before blending.
+
+Static diffuse transport is one HDR lightmap assembled from two linear Cycles
+passes: indirect from baked and mixed lights plus the World, and direct from
+baked lights plus the World. Mixed direct lighting remains runtime work.
+Because the global environment has no local visibility, OpenGL applies global
+runtime IBL only to non-lightmapped surfaces; future spatial reflection probes
+are a separate indirect-specular path.
 
 ## Physics
 

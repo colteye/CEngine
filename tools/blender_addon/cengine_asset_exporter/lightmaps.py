@@ -46,11 +46,11 @@ DEFAULT_RGBM_RANGE = 8.0
 HDR_LIGHTMAP_DECODE_SCALE = 1.0
 DEFAULT_DENOISE = True
 DEFAULT_SAMPLES = 1024
-DEFAULT_INCLUDE_DIRECT = False
 ALPHA_CLIP_ENABLED = False
 ALPHA_CLIP_THRESHOLD = 0.5
 MINIMUM_LIGHTMAP_ENERGY = 1.0e-5
 INDIRECT_BAKE_LIGHT_MODES = frozenset({"baked", "mixed"})
+DIRECT_BAKE_LIGHT_MODES = frozenset({"baked"})
 
 
 @dataclass(frozen=True)
@@ -81,7 +81,6 @@ class LightmapSettings:
     padding: int = DEFAULT_PADDING
     samples: int = DEFAULT_SAMPLES
     denoise: bool = DEFAULT_DENOISE
-    include_direct: bool = DEFAULT_INCLUDE_DIRECT
 
     @classmethod
     def from_scene(cls, scene: object) -> "LightmapSettings":
@@ -101,9 +100,22 @@ class LightmapSettings:
             samples=max(1, int(getter(
                 "ce_lightmap_samples", DEFAULT_SAMPLES))),
             denoise=bool(getter("ce_lightmap_denoise", DEFAULT_DENOISE)),
-            include_direct=bool(getter(
-                "ce_lightmap_include_direct", DEFAULT_INCLUDE_DIRECT)),
         )
+
+
+def _light_mode(light: object) -> str:
+    """Return the normalized CEngine bake mode for a Blender light."""
+    return str(getattr(light, "get", lambda *_: "realtime")(
+        "ce_light_mode", "realtime")).strip().lower()
+
+
+def _set_bake_light_visibility(
+    light_states: Iterable[tuple[object, bool]],
+    allowed_modes: frozenset[str],
+) -> None:
+    """Expose only originally-visible lights whose mode participates in a pass."""
+    for light, was_hidden in light_states:
+        light.hide_render = was_hidden or _light_mode(light) not in allowed_modes
 
 
 def plan_atlas(names: Iterable[str], resolution: int, padding: int) -> dict[str, AtlasTile]:
@@ -806,23 +818,27 @@ def _restore_material_alpha_after_bake(change: dict[str, object]) -> None:
         node_tree.links.new(alpha_source_socket, alpha_input)
 
 
-def _denoise_lightmap(
+def _compose_lightmaps(
     blender: object,
-    source_image: object,
+    source_images: tuple[object, ...],
     resolution: int,
+    denoise: bool,
     logger: Callable[[str], None] | None = None,
 ) -> array:
-    """TODO: Describe `_denoise_lightmap`.
+    """Add linear bake passes and optionally denoise their combined result.
 
     Args:
         blender: TODO: Describe this parameter.
-        source_image: TODO: Describe this parameter.
+        source_images: Linear Blender images to add.
         resolution: TODO: Describe this parameter.
+        denoise: Whether to run the compositor denoise filters.
         logger: TODO: Describe this parameter.
 
     Returns:
         TODO: Describe the produced value.
     """
+    if not source_images:
+        raise ValueError("at least one lightmap pass is required")
     scene = blender.context.scene
     previous_group = scene.compositing_node_group
     previous_filepath = scene.render.filepath
@@ -844,31 +860,48 @@ def _denoise_lightmap(
         compositor.interface.new_socket(
             name="Image", in_out="OUTPUT", socket_type="NodeSocketColor")
 
-        image_node = compositor.nodes.new("CompositorNodeImage")
-        image_node.image = source_image
-        denoise_node = compositor.nodes.new("CompositorNodeDenoise")
-        despeckle_node = compositor.nodes.new("CompositorNodeDespeckle")
-        despeckle_node.inputs["Factor"].default_value = 1.0
+        image_nodes = []
+        for source_image in source_images:
+            image_node = compositor.nodes.new("CompositorNodeImage")
+            image_node.image = source_image
+            image_nodes.append(image_node)
+        result_socket = image_nodes[0].outputs["Image"]
+        for image_node in image_nodes[1:]:
+            add_node = compositor.nodes.new("ShaderNodeVectorMath")
+            add_node.operation = "ADD"
+            compositor.links.new(result_socket, add_node.inputs[0])
+            compositor.links.new(image_node.outputs["Image"], add_node.inputs[1])
+            result_socket = add_node.outputs["Vector"]
+        if denoise:
+            denoise_node = compositor.nodes.new("CompositorNodeDenoise")
+            despeckle_node = compositor.nodes.new("CompositorNodeDespeckle")
+            despeckle_node.inputs["Factor"].default_value = 1.0
+            compositor.links.new(result_socket, denoise_node.inputs["Image"])
+            compositor.links.new(
+                denoise_node.outputs["Image"], despeckle_node.inputs["Image"])
+            result_socket = despeckle_node.outputs["Image"]
         output_node = compositor.nodes.new("NodeGroupOutput")
-        compositor.links.new(image_node.outputs["Image"], denoise_node.inputs["Image"])
-        compositor.links.new(denoise_node.outputs["Image"], despeckle_node.inputs["Image"])
-        compositor.links.new(despeckle_node.outputs["Image"], output_node.inputs["Image"])
+        compositor.links.new(result_socket, output_node.inputs["Image"])
 
         if logger is not None:
-            logger("Lightmap compositor: Denoise -> Despeckle (factor 1.0)")
-        with tempfile.TemporaryDirectory(prefix="cengine-lightmap-denoise-") as temporary:
+            operation = "Add -> Denoise -> Despeckle" if denoise else "Add"
+            logger(
+                f"Lightmap compositor: {len(source_images)} linear pass(es), "
+                f"{operation}")
+        with tempfile.TemporaryDirectory(prefix="cengine-lightmap-compose-") as temporary:
             scene.render.image_settings.file_format = "OPEN_EXR"
             scene.render.image_settings.color_mode = "RGB"
             scene.render.image_settings.color_depth = "32"
-            scene.render.filepath = str(Path(temporary) / "LightBake_Denoised.exr")
+            scene.render.filepath = str(Path(temporary) / "LightBake_Composed.exr")
             scene.render.resolution_x = resolution
             scene.render.resolution_y = resolution
             scene.render.resolution_percentage = 100
             blender.ops.render.render(write_still=True)
             if not Path(scene.render.filepath).is_file():
-                raise RuntimeError(f"Denoised EXR was not created: {scene.render.filepath}")
+                raise RuntimeError(
+                    f"Composed lightmap EXR was not created: {scene.render.filepath}")
             result_image = blender.data.images.load(scene.render.filepath, check_existing=False)
-            result = array("f", [0.0]) * len(source_image.pixels)
+            result = array("f", [0.0]) * len(source_images[0].pixels)
             result_image.pixels.foreach_get(result)
             return result
     finally:
@@ -929,19 +962,21 @@ def bake_scene_lightmaps(
     padding = settings.padding
     denoise = settings.denoise
     samples = settings.samples
-    include_direct = settings.include_direct
     tiles = plan_atlas((target.key for target in targets), resolution, padding)
     source_meshes = list({int(target.source.as_pointer()): target.source for target in targets}.values())
     ensure_lightmap_uvs(blender, source_meshes, resolution, padding)
 
     output_dir = output_dir_for_source(source, output_root) / "lightmaps"
     output = output_dir / f"{clean_asset_name(scene_name)}_0.dds"
-    old_raw_image = blender.data.images.get("LightBake_Raw")
-    if old_raw_image is not None:
-        blender.data.images.remove(old_raw_image)
-    raw_image = blender.data.images.new(
-        "LightBake_Raw", width=resolution, height=resolution,
-        alpha=False, float_buffer=True)
+    pass_images: list[object] = []
+    for image_name in ("LightBake_Indirect", "LightBake_Direct"):
+        old_image = blender.data.images.get(image_name)
+        if old_image is not None:
+            blender.data.images.remove(old_image)
+        pass_images.append(blender.data.images.new(
+            image_name, width=resolution, height=resolution,
+            alpha=False, float_buffer=True))
+    indirect_image, direct_image = pass_images
     previous_engine = scene.render.engine
     previous_bake_clear = scene.render.bake.use_clear
     previous_pass_color = scene.render.bake.use_pass_color
@@ -967,6 +1002,12 @@ def bake_scene_lightmaps(
     prepared_materials: set[int] = set()
     bake_materials: dict[int, object] = {}
     hidden_objects: list[tuple[object, bool]] = []
+    light_states = [
+        (obj, bool(obj.hide_render))
+        for obj in scene.objects
+        if getattr(obj, "type", "") == "LIGHT"
+    ]
+
     def hide_object(obj: object) -> None:
         """TODO: Describe `hide_object`.
 
@@ -989,16 +1030,16 @@ def bake_scene_lightmaps(
             material.node_tree.nodes.active = node
             node.select = True
 
-    def bake_pass() -> None:
-        """TODO: Describe `bake_pass`."""
-        target_image(raw_image)
+    def bake_pass(image: object, *, direct: bool, indirect: bool) -> None:
+        """Bake one diffuse transport component into its own linear image."""
+        target_image(image)
         scene.cycles.bake_type = "DIFFUSE"
         scene.render.bake.use_selected_to_active = False
         scene.render.bake.use_clear = True
         scene.render.bake.margin = padding
         scene.render.bake.use_pass_color = False
-        scene.render.bake.use_pass_direct = include_direct
-        scene.render.bake.use_pass_indirect = True
+        scene.render.bake.use_pass_direct = direct
+        scene.render.bake.use_pass_indirect = indirect
         for index, target in enumerate(temporary_objects):
             _select_only(blender, target)
             scene.render.bake.use_clear = index == 0
@@ -1016,7 +1057,7 @@ def bake_scene_lightmaps(
         if logger is not None:
             logger(
                 f"Lightmap Cycles quality: {samples} samples, "
-                f"direct={'on' if include_direct else 'off'}, indirect=on")
+                "separate indirect and baked-direct passes")
         # Replace each receiving source surface with one concrete bake copy.
         # All other scene geometry and lights remain visible, matching the
         # standalone pipeline's lighting environment exactly.
@@ -1068,7 +1109,7 @@ def bake_scene_lightmaps(
                 node = material.node_tree.nodes.new("ShaderNodeTexImage")
                 node.name = "LightmapBakeTarget"
                 node.label = "Lightmap Bake Target"
-                node.image = raw_image
+                node.image = indirect_image
                 material.node_tree.nodes.active = node
                 node.select = True
                 temporary_nodes.append((material, node))
@@ -1094,16 +1135,30 @@ def bake_scene_lightmaps(
                 "Lightmap alpha preparation: temporarily converted "
                 f"{len(alpha_material_changes)} material(s)")
 
-        bake_pass()
-        combined_pixels = raw_image.pixels[:]
-        raw_combined_max = _maximum_rgb(combined_pixels)
-        if denoise:
-            combined_pixels = _denoise_lightmap(blender, raw_image, resolution, logger)
-        combined_max = _maximum_rgb(combined_pixels)
+        # Indirect transport is baked from Baked and Mixed lights. Realtime
+        # lights never contribute to precomputed lighting.
+        _set_bake_light_visibility(light_states, INDIRECT_BAKE_LIGHT_MODES)
         if logger is not None:
             logger(
-                f"Lightmap bake energy: raw={raw_combined_max:.6g}, "
-                f"output={combined_max:.6g}")
+                "Lightmap indirect pass: World + Baked + Mixed; "
+                "Realtime lights hidden")
+        bake_pass(indirect_image, direct=False, indirect=True)
+
+        # Direct transport is baked only from Baked lights. The Blender World
+        # is not a LIGHT object and intentionally remains enabled so the EXR's
+        # geometry-occluded diffuse lighting is stored in the lightmap.
+        _set_bake_light_visibility(light_states, DIRECT_BAKE_LIGHT_MODES)
+        if logger is not None:
+            logger(
+                "Lightmap direct pass: World + Baked; "
+                "Mixed and Realtime lights hidden")
+        bake_pass(direct_image, direct=True, indirect=False)
+
+        combined_pixels = _compose_lightmaps(
+            blender, (indirect_image, direct_image), resolution, denoise, logger)
+        combined_max = _maximum_rgb(combined_pixels)
+        if logger is not None:
+            logger(f"Lightmap bake energy: output={combined_max:.6g}")
         if combined_max <= MINIMUM_LIGHTMAP_ENERGY:
             raise RuntimeError(
                 "Cycles produced an empty lightmap; check light modes, render visibility, "
@@ -1150,7 +1205,10 @@ def bake_scene_lightmaps(
                 blender.data.materials.remove(material)
         for obj, hidden in hidden_objects:
             obj.hide_render = hidden
-        blender.data.images.remove(raw_image)
+        for light, was_hidden in light_states:
+            light.hide_render = was_hidden
+        for pass_image in pass_images:
+            blender.data.images.remove(pass_image)
         scene.render.engine = previous_engine
         scene.render.bake.use_clear = previous_bake_clear
         scene.render.bake.use_pass_color = previous_pass_color

@@ -164,8 +164,17 @@ effects or stream-decode the retained compressed bytes for music and ambience.
 ## Sponza
 
 The checked-in Sponza scene, materials, and meshes are cooked in the current
-generated version-one formats. The existing
-`assets/compiled/sponza/lightmaps/Sponza_0.dds` is retained byte-for-byte.
+generated version-one formats. Its 4096-square mipmapped RGBExp32 lightmap at
+`assets/compiled/sponza/lightmaps/Sponza_0.dds` combines separate
+visibility-aware direct and indirect Cycles passes.
+Because the original source scene is not checked in,
+`tools/ceasset/cook_sponza_collision.py` builds one static collision-only asset
+from the structural LOD-zero meshes, binds it through a `collider` entity, and
+places the viewer spawn origin on the floor. The viewer entity applies its
+camera eye-height offset at runtime.
+When the external source scene is available,
+`tools/ceasset/author_sponza_collision.py` creates the matching aggressively
+decimated, collision-only Blender object while preserving the floor polygons.
 
 ## Reference formats
 

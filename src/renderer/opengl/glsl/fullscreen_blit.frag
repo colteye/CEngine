@@ -39,28 +39,62 @@ float luminance(vec3 color)
     return dot(color, vec3(0.2126, 0.7152, 0.0722));
 }
 
-// Khronos PBR Neutral maps linear Rec. 709 HDR to linear Rec. 709 display
-// values while preserving base-color appearance and avoiding hue skews.
-vec3 tone_map_pbr_neutral(vec3 color)
+// Compact shader fit of Blender 5.2's AgX Base response with no creative look.
+// Inputs and outputs are linear Rec. 709; the framebuffer performs the final
+// sRGB transfer. The Chebyshev fit was sampled through Blender's OCIO display
+// processor and stays within 0.005 display-code value over the fitted range.
+vec3 agx_base_curve(vec3 value)
 {
-    color = max(color, vec3(0.0));
-    const float start_compression = 0.8 - 0.04;
-    const float desaturation = 0.15;
-    float minimum_channel = min(color.r, min(color.g, color.b));
-    float offset = minimum_channel < 0.08
-        ? minimum_channel - 6.25 * minimum_channel * minimum_channel
-        : 0.04;
-    color -= offset;
-    float peak = max(color.r, max(color.g, color.b));
-    if (peak < start_compression)
-        return color;
-    float compression_range = 1.0 - start_compression;
-    float new_peak = 1.0 - compression_range * compression_range /
-        (peak + compression_range - start_compression);
-    color *= new_peak / peak;
-    float highlight_desaturation =
-        1.0 - 1.0 / (desaturation * (peak - new_peak) + 1.0);
-    return mix(color, vec3(new_peak), highlight_desaturation);
+    const float coefficients[13] = float[13](
+        0.432058687447, 0.558356010708, 0.093994897645,
+        -0.068662775093, -0.037143879553, 0.012049449491,
+        0.015065601865, -0.000492445341, -0.006416393403,
+        -0.001014936933, 0.002439005479, 0.001767370829,
+        -0.001035488877);
+    vec3 x = value * 2.0 - 1.0;
+    vec3 previous = vec3(1.0);
+    vec3 current = x;
+    vec3 result = coefficients[0] * previous + coefficients[1] * current;
+    for (int degree = 2; degree <= 12; ++degree) {
+        vec3 next = 2.0 * x * current - previous;
+        result += coefficients[degree] * next;
+        previous = current;
+        current = next;
+    }
+    return result;
+}
+
+vec3 tone_map_agx(vec3 color)
+{
+    const mat3 linear_rec709_to_rec2020 = mat3(
+        vec3(0.6274, 0.0691, 0.0164),
+        vec3(0.3293, 0.9195, 0.0880),
+        vec3(0.0433, 0.0113, 0.8956));
+    const mat3 linear_rec2020_to_rec709 = mat3(
+        vec3(1.6605, -0.1246, -0.0182),
+        vec3(-0.5876, 1.1329, -0.1006),
+        vec3(-0.0728, -0.0083, 1.1187));
+    const mat3 inset = mat3(
+        vec3(0.8566271533, 0.1373189729, 0.1118982130),
+        vec3(0.0951212405, 0.7612419906, 0.0767994186),
+        vec3(0.0482516061, 0.1014390365, 0.8113023684));
+    const mat3 outset = mat3(
+        vec3(1.1271005818, -0.1413297635, -0.1413297635),
+        vec3(-0.1106066431, 1.1578237022, -0.1106066431),
+        vec3(-0.0164939387, -0.0164939387, 1.2519364066));
+    const float minimum_ev = -12.47393;
+    const float maximum_ev = 4.026069;
+
+    color = inset * (linear_rec709_to_rec2020 * max(color, vec3(0.0)));
+    color = log2(max(color, vec3(1.0e-10)));
+    color = clamp(
+        (color - minimum_ev) / (maximum_ev - minimum_ev), 0.0, 1.0);
+    color = agx_base_curve(color);
+    color = outset * color;
+    // Blender's AgX Base LUT is encoded for a Rec.1886 2.4 display before
+    // conversion to the selected sRGB display.
+    color = pow(max(color, vec3(0.0)), vec3(2.4));
+    return clamp(linear_rec2020_to_rec709 * color, 0.0, 1.0);
 }
 
 float linear_depth(float depth)
@@ -158,7 +192,7 @@ void main()
     color = apply_sun_lens_flare(color);
     if (tone_mapping_enabled) {
         color *= max(exposure, 0.0);
-        color = tone_map_pbr_neutral(color);
+        color = tone_map_agx(color);
         color = (color - 0.5) * contrast + 0.5;
         float luma = luminance(color);
         color = mix(vec3(luma), color, saturation);

@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 id = "cengine_asset_exporter"
-version = "0.2.0"
+version = "0.2.2"
 name = "CEngine Asset Authoring"
 tagline = "Author, preview, bake, and export CEngine assets"
 maintainer = "CEngine"
