@@ -509,9 +509,12 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
     Renderer::AmbientLighting ambient;
     ambient.sky_color = scene->Settings().ambient_color;
     ambient.ground_color = scene->Settings().ambient_color * 0.35f;
-    ambient.intensity = scene->Settings().exposure;
+    ambient.intensity = 1.0f;
     ambient.enabled = glm::any(glm::greaterThan(scene->Settings().ambient_color, glm::vec3(0.0f)));
     renderer.SetAmbientLighting(ambient);
+    Renderer::PostProcessSettings post_process = renderer.GetPostProcessSettings();
+    post_process.exposure = scene->Settings().exposure;
+    renderer.SetPostProcessSettings(post_process);
 
 #ifdef CENGINE_ENABLE_JOLT_PHYSICS
     PhysicsSystem physics;

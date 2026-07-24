@@ -156,10 +156,12 @@ void main()
     vec3 color = apply_depth_of_field(coc);
     color = apply_bloom(color);
     color = apply_sun_lens_flare(color);
-    color *= max(exposure, 0.0);
-    if (tone_mapping_enabled) color = tone_map_pbr_neutral(color);
-    color = (color - 0.5) * contrast + 0.5;
-    float luma = luminance(color);
-    color = mix(vec3(luma), color, saturation);
+    if (tone_mapping_enabled) {
+        color *= max(exposure, 0.0);
+        color = tone_map_pbr_neutral(color);
+        color = (color - 0.5) * contrast + 0.5;
+        float luma = luminance(color);
+        color = mix(vec3(luma), color, saturation);
+    }
     frag_color = vec4(clamp(color, 0.0, 1.0), 1.0);
 }

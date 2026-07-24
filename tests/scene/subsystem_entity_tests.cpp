@@ -289,9 +289,12 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
     CEngine::Renderer::AmbientLighting initial_ambient;
     initial_ambient.sky_color = scene->Settings().ambient_color;
     initial_ambient.ground_color = scene->Settings().ambient_color * 0.35f;
-    initial_ambient.intensity = scene->Settings().exposure;
+    initial_ambient.intensity = 1.0f;
     initial_ambient.enabled = glm::any(glm::greaterThan(scene->Settings().ambient_color, glm::vec3(0.0f)));
     renderer.SetAmbientLighting(initial_ambient);
+    CEngine::Renderer::PostProcessSettings initial_post_process = renderer.GetPostProcessSettings();
+    initial_post_process.exposure = scene->Settings().exposure;
+    renderer.SetPostProcessSettings(initial_post_process);
     std::size_t prop_count = 0;
     std::size_t visible_prop_count = 0;
     std::size_t lightmapped_prop_count = 0;

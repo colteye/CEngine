@@ -87,7 +87,7 @@ void SkyboxEntity::Update(Context &context, float /*unused*/)
         ambient.sky_color = context.scene->Settings().ambient_color;
         ambient.ground_color =
             context.scene->Settings().ambient_color * 0.35f;
-        ambient.intensity = context.scene->Settings().exposure;
+        ambient.intensity = 1.0f;
         ambient.enabled = glm::any(glm::greaterThan(
             context.scene->Settings().ambient_color, glm::vec3(0.0f)));
         context.rendering->SetAmbientLighting(ambient);
