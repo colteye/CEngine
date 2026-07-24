@@ -9,6 +9,8 @@
 
 #include <array>
 #include <cstddef>
+#include <optional>
+#include <utility>
 
 namespace CEngine::Input
 {
@@ -143,6 +145,33 @@ SDL_Window *SdlWindow(void *window)
     return static_cast<SDL_Window *>(window);
 }
 
+std::optional<Key> EngineKey(SDL_Scancode scancode)
+{
+    for (std::size_t index = 0; index < KeyScancodes.size(); ++index)
+    {
+        if (KeyScancodes[index] == scancode && scancode != SDL_SCANCODE_UNKNOWN)
+        {
+            return static_cast<Key>(index);
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<PointerButton> EnginePointerButton(Uint8 button)
+{
+    switch (button)
+    {
+    case SDL_BUTTON_LEFT:
+        return PointerButton::Primary;
+    case SDL_BUTTON_RIGHT:
+        return PointerButton::Secondary;
+    case SDL_BUTTON_MIDDLE:
+        return PointerButton::Middle;
+    default:
+        return std::nullopt;
+    }
+}
+
 } // namespace
 
 SdlInputBackend::SdlInputBackend(Window::WindowSystem &window) : window_(window.NativeHandle())
@@ -151,6 +180,8 @@ SdlInputBackend::SdlInputBackend(Window::WindowSystem &window) : window_(window.
 
 void SdlInputBackend::BeginFrame()
 {
+    events_ = std::move(pending_events_);
+    pending_events_.clear();
     pointer_delta_ = glm::vec2(0.0f);
     SDL_Window *window = SdlWindow(window_);
     if (window == nullptr || (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) == 0)
@@ -170,12 +201,92 @@ void SdlInputBackend::BeginFrame()
 
     SDL_GetMouseState(&x, &y);
     const glm::vec2 current(x, y);
+    pointer_position_ = current;
     if (has_pointer_sample_)
     {
         pointer_delta_ = current - previous_pointer_;
     }
     previous_pointer_ = current;
     has_pointer_sample_ = true;
+}
+
+void SdlInputBackend::ProcessPlatformEvent(const void *opaque_event)
+{
+    if (opaque_event == nullptr)
+    {
+        return;
+    }
+    const auto &event = *static_cast<const SDL_Event *>(opaque_event);
+    switch (event.type)
+    {
+    case SDL_EVENT_MOUSE_MOTION:
+    {
+        InputEvent normalized;
+        normalized.type = InputEventType::PointerMove;
+        normalized.position = glm::vec2(event.motion.x, event.motion.y);
+        pending_events_.push_back(std::move(normalized));
+        break;
+    }
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (const std::optional<PointerButton> button = EnginePointerButton(event.button.button))
+        {
+            InputEvent normalized;
+            normalized.type = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN
+                                  ? InputEventType::PointerButtonDown
+                                  : InputEventType::PointerButtonUp;
+            normalized.button = *button;
+            normalized.position = glm::vec2(event.button.x, event.button.y);
+            pending_events_.push_back(std::move(normalized));
+        }
+        break;
+    case SDL_EVENT_MOUSE_WHEEL:
+    {
+        glm::vec2 wheel(event.wheel.x, event.wheel.y);
+        if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED)
+        {
+            wheel = -wheel;
+        }
+        InputEvent normalized;
+        normalized.type = InputEventType::PointerWheel;
+        normalized.wheel = wheel;
+        pending_events_.push_back(std::move(normalized));
+        break;
+    }
+    case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+    {
+        InputEvent normalized;
+        normalized.type = InputEventType::PointerLeave;
+        pending_events_.push_back(std::move(normalized));
+        break;
+    }
+    case SDL_EVENT_KEY_DOWN:
+    case SDL_EVENT_KEY_UP:
+        if (const std::optional<Key> key = EngineKey(event.key.scancode))
+        {
+            InputEvent normalized;
+            normalized.type =
+                event.type == SDL_EVENT_KEY_DOWN ? InputEventType::KeyDown : InputEventType::KeyUp;
+            normalized.key = *key;
+            pending_events_.push_back(std::move(normalized));
+        }
+        break;
+    case SDL_EVENT_TEXT_INPUT:
+    {
+        InputEvent normalized;
+        normalized.type = InputEventType::TextInput;
+        normalized.text = event.text.text;
+        pending_events_.push_back(std::move(normalized));
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+std::span<const InputEvent> SdlInputBackend::Events() const
+{
+    return events_;
 }
 
 bool SdlInputBackend::IsDown(Key key) const
@@ -198,6 +309,11 @@ bool SdlInputBackend::IsDown(Key key) const
 glm::vec2 SdlInputBackend::PointerDelta() const
 {
     return pointer_delta_;
+}
+
+glm::vec2 SdlInputBackend::PointerPosition() const
+{
+    return pointer_position_;
 }
 
 void SdlInputBackend::SetPointerCaptured(bool captured)

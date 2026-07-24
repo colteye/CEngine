@@ -1,0 +1,17 @@
+<rml>
+<head>
+    <title>CEngine Viewer</title>
+    <link type="text/rcss" href="start_menu.rcss"/>
+</head>
+<body>
+    <div id="backdrop">
+        <div id="menu">
+            <div id="eyebrow">CENGINE VIEWER</div>
+            <h1>Sponza</h1>
+            <p>Explore the scene in real time.</p>
+            <button id="start-button" autofocus>Start Game</button>
+            <div id="controls">WASD to move&nbsp;&nbsp;&bull;&nbsp;&nbsp;Mouse to look&nbsp;&nbsp;&bull;&nbsp;&nbsp;Tab releases cursor</div>
+        </div>
+    </div>
+</body>
+</rml>

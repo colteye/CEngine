@@ -23,10 +23,10 @@ struct AnimationSystemDesc;
 
 struct AnimationPoseRequest
 {
-    const Assets::Animation *source_clip = nullptr;
+    std::shared_ptr<const Assets::Animation> source_clip;
     float source_ratio = 0.0f;
     bool sample_source = true;
-    const Assets::Animation *destination_clip = nullptr;
+    std::shared_ptr<const Assets::Animation> destination_clip;
     float destination_ratio = 0.0f;
     float destination_weight = 0.0f;
 };

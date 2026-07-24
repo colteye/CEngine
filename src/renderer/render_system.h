@@ -21,6 +21,7 @@
 #include "renderer/mesh_instance.h"
 #include "renderer/render_backend.h"
 #include "renderer/texture.h"
+#include "renderer/ui_frame.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -175,6 +176,8 @@ class RenderSystem
      * @brief TODO: Describe Render.
      */
     void Render();
+    void SetUiFrame(UiFrame frame);
+    [[nodiscard]] const UiFrame &GetUiFrame() const;
 
     /**
      * @brief TODO: Describe RegisterMeshInstance.
@@ -375,6 +378,7 @@ class RenderSystem
     void RebuildGpuLights();
 
     std::unique_ptr<IRenderBackend> backend_;
+    UiFrame ui_frame_;
     std::vector<MeshInstance> mesh_instances_;
     std::vector<Bounds> mesh_instance_local_bounds_;
     std::vector<Bounds> mesh_instance_world_bounds_;

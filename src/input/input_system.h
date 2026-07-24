@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -169,6 +170,39 @@ enum class PointerAxis
     Y,
 };
 
+enum class PointerButton : std::uint8_t
+{
+    Primary,
+    Secondary,
+    Middle,
+};
+
+enum class InputEventType : std::uint8_t
+{
+    PointerMove,
+    PointerButtonDown,
+    PointerButtonUp,
+    PointerWheel,
+    PointerLeave,
+    KeyDown,
+    KeyUp,
+    TextInput,
+};
+
+/**
+ * One platform-neutral client-frame input event. Only fields relevant to the
+ * event's type are populated.
+ */
+struct InputEvent
+{
+    InputEventType type = InputEventType::PointerMove;
+    Key key = Key::Space;
+    PointerButton button = PointerButton::Primary;
+    glm::vec2 position = glm::vec2(0.0f);
+    glm::vec2 wheel = glm::vec2(0.0f);
+    std::string text;
+};
+
 /**
  * @brief TODO: Describe InputSystem.
  */
@@ -213,6 +247,24 @@ class InputSystem
         }
     }
     /**
+     * Forward an event supplied by WindowSystem to the compiled platform input
+     * adapter. Game and UI code consume only the normalized Events() result.
+     */
+    void ProcessPlatformEvent(const void *event)
+    {
+        if (backend_ != nullptr)
+        {
+            backend_->ProcessPlatformEvent(event);
+        }
+    }
+    /**
+     * Events normalized for the current client frame.
+     */
+    [[nodiscard]] std::span<const InputEvent> Events() const
+    {
+        return backend_ != nullptr ? backend_->Events() : std::span<const InputEvent>();
+    }
+    /**
      * @brief TODO: Describe IsDown.
      *
      * @param key TODO: Describe this parameter.
@@ -230,6 +282,13 @@ class InputSystem
     [[nodiscard]] glm::vec2 PointerDelta() const
     {
         return backend_ != nullptr ? backend_->PointerDelta() : glm::vec2(0.0f);
+    }
+    /**
+     * Absolute pointer position in logical window coordinates.
+     */
+    [[nodiscard]] glm::vec2 PointerPosition() const
+    {
+        return backend_ != nullptr ? backend_->PointerPosition() : glm::vec2(0.0f);
     }
     /**
      * @brief TODO: Describe SetPointerCaptured.

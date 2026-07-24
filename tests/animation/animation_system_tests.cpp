@@ -49,6 +49,10 @@ bool Run(const std::filesystem::path &root)
     }
 
     Animations::AnimationSystem system;
+    if (!Expect(system.Initialize(), "animation system should initialize its backend"))
+    {
+        return false;
+    }
     const Animations::AnimationInstanceHandle instance =
         system.CreateInstance({skeleton});
     if (!Expect(static_cast<bool>(instance), "Ozz backend should accept the neutral skeleton") ||

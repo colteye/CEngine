@@ -60,6 +60,10 @@ Cooked asset payloads use one schema-owned version-one format.
   and revisions.
 - OpenGL shares/refcounts GPU mesh, material, and lightmap resources and draws
   indexed geometry.
+- OpenGL owns backend-private skinning palette texture buffers and applies the
+  same four-weight matrix skinning in deferred, forward, depth, and point
+  shadow passes. Vulkan explicitly rejects skinning while its mesh path remains
+  incomplete.
 - OpenGL implementation types live under `Renderer::OpenGL`; cascade fitting
   and shadow resource management are consolidated in `ShadowSystem`.
 - `.cparticle` is a separate generated asset type; a renderer simulation path
@@ -87,6 +91,9 @@ Cooked asset payloads use one schema-owned version-one format.
   index buffer.
 - Blender exports skeletons, animations, physics, compositions, scenes, and
   simplified particle settings through the same schema path.
+- Skeleton and animation assets contain only engine records: canonical
+  hierarchy/rest/inverse-bind data and evaluated local TRS tracks/events. No
+  Ozz type or archive is part of `CEngineAssets` or the exported format.
 - Sponza scene, material, and mesh files are recooked to the new format; its
   existing `Sponza_0.dds` lightmap is preserved.
 
@@ -167,12 +174,30 @@ Cooked asset payloads use one schema-owned version-one format.
 - The vendored audio footprint is limited to miniaudio, stb_vorbis, and the
   miniaudio reverb node. SDL_mixer is not included.
 
+### Animation
+
+- `AnimationSystem` owns generation-checked instances, playback cursors,
+  pause/loop/rate policy, interrupted cross-fades, cosmetic events, budgets,
+  and diagnostics.
+- `IAnimationBackend` is the engine boundary for runtime representation and
+  pose evaluation. The current Ozz backend alone includes Ozz headers and
+  converts backend-neutral skeleton/track assets into private runtime objects.
+- The application owns animation beside assets, physics, audio, and rendering;
+  scene evaluation runs after physics and before entity `LateUpdate`.
+- A skinned `prop` binds one mesh, skeleton, and default animation by GUID,
+  creates an animation instance, and uploads its evaluated palette through the
+  renderer facade.
+- Blender evaluates armature actions and exports complete canonical local TRS
+  tracks. Scene export binds a mesh armature to its `.cskel` and deterministic
+  default `.canim`; no separate animation processor or interchange JSON exists.
+- Ozz 0.16.0 is pinned to an immutable commit and is private to
+  `src/animation/ozz`.
+
 ## Known limits
 
-- Skeleton and animation assets cook and load, and meshes carry skin weights,
-  but there is no runtime pose evaluation, cross-fade, cosmetic-event, or GPU
-  skinning path yet. The proposed design is
-  [`../animation_requirements.md`](../animation_requirements.md).
+- The first animation slice selects one default clip per authored prop. Game
+  animation graphs, root motion, retargeting, additive/partial layers, IK,
+  worker evaluation, and animation LOD remain deferred.
 - Constraint break thresholds are not implemented.
 - Constraint authoring uses world-space anchors; a richer local-frame editing
   widget is not implemented.
@@ -194,7 +219,7 @@ These are explicit limits, not placeholder interfaces.
 
 ## Verification
 
-The complete gate passed on 2026-07-23:
+The animation slice was verified on 2026-07-23 with:
 
 ```sh
 cmake --build --preset mac-debug -j 6
@@ -203,19 +228,20 @@ python3 -m unittest discover tools/ceasset/tests
 git diff --check
 ```
 
-- `cmake --build --preset mac-debug -j 6`: passed;
-- `ctest --test-dir build/mac-debug --output-on-failure`: 12/12 passed;
-- an audio-disabled OpenGL viewer build passed with SDL3 audio off and no
-  miniaudio sources;
-- a Vulkan-selected viewer compile/link check passed through SDL3's Vulkan
-  surface path;
-- `python3 -m unittest discover tools/ceasset/tests`: 128 tests passed with one
-  intentional skip;
-- Blender 5.2 background registration created every engine and viewer entity,
-  then authored a source-to-target connection through the add-on operators;
+- the neutral asset, `AnimationSystem`, Ozz backend, scene prop, and renderer
+  integration translation units compile;
+- the focused animation executable converts generated raw engine assets,
+  samples the expected midpoint palette, emits a marker, pauses, cross-fades,
+  destroys its slot, and rejects its stale handle;
+- `python3 -m unittest discover -s tools/ceasset/tests`: 131 tests passed with
+  one intentional skip;
 - `git diff --check`: passed;
-- both game-schema JSON files parse successfully;
-- all standard concrete `Key` values have an SDL3 scancode mapping; F25 is the
-  sole intentionally unmapped legacy value;
-- source searches contain no live old renderable, asset-database, public
-  physics-backend, legacy box-physics, or parallel property APIs.
+- source searches confirm that Ozz appears only in its backend and build/docs,
+  with no Ozz data or type in assets, schemas, Blender export, scenes, or
+  rendering.
+
+The repository-wide gate must be rerun after the concurrent UI/input worktree
+settles. Its current configure requires an unavailable new FreeType download,
+and the already-built CTest set reports 12/13 because the concurrently
+regenerated Sponza scene no longer matches the existing mesh fixture. Neither
+failure is in the animation slice.

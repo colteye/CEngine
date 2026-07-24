@@ -26,6 +26,7 @@
 #include "renderer/opengl/shaders/shader.h"
 #include "renderer/opengl/shaders/ssao.h"
 #include "renderer/opengl/shadow_system.h"
+#include "renderer/opengl/ui_renderer.h"
 #include "renderer/render_backend.h"
 
 #include <glad/glad.h>
@@ -378,6 +379,7 @@ class RenderBackend final : public IRenderBackend
     RenderQueues render_queues_;
     ShaderPasses shader_passes_;
     EnvironmentResources environment_resources_;
+    UiRenderer ui_renderer_;
     std::unordered_map<const Mesh *, MeshResources> mesh_resources_;
     std::unordered_map<const Material *, MaterialResources> material_resources_;
     std::unordered_map<const Texture *, LightmapResources> lightmap_resources_;

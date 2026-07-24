@@ -158,10 +158,10 @@ void PropEntity::Initialize(Context &context)
 
             const bool has_skeleton = static_cast<bool>(skeleton);
             const bool has_animation = static_cast<bool>(animation);
-            if (renderer_mesh->skinned != has_skeleton || has_animation != has_skeleton)
+            if (renderer_mesh->skinned != has_skeleton || (has_animation && !has_skeleton))
             {
                 throw std::runtime_error(
-                    "skinned prop requires one skeleton and one animation; static prop requires neither");
+                    "skinned prop requires one skeleton; static prop cannot reference animation assets");
             }
             if (has_skeleton)
             {
@@ -170,23 +170,30 @@ void PropEntity::Initialize(Context &context)
                     throw std::runtime_error("skinned prop requires the animation system");
                 }
                 const Assets::Reference *skeleton_reference = context.scene->AssetReference(skeleton.index);
-                const Assets::Reference *animation_reference = context.scene->AssetReference(animation.index);
                 if (skeleton_reference == nullptr || skeleton_reference->type != Assets::Type::Skeleton)
                 {
                     throw std::runtime_error("prop skeleton reference is invalid");
                 }
-                if (animation_reference == nullptr || animation_reference->type != Assets::Type::Animation)
+                const Assets::Reference *animation_reference = nullptr;
+                if (has_animation)
                 {
-                    throw std::runtime_error("prop animation reference is invalid");
+                    animation_reference = context.scene->AssetReference(animation.index);
+                    if (animation_reference == nullptr || animation_reference->type != Assets::Type::Animation)
+                    {
+                        throw std::runtime_error("prop animation reference is invalid");
+                    }
                 }
                 skeleton_asset_ = context.assets->LoadSkeleton(*skeleton_reference);
-                animation_asset_ = context.assets->LoadAnimation(*animation_reference);
-                if (!skeleton_asset_ || !animation_asset_)
+                animation_asset_ = animation_reference != nullptr
+                                       ? context.assets->LoadAnimation(*animation_reference)
+                                       : nullptr;
+                if (!skeleton_asset_ || (animation_reference != nullptr && !animation_asset_))
                 {
                     throw std::runtime_error("could not load prop animation assets");
                 }
                 if (renderer_mesh->skeleton_guid != skeleton_asset_->Identity() ||
-                    animation_asset_->SkeletonReference().guid != skeleton_asset_->Identity())
+                    (animation_asset_ &&
+                     animation_asset_->SkeletonReference().guid != skeleton_asset_->Identity()))
                 {
                     throw std::runtime_error("prop mesh, skeleton, and animation identities do not match");
                 }
@@ -195,7 +202,8 @@ void PropEntity::Initialize(Context &context)
                 playback.rate = animation_playback_rate;
                 playback.looping = animation_looping;
                 if (!animation_instance_ ||
-                    !context.animations->Play(animation_instance_, animation_asset_, playback))
+                    (animation_asset_ &&
+                     !context.animations->Play(animation_instance_, animation_asset_, playback)))
                 {
                     throw std::runtime_error("animation system rejected prop animation");
                 }

@@ -1,7 +1,7 @@
 # Blender asset authoring
 
 The CEngine Blender add-on makes a `.blend` file the source of truth for a
-model/prefab or scene. It cooks native Blender meshes, Principled materials,
+model/prefab or scene. It exports/processes native Blender meshes, Principled materials,
 images, armatures, animations, lights, cameras, and schema-defined engine
 entities into the target asset formats.
 
@@ -19,7 +19,7 @@ Files saved under `assets/source` default to the sibling `assets/compiled`
 tree. The output root can be overridden in the same panel. Export operates only
 on the active collection and its visible descendants.
 
-The export command is deliberately a cooker, not a render command. It does not
+The export command is an asset exporter/processor, not a render command. It does not
 invoke Cycles or rebuild lightmap UVs.
 
 ## Entities

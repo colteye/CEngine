@@ -31,6 +31,7 @@
 #include "renderer/camera.h"
 #include "renderer/render_system.h"
 #include "scene/scene.h"
+#include "ui/ui_system.h"
 #include "window/window_system.h"
 
 #ifdef CENGINE_ENABLE_OPENGL
@@ -51,6 +52,23 @@ namespace Renderer = CEngine::Renderer;
 
 namespace
 {
+
+struct PlatformEventTargets
+{
+    CEngine::Input::InputSystem *input = nullptr;
+};
+
+void ProcessPlatformEvent(const void *event, void *user_data)
+{
+    auto *targets = static_cast<PlatformEventTargets *>(user_data);
+    if (targets != nullptr && targets->input != nullptr)
+    {
+        targets->input->ProcessPlatformEvent(event);
+    }
+#ifdef CENGINE_ENABLE_OPENGL
+    Viewer::ImGuiPlatform::ProcessEvent(event, nullptr);
+#endif
+}
 
 /**
  * @brief TODO: Describe UseExecutableDirectory.
@@ -327,8 +345,27 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
 {
     CEngine::Assets::Store assets(project_root);
     CEngine::Animations::AnimationSystem animations;
+    if (!animations.Initialize())
+    {
+        std::cerr << "Failed to initialize skeletal animation.\n";
+        return 1;
+    }
     CEngine::Input::InputSystem input(std::make_unique<CEngine::Input::SdlInputBackend>(window));
     const Viewer::Actions actions = Viewer::RegisterActions(input);
+    CEngine::UI::UISystem ui;
+    if (!ui.Initialize(window, std::filesystem::current_path()) ||
+        !ui.LoadFont("ui/fonts/LatoLatin-Regular.ttf"))
+    {
+        std::cerr << "Failed to initialize game UI.\n";
+        return 1;
+    }
+    const CEngine::UI::UiScreenHandle start_menu = ui.LoadScreen("ui/viewer/start_menu.rml");
+    if (!start_menu || !ui.BindClick(start_menu, "start-button", "start_game") ||
+        !ui.Show(start_menu, true))
+    {
+        std::cerr << "Failed to load the viewer start menu.\n";
+        return 1;
+    }
 #ifdef CENGINE_ENABLE_AUDIO
     CEngine::Audio::AudioSystem audio;
     if (!audio.Initialize())
@@ -354,10 +391,28 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
     local_player.name = "LocalPlayer";
     local_player.locally_controlled = true;
     local_player.primary_view = true;
-    if (!game.AdoptOrAddPlayer(*scene, std::move(local_player)))
+    if (!game.AdoptOrAddPlayer(*scene, local_player))
     {
-        std::cerr << "Scene has neither an authored player nor a compatible player_spawn.\n";
-        return 1;
+        // Geometry-only viewer scenes still need a camera controller. Seed a
+        // transient player at the authored active entity, or just above the
+        // origin when the scene has no active viewpoint.
+        Viewer::PlayerRuntimeConfig fallback;
+        if (const CEngine::Scene::Entity *active =
+                scene->GetEntity(scene->Settings().active_entity))
+        {
+            fallback.transform = active->GetTransform();
+        }
+        else
+        {
+            fallback.transform.position = {0.0f, 0.0f, 1.65f};
+            fallback.transform.UpdateWorldMatrix();
+        }
+        scene->CreateEntity<Viewer::PlayerEntity>("RuntimePlayer", actions, fallback);
+        if (!game.AdoptOrAddPlayer(*scene, std::move(local_player)))
+        {
+            std::cerr << "Failed to create the viewer player.\n";
+            return 1;
+        }
     }
     Renderer::AmbientLighting ambient;
     ambient.sky_color = scene->Settings().ambient_color;
@@ -414,35 +469,27 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
     renderer.SetCameraAspectRatio(static_cast<float>(framebuffer_width) / static_cast<float>(framebuffer_height));
 #ifdef CENGINE_ENABLE_OPENGL
     Viewer::PlayerEntity *player = game.PrimaryViewPlayer(*scene);
-    bool ui_input_mode = true;
-    bool show_tuning_panel = true;
+    bool ui_input_mode = false;
+    bool show_tuning_panel = false;
     bool tab_was_down = false;
     bool shift_was_down = false;
-    input.SetPointerCaptured(false);
-#else
-    input.SetPointerCaptured(true);
 #endif
+    bool game_started = false;
+    input.SetPointerCaptured(false);
+    PlatformEventTargets event_targets{&input};
     double previous_time = window.TimeSeconds();
     double simulation_accumulator = 0.0;
     constexpr double FixedDelta = 1.0 / 60.0;
     constexpr int MaxStepsPerFrame = 4;
     while (!window.ShouldClose())
     {
-#ifdef CENGINE_ENABLE_OPENGL
-        window.PollEvents(&Viewer::ImGuiPlatform::ProcessEvent, nullptr);
-#else
-        window.PollEvents();
-#endif
+        window.PollEvents(&ProcessPlatformEvent, &event_targets);
         const glm::ivec2 current_size = window.DrawableSize();
         const int current_width = current_size.x;
         const int current_height = current_size.y;
         if (current_width <= 0 || current_height <= 0)
         {
-#ifdef CENGINE_ENABLE_OPENGL
-            window.WaitEvents(100, &Viewer::ImGuiPlatform::ProcessEvent, nullptr);
-#else
-            window.WaitEvents(100);
-#endif
+            window.WaitEvents(100, &ProcessPlatformEvent, &event_targets);
             previous_time = window.TimeSeconds();
             simulation_accumulator = 0.0;
             continue;
@@ -463,6 +510,18 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
         const float delta_seconds = static_cast<float>(std::min(current_time - previous_time, 0.25));
         previous_time = current_time;
         input.BeginFrame();
+        ui.Update(input);
+        for (const CEngine::UI::UiEvent &event : ui.DrainEvents())
+        {
+            if (event.screen == start_menu && event.action == "start_game")
+            {
+                game_started = true;
+                ui.Hide(start_menu);
+                input.SetPointerCaptured(true);
+                previous_time = window.TimeSeconds();
+                simulation_accumulator = 0.0;
+            }
+        }
         if (input.IsDown(CEngine::Input::Key::Escape))
         {
             window.RequestClose();
@@ -471,7 +530,7 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
 
 #ifdef CENGINE_ENABLE_OPENGL
         const bool tab_down = input.IsDown(CEngine::Input::Key::Tab);
-        if (tab_down && !tab_was_down)
+        if (game_started && tab_down && !tab_was_down)
         {
             ui_input_mode = !ui_input_mode;
             input.SetPointerCaptured(!ui_input_mode);
@@ -479,12 +538,12 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
         tab_was_down = tab_down;
         const bool shift_down =
             input.IsDown(CEngine::Input::Key::LeftShift) || input.IsDown(CEngine::Input::Key::RightShift);
-        if (shift_down && !shift_was_down)
+        if (game_started && shift_down && !shift_was_down)
         {
             show_tuning_panel = !show_tuning_panel;
         }
         shift_was_down = shift_down;
-        if (ui_input_mode)
+        if (!game_started || ui_input_mode)
         {
             input.Set(actions.move_forward, 0.0f);
             input.Set(actions.move_right, 0.0f);
@@ -495,9 +554,12 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
         }
 #endif
 
-        simulation_accumulator += delta_seconds;
+        if (game_started)
+        {
+            simulation_accumulator += delta_seconds;
+        }
         int simulation_steps = 0;
-        while (simulation_accumulator >= FixedDelta && simulation_steps < MaxStepsPerFrame)
+        while (game_started && simulation_accumulator >= FixedDelta && simulation_steps < MaxStepsPerFrame)
         {
             scene->Update(context, static_cast<float>(FixedDelta));
             simulation_accumulator -= FixedDelta;
@@ -520,6 +582,7 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
             DrawTuningPanel(renderer, player);
         }
 #endif
+        renderer.SetUiFrame(ui.Compose());
         renderer.Render();
 #ifdef CENGINE_ENABLE_OPENGL
         EndTuningFrame();

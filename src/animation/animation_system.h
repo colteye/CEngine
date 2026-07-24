@@ -82,14 +82,16 @@ struct AnimationDiagnostics
 class AnimationSystem
 {
   public:
-    explicit AnimationSystem(AnimationSystemDesc desc = {});
-    AnimationSystem(std::unique_ptr<IAnimationBackend> backend, AnimationSystemDesc desc);
+    AnimationSystem();
+    explicit AnimationSystem(std::unique_ptr<IAnimationBackend> backend);
     ~AnimationSystem();
     AnimationSystem(const AnimationSystem &) = delete;
     AnimationSystem &operator=(const AnimationSystem &) = delete;
     AnimationSystem(AnimationSystem &&) = delete;
     AnimationSystem &operator=(AnimationSystem &&) = delete;
 
+    bool Initialize(const AnimationSystemDesc &desc = {});
+    void Shutdown();
     AnimationInstanceHandle CreateInstance(const AnimationInstanceDesc &desc);
     bool DestroyInstance(AnimationInstanceHandle handle);
     bool Play(AnimationInstanceHandle handle, std::shared_ptr<const Assets::Animation> clip,
@@ -128,6 +130,7 @@ class AnimationSystem
     std::vector<std::uint32_t> free_slots_;
     std::vector<AnimationEvent> events_;
     AnimationDiagnostics diagnostics_;
+    bool initialized_ = false;
 };
 
 } // namespace CEngine::Animations

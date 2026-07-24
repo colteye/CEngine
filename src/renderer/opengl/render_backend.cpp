@@ -320,6 +320,12 @@ bool RenderBackend::Initialize(RenderSystem &in_rendering, Window::WindowSystem 
         DestroyFrameResources();
         return false;
     }
+    if (!ui_renderer_.Initialize())
+    {
+        shadow_system_.Destroy();
+        DestroyFrameResources();
+        return false;
+    }
     default_white_texture_ = TextureLoader::CreateSolid(255, 255, 255);
     default_normal_texture_ = TextureLoader::CreateSolid(128, 128, 255);
     if (default_white_texture_ == 0 || default_normal_texture_ == 0)
@@ -354,6 +360,7 @@ bool RenderBackend::Initialize(RenderSystem &in_rendering, Window::WindowSystem 
  */
 void RenderBackend::Shutdown()
 {
+    ui_renderer_.Shutdown();
     environment_resources_.Destroy();
     shader_passes_ = ShaderPasses();
 
@@ -1432,6 +1439,7 @@ void RenderBackend::Render()
     RenderForwardQueue(render_queues_.forward, false);
     RenderForwardQueue(render_queues_.transparent, true);
     PresentSceneColor();
+    ui_renderer_.Render(rendering_->GetUiFrame(), window_width_, window_height_);
 
     glEnable(GL_DEPTH_TEST);
 }

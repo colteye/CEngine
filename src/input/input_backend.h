@@ -18,10 +18,13 @@
 
 #include <glm/vec2.hpp>
 
+#include <span>
+
 namespace CEngine::Input
 {
 
 enum class Key;
+struct InputEvent;
 
 /**
  * @brief TODO: Describe IInputBackend.
@@ -63,6 +66,22 @@ class IInputBackend
      */
     virtual void BeginFrame() = 0;
     /**
+     * Feed one opaque platform event into the compiled input adapter. Platform
+     * types remain private to that adapter; callers consume normalized events
+     * through Events().
+     */
+    virtual void ProcessPlatformEvent(const void *event)
+    {
+        (void)event;
+    }
+    /**
+     * Normalized events collected for the current client frame.
+     */
+    [[nodiscard]] virtual std::span<const InputEvent> Events() const
+    {
+        return {};
+    }
+    /**
      * @brief TODO: Describe IsDown.
      *
      * @param key TODO: Describe this parameter.
@@ -75,6 +94,13 @@ class IInputBackend
      * @return TODO: Describe the return value.
      */
     [[nodiscard]] virtual glm::vec2 PointerDelta() const = 0;
+    /**
+     * Absolute pointer position in logical window coordinates.
+     */
+    [[nodiscard]] virtual glm::vec2 PointerPosition() const
+    {
+        return glm::vec2(0.0f);
+    }
     /**
      * @brief TODO: Describe SetPointerCaptured.
      *

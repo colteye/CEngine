@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace
 {
@@ -127,6 +128,7 @@ void RenderSystem::Shutdown()
     light_revision_ = 1;
     light_state_revision_ = 1;
     lights_dirty_ = true;
+    ui_frame_.Clear();
 }
 
 /**
@@ -150,6 +152,16 @@ void RenderSystem::Render()
     {
         backend_->Render();
     }
+}
+
+void RenderSystem::SetUiFrame(UiFrame frame)
+{
+    ui_frame_ = std::move(frame);
+}
+
+const UiFrame &RenderSystem::GetUiFrame() const
+{
+    return ui_frame_;
 }
 
 /**

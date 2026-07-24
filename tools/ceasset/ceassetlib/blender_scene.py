@@ -462,9 +462,6 @@ def scene_description(
             if armature is not None and skeleton_output is None:
                 raise ValueError(
                     f"skinned mesh has no generated .cskel: {name}")
-            if armature is not None and not clips:
-                raise ValueError(
-                    f"skinned mesh has no generated .canim: {name}")
             object_entity_indices[name] = len(entities)
             for section_index, (output, material_name) in enumerate(outputs):
                 material_output = material_outputs.get(material_name)

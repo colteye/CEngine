@@ -199,6 +199,42 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(ozz_animation)
 
+# RmlUi is an implementation detail of UISystem. Keep the dependency surface
+# deliberately small: FreeType supplies font rasterization, while the optional
+# sample, scripting, vector-image, and animation integrations stay disabled.
+set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
+set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    freetype
+    GIT_REPOSITORY https://github.com/freetype/freetype.git
+    # FreeType 2.14.3, pinned to an immutable revision.
+    GIT_TAG 0a0221a1347e2f1e07c395263540026e9a0aa7c7
+)
+FetchContent_MakeAvailable(freetype)
+if(NOT TARGET Freetype::Freetype)
+    add_library(Freetype::Freetype ALIAS freetype-interface)
+endif()
+
+set(RMLUI_SAMPLES OFF CACHE BOOL "" FORCE)
+set(RMLUI_TESTS OFF CACHE BOOL "" FORCE)
+set(RMLUI_LUA_BINDINGS OFF CACHE BOOL "" FORCE)
+set(RMLUI_LOTTIE_PLUGIN OFF CACHE BOOL "" FORCE)
+set(RMLUI_SVG_PLUGIN OFF CACHE BOOL "" FORCE)
+set(RMLUI_FONT_ENGINE freetype CACHE STRING "" FORCE)
+set(RMLUI_PRECOMPILED_HEADERS OFF CACHE BOOL "" FORCE)
+set(RMLUI_COMPILER_OPTIONS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    RmlUi
+    GIT_REPOSITORY https://github.com/mikke89/RmlUi.git
+    # RmlUi 6.2, pinned to an immutable revision.
+    GIT_TAG 2230d1a6e8e0848ed87a5761e2a5160b2a175ba4
+)
+FetchContent_MakeAvailable(RmlUi)
+
 if(CENGINE_ENABLE_OPENGL)
     set(CENGINE_OPENGL_SHADER_SOURCES
         src/renderer/opengl/glsl/deferred_lighting.frag
@@ -356,7 +392,27 @@ if(CENGINE_BUILD_TESTS)
         target_compile_options(CEngineWindowSystemTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME window_system COMMAND CEngineWindowSystemTests)
+    add_executable(CEngineUiSystemTests tests/ui/ui_system_tests.cpp)
+    target_link_libraries(CEngineUiSystemTests PRIVATE CEngineCore)
+    if(MSVC)
+        target_compile_options(CEngineUiSystemTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+    else()
+        target_compile_options(CEngineUiSystemTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME ui_system
+        COMMAND CEngineUiSystemTests "${CMAKE_CURRENT_SOURCE_DIR}/tests/ui/data")
     if(CENGINE_ENABLE_OPENGL)
+        add_executable(CEngineUiRendererTests
+            tests/renderer/ui_renderer_tests.cpp
+        )
+        target_link_libraries(CEngineUiRendererTests PRIVATE CEngineCore)
+        if(MSVC)
+            target_compile_options(CEngineUiRendererTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+        else()
+            target_compile_options(CEngineUiRendererTests PRIVATE -Wall -Wextra -Wpedantic)
+        endif()
+        add_test(NAME ui_renderer COMMAND CEngineUiRendererTests)
+        set_tests_properties(ui_renderer PROPERTIES SKIP_RETURN_CODE 77)
         add_executable(CEngineShadowSystemTests
             tests/renderer/shadow_system_tests.cpp
         )
@@ -404,6 +460,11 @@ set(CENGINE_CORE_SOURCES
     src/input/input_system.cpp
     src/renderer/mesh_instance.cpp
     src/renderer/render_system.cpp
+    src/ui/rmlui/rmlui_file_interface.cpp
+    src/ui/rmlui/rmlui_render_interface.cpp
+    src/ui/rmlui/rmlui_runtime.cpp
+    src/ui/rmlui/rmlui_system_interface.cpp
+    src/ui/ui_system.cpp
     src/window/sdl/sdl_window_backend.cpp
     src/window/window_system.cpp
 )
@@ -429,6 +490,7 @@ if(CENGINE_ENABLE_OPENGL)
         src/renderer/opengl/render_backend.cpp
         src/renderer/opengl/shadow_system.cpp
         src/renderer/opengl/texture.cpp
+        src/renderer/opengl/ui_renderer.cpp
         src/renderer/opengl/shaders/deferred_lighting.cpp
         src/renderer/opengl/shaders/depth_only.cpp
         src/renderer/opengl/shaders/fullscreen_blit.cpp
@@ -470,6 +532,7 @@ target_include_directories(CEngineCore
 target_link_libraries(CEngineCore PUBLIC ${CENGINE_SDL3_TARGET})
 target_link_libraries(CEngineCore PUBLIC CEngineAssets)
 target_link_libraries(CEngineCore PRIVATE ozz_animation_offline)
+target_link_libraries(CEngineCore PRIVATE RmlUi::Core)
 target_link_libraries(CEngineCore PRIVATE ${CMAKE_DL_LIBS})
 target_link_libraries(CEngineScene PUBLIC CEngineCore)
 

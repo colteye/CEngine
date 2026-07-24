@@ -87,7 +87,12 @@ if(CENGINE_BUILD_VIEWER)
         target_link_libraries(CEngineViewerImGui PUBLIC ${CENGINE_SDL3_TARGET})
     endif()
 
-    set(VIEWER_EXECUTABLE_SOURCES ${VIEWER_GAME_SOURCES} main.cpp)
+    set(VIEWER_EXECUTABLE_SOURCES
+        ${VIEWER_GAME_SOURCES}
+        main.cpp
+        ui/start_menu.rml
+        ui/start_menu.rcss
+    )
     if(CENGINE_ENABLE_OPENGL)
         list(APPEND VIEWER_EXECUTABLE_SOURCES imgui_platform.cpp)
     endif()
@@ -124,6 +129,24 @@ if(CENGINE_BUILD_VIEWER)
             WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
         )
     endif()
+
+    add_custom_command(TARGET CEngine POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+            "$<TARGET_FILE_DIR:CEngine>/ui/fonts"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+            "$<TARGET_FILE_DIR:CEngine>/ui/viewer"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${rmlui_SOURCE_DIR}/Samples/assets/LatoLatin-Regular.ttf"
+            "$<TARGET_FILE_DIR:CEngine>/ui/fonts/LatoLatin-Regular.ttf"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${rmlui_SOURCE_DIR}/Samples/assets/LICENSE.txt"
+            "$<TARGET_FILE_DIR:CEngine>/ui/fonts/LICENSE.txt"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/start_menu.rml"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/start_menu.rcss"
+            "$<TARGET_FILE_DIR:CEngine>/ui/viewer"
+        VERBATIM
+    )
 
     if(APPLE)
         set(VIEWER_ADDON_PLATFORM "macos-arm64")

@@ -155,6 +155,23 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertEqual(prop.values["animation_playback_rate"], 1.0)
         self.assertTrue(prop.values["animation_looping"])
 
+    def test_skinned_mesh_without_actions_exports_reference_pose(self) -> None:
+        armature = FakeObject("Rig", "ARMATURE")
+        obj = FakeObject("Character", "MESH")
+        obj.parent = armature
+
+        scene = scene_description(
+            (obj, armature),
+            {"Character": [(Path("Character.cmesh"), "Character")]},
+            {"Character": Path("Character.cmat")},
+            lambda path: path.as_posix(),
+            skeleton_outputs={"Rig": Path("Rig.cskel")},
+        )
+
+        prop = scene.entities[0].data
+        self.assertEqual(prop.values["skeleton"].path, "Rig.cskel")
+        self.assertIsNone(prop.values["animation"])
+
     def test_scene_occluder_becomes_shadow_only_prop_without_lightmap(self) -> None:
         """TODO: Describe `test_scene_occluder_becomes_shadow_only_prop_without_lightmap`."""
         obj = FakeObject("OCC_SunBlocker", "MESH", props={"ce_role": "occluder"})

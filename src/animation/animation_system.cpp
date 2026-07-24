@@ -53,35 +53,55 @@ struct AnimationSystem::Slot
     std::unique_ptr<Instance> instance;
 };
 
-AnimationSystem::AnimationSystem(AnimationSystemDesc desc)
-    : AnimationSystem(std::make_unique<Ozz::AnimationBackend>(), desc)
+AnimationSystem::AnimationSystem()
+    : AnimationSystem(std::make_unique<Ozz::AnimationBackend>())
 {
 }
 
-AnimationSystem::AnimationSystem(std::unique_ptr<IAnimationBackend> backend, AnimationSystemDesc desc)
-    : desc_(desc), backend_(std::move(backend))
+AnimationSystem::AnimationSystem(std::unique_ptr<IAnimationBackend> backend)
+    : backend_(std::move(backend))
 {
-    events_.reserve(desc_.max_events);
-    slots_.reserve(desc_.max_instances);
-    free_slots_.reserve(desc_.max_instances);
-    if (backend_ == nullptr || desc_.max_instances == 0u || desc_.max_pose_joints == 0u ||
-        !backend_->Initialize(desc_))
-    {
-        ++diagnostics_.backend_failures;
-    }
 }
 
 AnimationSystem::~AnimationSystem()
+{
+    Shutdown();
+}
+
+bool AnimationSystem::Initialize(const AnimationSystemDesc &desc)
+{
+    Shutdown();
+    if (backend_ == nullptr || desc.max_instances == 0u ||
+        desc.max_pose_joints == 0u || !backend_->Initialize(desc))
+    {
+        ++diagnostics_.backend_failures;
+        return false;
+    }
+    desc_ = desc;
+    events_.reserve(desc_.max_events);
+    slots_.reserve(desc_.max_instances);
+    free_slots_.reserve(desc_.max_instances);
+    initialized_ = true;
+    return true;
+}
+
+void AnimationSystem::Shutdown()
 {
     if (backend_ != nullptr)
     {
         backend_->Shutdown();
     }
+    slots_.clear();
+    free_slots_.clear();
+    events_.clear();
+    diagnostics_ = {};
+    initialized_ = false;
 }
 
 AnimationInstanceHandle AnimationSystem::CreateInstance(const AnimationInstanceDesc &desc)
 {
-    if (backend_ == nullptr || desc.skeleton == nullptr || desc.skeleton->BoneCount() == 0u)
+    if (!initialized_ || backend_ == nullptr || desc.skeleton == nullptr ||
+        desc.skeleton->BoneCount() == 0u)
     {
         ++diagnostics_.rejected_commands;
         return {};
@@ -276,7 +296,7 @@ void AnimationSystem::Evaluate(float presentation_delta_seconds)
 
         AnimationPoseRequest pose;
         pose.sample_source = !instance.frozen_source;
-        pose.source_clip = instance.current_clip.get();
+        pose.source_clip = instance.current_clip;
         if (instance.current_clip != nullptr && !instance.frozen_source)
         {
             const double previous = instance.current_time;
@@ -316,7 +336,7 @@ void AnimationSystem::Evaluate(float presentation_delta_seconds)
                 EmitEvents(handle, *instance.destination_clip, previous,
                            instance.destination_time, instance.destination_playback);
             }
-            pose.destination_clip = instance.destination_clip.get();
+            pose.destination_clip = instance.destination_clip;
             pose.destination_ratio =
                 SampleRatio(*instance.destination_clip, instance.destination_playback,
                             instance.destination_time);

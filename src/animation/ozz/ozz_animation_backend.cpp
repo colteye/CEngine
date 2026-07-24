@@ -25,6 +25,7 @@
 #include <array>
 #include <cmath>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -196,43 +197,47 @@ bool BuildAnimation(const Assets::Animation &source,
 
 struct AnimationBackend::Impl
 {
+    struct RuntimeSkeleton
+    {
+        std::shared_ptr<const Assets::Skeleton> source;
+        ozz::animation::Skeleton skeleton;
+    };
+
     struct RuntimeClip
     {
-        const Assets::Animation *source = nullptr;
+        std::shared_ptr<const Assets::Animation> source;
         ozz::animation::Animation animation;
     };
 
     struct Instance
     {
-        Instance(std::shared_ptr<const Assets::Skeleton> source,
-                 ozz::animation::Skeleton built)
-            : skeleton(std::move(source)), runtime_skeleton(std::move(built))
+        explicit Instance(std::shared_ptr<RuntimeSkeleton> resource)
+            : skeleton(std::move(resource))
         {
             contexts = {
                 std::make_unique<ozz::animation::SamplingJob::Context>(
-                    runtime_skeleton.num_joints()),
+                    skeleton->skeleton.num_joints()),
                 std::make_unique<ozz::animation::SamplingJob::Context>(
-                    runtime_skeleton.num_joints())};
+                    skeleton->skeleton.num_joints())};
             const std::size_t soa_count =
-                static_cast<std::size_t>(runtime_skeleton.num_soa_joints());
+                static_cast<std::size_t>(skeleton->skeleton.num_soa_joints());
             source_locals.resize(soa_count);
             destination_locals.resize(soa_count);
             blended_locals.resize(soa_count);
             current_locals.resize(soa_count);
-            std::copy(runtime_skeleton.joint_rest_poses().begin(),
-                      runtime_skeleton.joint_rest_poses().end(),
+            std::copy(skeleton->skeleton.joint_rest_poses().begin(),
+                      skeleton->skeleton.joint_rest_poses().end(),
                       source_locals.begin());
             destination_locals = source_locals;
             blended_locals = source_locals;
             current_locals = source_locals;
-            model_joints.resize(skeleton->BoneCount(),
+            model_joints.resize(skeleton->source->BoneCount(),
                                 ozz::math::Float4x4::identity());
-            palette.resize(skeleton->BoneCount(), glm::mat4(1.0f));
+            palette.resize(skeleton->source->BoneCount(), glm::mat4(1.0f));
         }
 
-        std::shared_ptr<const Assets::Skeleton> skeleton;
-        ozz::animation::Skeleton runtime_skeleton;
-        std::array<RuntimeClip, 2> clips;
+        std::shared_ptr<RuntimeSkeleton> skeleton;
+        std::array<std::shared_ptr<RuntimeClip>, 2> clips;
         std::array<std::unique_ptr<ozz::animation::SamplingJob::Context>, 2>
             contexts;
         std::vector<ozz::math::SoaTransform> source_locals;
@@ -253,35 +258,75 @@ struct AnimationBackend::Impl
         return slot < instances.size() ? instances[slot].get() : nullptr;
     }
 
-    static bool EnsureClip(Instance &instance, std::size_t channel,
-                           const Assets::Animation &source)
+    std::shared_ptr<RuntimeSkeleton> GetSkeleton(
+        std::shared_ptr<const Assets::Skeleton> source)
     {
-        RuntimeClip &clip = instance.clips[channel];
-        if (clip.source == &source)
+        const auto existing = skeletons.find(source.get());
+        if (existing != skeletons.end())
+        {
+            if (auto resource = existing->second.lock())
+            {
+                return resource;
+            }
+        }
+        auto resource = std::make_shared<RuntimeSkeleton>();
+        resource->source = std::move(source);
+        if (!BuildSkeleton(*resource->source, resource->skeleton))
+        {
+            return {};
+        }
+        skeletons[resource->source.get()] = resource;
+        return resource;
+    }
+
+    std::shared_ptr<RuntimeClip> GetClip(
+        std::shared_ptr<const Assets::Animation> source)
+    {
+        const auto existing = animations.find(source.get());
+        if (existing != animations.end())
+        {
+            if (auto resource = existing->second.lock())
+            {
+                return resource;
+            }
+        }
+        auto resource = std::make_shared<RuntimeClip>();
+        resource->source = std::move(source);
+        if (!BuildAnimation(*resource->source, resource->animation))
+        {
+            return {};
+        }
+        animations[resource->source.get()] = resource;
+        return resource;
+    }
+
+    bool EnsureClip(Instance &instance, std::size_t channel,
+                    std::shared_ptr<const Assets::Animation> source)
+    {
+        if (instance.clips[channel] != nullptr &&
+            instance.clips[channel]->source == source)
         {
             return true;
         }
-        ozz::animation::Animation built;
-        if (!BuildAnimation(source, built))
+        instance.clips[channel] = GetClip(std::move(source));
+        if (instance.clips[channel] == nullptr)
         {
             return false;
         }
-        clip.animation = std::move(built);
-        clip.source = &source;
         instance.contexts[channel]->Invalidate();
         return true;
     }
 
-    static bool Sample(Instance &instance, std::size_t channel,
-                       const Assets::Animation &clip, float ratio,
-                       std::vector<ozz::math::SoaTransform> &output)
+    bool Sample(Instance &instance, std::size_t channel,
+                std::shared_ptr<const Assets::Animation> clip, float ratio,
+                std::vector<ozz::math::SoaTransform> &output)
     {
-        if (!EnsureClip(instance, channel, clip))
+        if (!EnsureClip(instance, channel, std::move(clip)))
         {
             return false;
         }
         ozz::animation::SamplingJob sample;
-        sample.animation = &instance.clips[channel].animation;
+        sample.animation = &instance.clips[channel]->animation;
         sample.context = instance.contexts[channel].get();
         sample.ratio = ratio;
         sample.output = ozz::make_span(output);
@@ -289,6 +334,11 @@ struct AnimationBackend::Impl
     }
 
     std::vector<std::unique_ptr<Instance>> instances;
+    std::unordered_map<const Assets::Skeleton *,
+                       std::weak_ptr<RuntimeSkeleton>>
+        skeletons;
+    std::unordered_map<const Assets::Animation *, std::weak_ptr<RuntimeClip>>
+        animations;
     std::uint32_t max_instances = 0;
     std::uint64_t failures = 0;
     bool initialized = false;
@@ -316,6 +366,8 @@ bool AnimationBackend::Initialize(const AnimationSystemDesc &desc)
 void AnimationBackend::Shutdown()
 {
     impl_->instances.clear();
+    impl_->animations.clear();
+    impl_->skeletons.clear();
     impl_->max_instances = 0;
     impl_->failures = 0;
     impl_->initialized = false;
@@ -339,14 +391,15 @@ bool AnimationBackend::CreateInstance(
         ++impl_->failures;
         return false;
     }
-    ozz::animation::Skeleton built;
-    if (!BuildSkeleton(*skeleton, built))
+    std::shared_ptr<Impl::RuntimeSkeleton> resource =
+        impl_->GetSkeleton(std::move(skeleton));
+    if (resource == nullptr)
     {
         ++impl_->failures;
         return false;
     }
     impl_->instances[slot] =
-        std::make_unique<Impl::Instance>(std::move(skeleton), std::move(built));
+        std::make_unique<Impl::Instance>(std::move(resource));
     return true;
 }
 
@@ -388,11 +441,11 @@ bool AnimationBackend::Evaluate(std::uint32_t slot,
     {
         if (request.source_clip == nullptr)
         {
-            const auto rest = instance->runtime_skeleton.joint_rest_poses();
+            const auto rest = instance->skeleton->skeleton.joint_rest_poses();
             std::copy(rest.begin(), rest.end(), instance->source_locals.begin());
         }
-        else if (!Impl::Sample(*instance, 0u, *request.source_clip,
-                               request.source_ratio, instance->source_locals))
+        else if (!impl_->Sample(*instance, 0u, request.source_clip,
+                                request.source_ratio, instance->source_locals))
         {
             ++impl_->failures;
             return false;
@@ -403,9 +456,9 @@ bool AnimationBackend::Evaluate(std::uint32_t slot,
         &instance->source_locals;
     if (request.destination_clip != nullptr)
     {
-        if (!Impl::Sample(*instance, 1u, *request.destination_clip,
-                          request.destination_ratio,
-                          instance->destination_locals))
+        if (!impl_->Sample(*instance, 1u, request.destination_clip,
+                           request.destination_ratio,
+                           instance->destination_locals))
         {
             ++impl_->failures;
             return false;
@@ -417,7 +470,7 @@ bool AnimationBackend::Evaluate(std::uint32_t slot,
         layers[1].transform = ozz::make_span(instance->destination_locals);
         ozz::animation::BlendingJob blend;
         blend.layers = ozz::make_span(layers);
-        blend.rest_pose = instance->runtime_skeleton.joint_rest_poses();
+        blend.rest_pose = instance->skeleton->skeleton.joint_rest_poses();
         blend.output = ozz::make_span(instance->blended_locals);
         if (!blend.Run())
         {
@@ -429,7 +482,7 @@ bool AnimationBackend::Evaluate(std::uint32_t slot,
 
     instance->current_locals = *final_locals;
     ozz::animation::LocalToModelJob local_to_model;
-    local_to_model.skeleton = &instance->runtime_skeleton;
+    local_to_model.skeleton = &instance->skeleton->skeleton;
     local_to_model.input = ozz::make_span(instance->current_locals);
     local_to_model.output = ozz::make_span(instance->model_joints);
     if (!local_to_model.Run())
@@ -437,12 +490,13 @@ bool AnimationBackend::Evaluate(std::uint32_t slot,
         ++impl_->failures;
         return false;
     }
-    for (std::uint32_t joint = 0; joint < instance->skeleton->BoneCount();
+    for (std::uint32_t joint = 0;
+         joint < instance->skeleton->source->BoneCount();
          ++joint)
     {
         instance->palette[joint] =
             Matrix(instance->model_joints[joint]) *
-            *instance->skeleton->JointFromArmatureBind(joint);
+            *instance->skeleton->source->JointFromArmatureBind(joint);
     }
     return true;
 }

@@ -1069,10 +1069,9 @@ Additional techniques use the evidence rules in
 
 ## Animation
 
-> **Status: detailed target contract.** Implement only when the active milestone
-> in `IMPLEMENTATION.md` promotes animation. The concrete ozz-animation
-> dependency, cooked-data migration, renderer boundary, and vertical gates are
-> defined in
+> **Status: implemented first vertical slice with deferred extensions.** The
+> concrete backend boundary, Ozz implementation, exported engine-data contract,
+> renderer integration, and exclusions are defined in
 > [`../animation_requirements.md`](../animation_requirements.md).
 
 ### 1. Purpose
@@ -1091,6 +1090,11 @@ cosmetic events, and skinning output.
 - animation-event extraction;
 - skinning palette production;
 - contiguous pose storage and animation-memory budgets.
+
+`IAnimationBackend` owns runtime-representation conversion and pose
+evaluation. Ozz is the current backend and its types are private to
+`src/animation/ozz`; `SkeletonAsset` and `AnimationAsset` remain
+backend-neutral.
 
 It does not own:
 

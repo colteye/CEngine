@@ -1,0 +1,8 @@
+<rml>
+<head>
+    <link type="text/rcss" href="click.rcss"/>
+</head>
+<body>
+    <button id="start">Start</button>
+</body>
+</rml>

@@ -256,9 +256,9 @@ matrix and exclusions.
 
 - [`STATUS.md`](STATUS.md): current initiative, inventory, remaining work, and
   verified commands.
-- [`../animation_requirements.md`](../animation_requirements.md): proposed
-  ozz-animation integration, cooked-data contract, runtime ownership, renderer
-  boundary, and promotion gates.
+- [`../animation_requirements.md`](../animation_requirements.md): implemented
+  backend-neutral animation assets, Ozz backend boundary, playback ownership,
+  renderer skinning, and verification contract.
 - [`../physics_requirements.md`](../physics_requirements.md): physics product
   contract and support matrix.
 - [`../audio_requirements.md`](../audio_requirements.md): audio product contract
