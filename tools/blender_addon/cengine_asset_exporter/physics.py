@@ -454,9 +454,19 @@ def physics_objects(objects: Iterable[object]) -> list[object]:
     return sorted((
         obj for obj in objects
         if getattr(obj, "type", "") == "MESH"
-        and str(_property(
-            obj, "ce_physics_motion", "None")).lower() != "none"
+        and _physics_motion(obj) != "none"
     ), key=lambda obj: str(getattr(obj, "name", "")))
+
+
+def _physics_motion(obj: object) -> str:
+    """Return the effective physics mode, including native trigger settings."""
+    classname = str(_property(obj, "ce_classname", "") or "")
+    if classname == "trigger_volume":
+        return "kinematic" if bool(_property(
+            obj, "ce_kinematic", False)) else "static"
+    return str(_property(
+        obj, "ce_physics_motion",
+        "Static" if classname == "collider" else "None")).lower()
 
 
 def write_physics_asset(
@@ -480,8 +490,7 @@ def write_physics_asset(
     Returns:
         TODO: Describe the produced value.
     """
-    motion = str(_property(
-        obj, "ce_physics_motion", "None")).lower()
+    motion = _physics_motion(obj)
     if motion not in ("static", "dynamic", "kinematic"):
         raise ValueError(
             f"physics motion must be Static, Dynamic, or Kinematic: {obj.name}")

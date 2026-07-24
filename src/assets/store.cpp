@@ -25,7 +25,7 @@
 #include "assets/reader.h"
 #include "assets/skeleton_asset.h"
 #include "assets/texture_asset.h"
-#include "logging/logger.h"
+#include "log.h"
 
 #include <algorithm>
 
@@ -214,7 +214,7 @@ std::shared_ptr<const PhysicsShape> Store::LoadPhysics(const Reference &referenc
 std::shared_ptr<const Skeleton> Store::LoadSkeleton(const Reference &reference) const
 {
     return Get(reference, Type::Skeleton, skeletons_,
-               [](const auto &path, auto &skeleton) { return skeleton.Load(path); });
+               [&reference](const auto &path, auto &skeleton) { return skeleton.Load(path, reference.guid); });
 }
 
 std::shared_ptr<const Animation> Store::LoadAnimation(const Reference &reference) const

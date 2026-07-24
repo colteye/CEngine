@@ -11,6 +11,28 @@ Blender add-on. Windowing and input have moved from GLFW to engine-owned SDL3
 backends, and the engine now has a complete SDL3/miniaudio playback path.
 Cooked asset payloads use one schema-owned version-one format.
 
+### Base entities and scene logic
+
+- The engine library contains 15 concrete classes: prop, collider, trigger
+  volume, physics constraint, light, camera, audio source/environment, skybox,
+  fog, post process, relay, timer, auto, and marker.
+- Entity schemas declare validated inputs and outputs. Scene connections carry
+  an optional parameter, simulation-time delay, and fire count; dispatch is
+  deterministic and bounded.
+- Scene physics ownership routes body and virtual-character contacts to
+  collider and trigger behavior after the physics step.
+- The active view is an enabled camera/player entity and drives both renderer
+  camera state and the audio listener.
+- Blender uses native Mesh, Light, Camera, and Speaker objects, cooks
+  collider/trigger meshes only as physics, authors output connections, exports
+  passthrough audio, and serializes its active camera.
+- The viewer owns `player`, `player_spawn`, and a concrete game coordinator.
+  The same join/respawn path supports one local player or multiple live player
+  records; spawn filtering uses game-owned team/group/priority and clearance
+  metadata.
+- The complete rationale and deliberate exclusions are in
+  [`../entity_library.md`](../entity_library.md).
+
 ### Window and platform
 
 - `WindowSystem` owns one replaceable `IWindowBackend`.
@@ -100,7 +122,8 @@ Cooked asset payloads use one schema-owned version-one format.
 - Constraints: fixed, point/ball, hinge, slider, distance/spring, and cone;
   hinge/slider velocity and position motors.
 - Character: virtual Z-up capsule with slopes, steps, grounding, floor sticking,
-  moving-ground state, penetration recovery, and crouch height.
+  moving-ground state, penetration recovery, crouch height, body/character
+  query identity, and trigger contact routing.
 - Handles reject stale slots; body destruction removes attached constraints.
 
 ### Physics assets, scenes, and Blender
@@ -146,6 +169,10 @@ Cooked asset payloads use one schema-owned version-one format.
 
 ## Known limits
 
+- Skeleton and animation assets cook and load, and meshes carry skin weights,
+  but there is no runtime pose evaluation, cross-fade, cosmetic-event, or GPU
+  skinning path yet. The proposed design is
+  [`../animation_requirements.md`](../animation_requirements.md).
 - Constraint break thresholds are not implemented.
 - Constraint authoring uses world-space anchors; a richer local-frame editing
   widget is not implemented.
@@ -182,8 +209,10 @@ git diff --check
   miniaudio sources;
 - a Vulkan-selected viewer compile/link check passed through SDL3's Vulkan
   surface path;
-- `python3 -m unittest discover tools/ceasset/tests`: 124 tests passed with one
+- `python3 -m unittest discover tools/ceasset/tests`: 128 tests passed with one
   intentional skip;
+- Blender 5.2 background registration created every engine and viewer entity,
+  then authored a source-to-target connection through the add-on operators;
 - `git diff --check`: passed;
 - both game-schema JSON files parse successfully;
 - all standard concrete `Key` values have an SDL3 scancode mapping; F25 is the

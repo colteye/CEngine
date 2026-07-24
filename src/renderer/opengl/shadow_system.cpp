@@ -832,6 +832,7 @@ void ShadowSystem::RenderDepthToAtlas(const AtlasTile &tile, const glm::mat4 &vi
             bound_vertex_array = item.vertex_array_obj;
         }
         depth_only_->UpdateObject(item.transform, *item.material, item.albedo_tex);
+        depth_only_->UpdateSkinning(item.joint_palette_texture, item.joint_count);
         glDrawElements(GL_TRIANGLES, item.count, GL_UNSIGNED_INT, nullptr);
     }
 
@@ -893,6 +894,7 @@ void ShadowSystem::RenderPointFace(GLenum face, GLuint texture, int resolution, 
             bound_vertex_array = item.vertex_array_obj;
         }
         point_depth_->UpdateObject(item.transform, *item.material, item.albedo_tex);
+        point_depth_->UpdateSkinning(item.joint_palette_texture, item.joint_count);
         glDrawElements(GL_TRIANGLES, item.count, GL_UNSIGNED_INT, nullptr);
     }
 

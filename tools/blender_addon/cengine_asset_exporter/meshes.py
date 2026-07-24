@@ -33,6 +33,7 @@ from ceassetlib.paths import generic_path, output_dir_for_source
 from ceassetlib.wire import pack_record
 
 from .materials import default_material_name_for_object, object_slot_materials
+from .skeletons import canonical_bones
 
 
 GAME_SCHEMA = load_bundled_game()
@@ -212,10 +213,8 @@ def bone_indices(armature: object | None) -> dict[str, int]:
     Returns:
         TODO: Describe the produced value.
     """
-    bones = getattr(getattr(armature, "data", None), "bones", ()) if armature is not None else ()
+    bones = canonical_bones(armature) if armature is not None else ()
     indices = {bone.name: index for index, bone in enumerate(bones)}
-    if any(index > 0xFFFF for index in indices.values()):
-        raise RuntimeError("CEngine mesh export supports up to 65536 bones per skeleton")
     return indices
 
 
@@ -451,6 +450,7 @@ def mesh_buffers(
 def mesh_payload(
     buffers: MeshBuffers,
     lods: Iterable[tuple[float, MeshBuffers]] = (),
+    skeleton_guid: bytes = bytes(16),
 ) -> bytes:
     """Serialize one mesh and its LODs through the shared game schema."""
     flags = (MESH_FLAG_SKINNED if buffers.skinned else 0) | \
@@ -458,6 +458,7 @@ def mesh_payload(
     cooked_lods = [(1.0, buffers), *lods]
     return pack_record(GAME_SCHEMA, "mesh", {
         "flags": flags,
+        "skeleton_guid": skeleton_guid,
         "bounds_min": buffers.bounds_min,
         "bounds_max": buffers.bounds_max,
         "lods": [
@@ -540,20 +541,27 @@ def write_mesh_asset(
         if not 0.0 <= screen_size < previous:
             raise RuntimeError(
                 f"mesh LOD screen sizes must strictly descend below 1.0: {obj.name}")
-        if lod.skinned != buffers.skinned or lod.lightmap_uv != buffers.lightmap_uv:
+        if lod.skinned != buffers.skinned or lod.lightmap_uv != buffers.lightmap_uv or \
+                lod.skeleton != buffers.skeleton:
             raise RuntimeError(
                 f"mesh LOD vertex features must match LOD0: {obj.name}")
         previous = screen_size
     output = mesh_output_path(blend_source, output_root, obj.name, export_material_name if split_by_material else None)
     asset_source_hash = source_hash if source_hash is not None else hash_file(blend_source)
     del material_output_path_for_name
-    del skeleton_output_path_for_name
+    skeleton_guid = bytes(16)
+    if buffers.skinned:
+        skeleton_output = skeleton_output_path_for_name(buffers.skeleton)
+        if skeleton_output is None:
+            raise RuntimeError(
+                f"skinned mesh has no exported skeleton: {buffers.skeleton}")
+        skeleton_guid = guid_from_stable_name(asset_path(skeleton_output))
     desc = AssetWriteDesc(
         asset_type=AssetType.MESH,
         guid=guid_from_stable_name(asset_path(output)),
         source_hash=asset_source_hash,
         platform_target="generic",
-        payload=mesh_payload(buffers, lods),
+        payload=mesh_payload(buffers, lods, skeleton_guid),
     )
     write_binary_asset(output, desc)
     if logger is not None:

@@ -234,6 +234,25 @@ def load_game_schema(path: Path) -> GameSchema:
     if any(not isinstance(name, str) or not name for name in classnames) or \
             len(classnames) != len(set(classnames)):
         raise ValueError(f"CEngine game file has invalid entity names: {path}")
+    for entity in entities:
+        for endpoint_kind in ("inputs", "outputs"):
+            endpoints = entity.get(endpoint_kind, [])
+            if not isinstance(endpoints, list):
+                raise ValueError(
+                    f"{entity['classname']} {endpoint_kind} must be a list")
+            names: list[str] = []
+            for endpoint in endpoints:
+                if not isinstance(endpoint, dict):
+                    raise ValueError(
+                        f"{entity['classname']} {endpoint_kind} entry is invalid")
+                name = endpoint.get("name")
+                if not isinstance(name, str) or not name or not name.isidentifier():
+                    raise ValueError(
+                        f"{entity['classname']} has an invalid {endpoint_kind} name")
+                names.append(name)
+            if len(names) != len(set(names)):
+                raise ValueError(
+                    f"{entity['classname']} has duplicate {endpoint_kind}")
     return GameSchema(
         path=path.resolve(),
         game=game,

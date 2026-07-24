@@ -19,7 +19,9 @@
 #include "assets/store.h"
 #include "context.h"
 #include "entity/entity.h"
+#include "physics/physics_types.h"
 
+#include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -42,7 +44,10 @@ struct EntityConnection
     EntityHandle target;
     std::string event;
     std::string action;
+    std::string parameter;
     float delay_seconds = 0.0f;
+    std::uint32_t times_to_fire = 0;
+    std::uint32_t times_fired = 0;
 };
 
 /**
@@ -183,6 +188,21 @@ class Scene
      * @param connection TODO: Describe this parameter.
      */
     void AddConnection(EntityConnection connection);
+    bool Emit(EntityHandle source, std::string_view event, EntityHandle activator = {},
+              std::string_view parameter = {});
+    bool DispatchInput(EntityHandle target, std::string_view input, EntityHandle source = {},
+                       EntityHandle activator = {}, std::string_view parameter = {});
+    [[nodiscard]] std::size_t DroppedInputCount() const
+    {
+        return dropped_inputs_;
+    }
+    std::size_t FindByName(std::string_view name, EntityHandle *entities, std::size_t capacity) const;
+    void RegisterPhysicsBody(PhysicsBodyHandle body, EntityHandle owner);
+    void UnregisterPhysicsBody(PhysicsBodyHandle body);
+    [[nodiscard]] EntityHandle PhysicsBodyOwner(PhysicsBodyHandle body) const;
+    void RegisterPhysicsCharacter(PhysicsCharacterHandle character, EntityHandle owner);
+    void UnregisterPhysicsCharacter(PhysicsCharacterHandle character);
+    [[nodiscard]] EntityHandle PhysicsCharacterOwner(PhysicsCharacterHandle character) const;
     /**
      * @brief TODO: Describe Settings.
      *
@@ -201,6 +221,7 @@ class Scene
     {
         settings_ = settings;
     }
+    bool SetActiveEntity(EntityHandle entity);
     /**
      * @brief TODO: Describe Activate.
      *
@@ -265,6 +286,27 @@ class Scene
     }
 
   private:
+    struct PendingInput
+    {
+        EntityHandle target;
+        EntityHandle source;
+        EntityHandle activator;
+        std::string input;
+        std::string parameter;
+        double delivery_time = 0.0;
+        std::uint64_t sequence = 0;
+    };
+
+    struct PhysicsOwner
+    {
+        std::uint32_t generation = 0;
+        EntityHandle entity;
+    };
+
+    void ProcessPhysicsContacts(Context &context);
+    void ProcessPendingInputs(Context &context);
+    void SynchronizeAudioListener(Context &context, float delta_seconds);
+
     Context active_context_;
     std::vector<std::unique_ptr<Entity>> entities_;
     std::vector<std::uint32_t> generations_;
@@ -273,8 +315,18 @@ class Scene
     std::vector<Assets::Reference> auxiliary_assets_;
     std::vector<Entity *> started_entities_;
     std::vector<EntityConnection> connections_;
+    std::vector<PendingInput> pending_inputs_;
+    std::vector<PhysicsOwner> body_owners_;
+    std::vector<PhysicsOwner> character_owners_;
     SceneSettings settings_;
     std::size_t live_count_ = 0;
+    std::size_t dropped_inputs_ = 0;
+    std::uint64_t next_input_sequence_ = 1;
+    double scene_time_ = 0.0;
+#ifdef CENGINE_ENABLE_AUDIO
+    glm::vec3 previous_listener_position_ = glm::vec3(0.0f);
+    bool listener_position_valid_ = false;
+#endif
     bool active_ = false;
 };
 

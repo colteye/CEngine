@@ -27,7 +27,7 @@ namespace CEngine::Entities
  */
 std::string_view FogEntity::Classname() const
 {
-    return "exponential_height_fog";
+    return "fog";
 }
 
 /**
@@ -51,6 +51,11 @@ void FogEntity::Update(Context &context, float /*unused*/)
     fog.cutoff_distance = cutoff_distance;
     fog.enabled = Enabled() && enabled;
     context.rendering->SetExponentialHeightFog(fog);
+}
+
+void FogEntity::OnEnabledChanged(Context &context, bool /*enabled*/)
+{
+    Update(context, 0.0f);
 }
 
 /**

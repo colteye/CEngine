@@ -15,6 +15,7 @@
 
 #include "entity/prop_entity.h"
 
+#include "animation/animation_system.h"
 #include "assets/store.h"
 #include "context.h"
 #include "physics/physics_system.h"
@@ -38,6 +39,22 @@ namespace CEngine::Entities
 std::string_view PropEntity::Classname() const
 {
     return "prop";
+}
+
+bool PropEntity::AcceptsInput(std::string_view input) const
+{
+    return input == "Show" || input == "Hide" || Entity::AcceptsInput(input);
+}
+
+bool PropEntity::HandleInput(Context &context, const Scene::EntityInput &input)
+{
+    if (input.name == "Show" || input.name == "Hide")
+    {
+        visible = input.name == "Show";
+        UpdatePresentation(context);
+        return true;
+    }
+    return Entity::HandleInput(context, input);
 }
 
 namespace
@@ -138,6 +155,51 @@ void PropEntity::Initialize(Context &context)
             {
                 throw std::runtime_error("could not load prop mesh");
             }
+
+            const bool has_skeleton = static_cast<bool>(skeleton);
+            const bool has_animation = static_cast<bool>(animation);
+            if (renderer_mesh->skinned != has_skeleton || has_animation != has_skeleton)
+            {
+                throw std::runtime_error(
+                    "skinned prop requires one skeleton and one animation; static prop requires neither");
+            }
+            if (has_skeleton)
+            {
+                if (context.animations == nullptr)
+                {
+                    throw std::runtime_error("skinned prop requires the animation system");
+                }
+                const Assets::Reference *skeleton_reference = context.scene->AssetReference(skeleton.index);
+                const Assets::Reference *animation_reference = context.scene->AssetReference(animation.index);
+                if (skeleton_reference == nullptr || skeleton_reference->type != Assets::Type::Skeleton)
+                {
+                    throw std::runtime_error("prop skeleton reference is invalid");
+                }
+                if (animation_reference == nullptr || animation_reference->type != Assets::Type::Animation)
+                {
+                    throw std::runtime_error("prop animation reference is invalid");
+                }
+                skeleton_asset_ = context.assets->LoadSkeleton(*skeleton_reference);
+                animation_asset_ = context.assets->LoadAnimation(*animation_reference);
+                if (!skeleton_asset_ || !animation_asset_)
+                {
+                    throw std::runtime_error("could not load prop animation assets");
+                }
+                if (renderer_mesh->skeleton_guid != skeleton_asset_->Identity() ||
+                    animation_asset_->SkeletonReference().guid != skeleton_asset_->Identity())
+                {
+                    throw std::runtime_error("prop mesh, skeleton, and animation identities do not match");
+                }
+                animation_instance_ = context.animations->CreateInstance({skeleton_asset_});
+                Animations::AnimationPlayback playback;
+                playback.rate = animation_playback_rate;
+                playback.looping = animation_looping;
+                if (!animation_instance_ ||
+                    !context.animations->Play(animation_instance_, animation_asset_, playback))
+                {
+                    throw std::runtime_error("animation system rejected prop animation");
+                }
+            }
             RegisterMeshInstance(context, std::move(renderer_mesh), std::move(renderer_material),
                                  std::move(renderer_lightmap));
         }
@@ -185,6 +247,7 @@ void PropEntity::Initialize(Context &context)
             {
                 throw std::runtime_error("physics rejected prop body");
             }
+            context.scene->RegisterPhysicsBody(physics_body_, GetHandle());
         }
     }
     catch (...)
@@ -284,12 +347,22 @@ void PropEntity::LateUpdate(Context &context, float /*unused*/)
         }
     }
 
-    if (context.rendering == nullptr || !renderer_mesh_instance_)
+    UpdatePresentation(context);
+}
+
+void PropEntity::UpdatePresentation(Context &context)
+{
+    if (context.rendering != nullptr && renderer_mesh_instance_)
     {
-        return;
+        context.rendering->UpdateMeshInstance(renderer_mesh_instance_, GetTransform().world_matrix,
+                                              BuildMeshInstanceFlags());
+        if (animation_instance_ && context.animations != nullptr &&
+            !context.rendering->UpdateMeshSkinning(
+                renderer_mesh_instance_, context.animations->SkinningPalette(animation_instance_)))
+        {
+            throw std::runtime_error("renderer rejected prop skinning palette");
+        }
     }
-    context.rendering->UpdateMeshInstance(renderer_mesh_instance_, GetTransform().world_matrix,
-                                          BuildMeshInstanceFlags());
 }
 
 /**
@@ -299,8 +372,19 @@ void PropEntity::LateUpdate(Context &context, float /*unused*/)
  */
 void PropEntity::Shutdown(Context &context)
 {
+    if (context.animations != nullptr && animation_instance_)
+    {
+        context.animations->DestroyInstance(animation_instance_);
+    }
+    animation_instance_ = {};
+    animation_asset_.reset();
+    skeleton_asset_.reset();
     if (context.physics != nullptr && physics_body_)
     {
+        if (context.scene != nullptr)
+        {
+            context.scene->UnregisterPhysicsBody(physics_body_);
+        }
         context.physics->DestroyBody(physics_body_);
     }
     physics_body_ = {};

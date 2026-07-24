@@ -27,7 +27,7 @@ namespace CEngine::Entities
 /**
  * @brief TODO: Describe FogEntity.
  */
-class FogEntity final : public Scene::Entity, public Generated::EngineEntities::ExponentialHeightFogProperties
+class FogEntity final : public Scene::Entity, public Generated::EngineEntities::FogProperties
 {
   public:
     /**
@@ -49,6 +49,9 @@ class FogEntity final : public Scene::Entity, public Generated::EngineEntities::
      * @param context TODO: Describe this parameter.
      */
     void Shutdown(Context &context) override;
+
+  private:
+    void OnEnabledChanged(Context &context, bool enabled) override;
 };
 
 } // namespace CEngine::Entities

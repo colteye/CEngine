@@ -15,7 +15,7 @@
 
 #include "assets/casset_asset.h"
 
-#include "logging/logger.h"
+#include "log.h"
 
 #include <unordered_set>
 

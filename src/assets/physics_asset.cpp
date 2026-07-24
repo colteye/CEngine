@@ -16,7 +16,7 @@
 #include "assets/physics_asset.h"
 
 #include "engine/engine_entities.generated.h"
-#include "logging/logger.h"
+#include "log.h"
 
 #include <algorithm>
 #include <cmath>

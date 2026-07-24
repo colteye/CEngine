@@ -18,6 +18,8 @@
 
 #include "input/input_system.h"
 
+#include <string_view>
+
 namespace CEngine::Input
 {
 class InputSystem;
@@ -45,7 +47,8 @@ struct Actions
  * @param input TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-Actions RegisterActions(CEngine::Input::InputSystem &input);
+Actions RegisterActions(
+    CEngine::Input::InputSystem &input, std::string_view prefix = {});
 
 } // namespace Viewer
 

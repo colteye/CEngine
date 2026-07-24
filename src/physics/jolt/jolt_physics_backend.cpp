@@ -888,6 +888,15 @@ struct JoltPhysicsBackend::Impl
         return found != body_handles.end() ? found->second : PhysicsBodyHandle{};
     }
 
+    [[nodiscard]] PhysicsCharacterHandle GetCharacterHandle(JPH::BodyID body) const
+    {
+        const auto found = character_body_handles.find(
+            body.GetIndexAndSequenceNumber());
+        return found != character_body_handles.end()
+                   ? found->second
+                   : PhysicsCharacterHandle{};
+    }
+
     /**
      * @brief TODO: Describe GetConstraint.
      *
@@ -929,6 +938,8 @@ struct JoltPhysicsBackend::Impl
     std::vector<CharacterSlot> characters;
     std::vector<std::uint32_t> free_character_handles;
     std::unordered_map<std::uint32_t, PhysicsBodyHandle> body_handles;
+    std::unordered_map<std::uint32_t, PhysicsCharacterHandle>
+        character_body_handles;
     ContactCollector contact_collector;
     std::vector<RawContact> contact_events;
     std::size_t max_contact_events = 0;
@@ -1047,6 +1058,7 @@ void JoltPhysicsBackend::Shutdown()
     impl_->characters.clear();
     impl_->free_character_handles.clear();
     impl_->body_handles.clear();
+    impl_->character_body_handles.clear();
     impl_->contact_events.clear();
     impl_->body_count = 0;
     impl_->constraint_count = 0;
@@ -1521,7 +1533,8 @@ bool JoltPhysicsBackend::RayCast(const glm::vec3 &origin, const glm::vec3 &displ
         return false;
     }
     hit.body = impl_->GetBodyHandle(result.mBodyID);
-    if (!hit.body)
+    hit.character = impl_->GetCharacterHandle(result.mBodyID);
+    if (!hit.body && !hit.character)
     {
         return false;
     }
@@ -1570,6 +1583,7 @@ std::size_t JoltPhysicsBackend::RayCastAll(const glm::vec3 &origin, const glm::v
         PhysicsQueryHit &output = hits[index];
         output = {};
         output.body = impl_->GetBodyHandle(result.mBodyID);
+        output.character = impl_->GetCharacterHandle(result.mBodyID);
         output.fraction = result.mFraction;
         output.position = origin + displacement * result.mFraction;
         output.sub_shape = result.mSubShapeID2.GetValue();
@@ -1627,7 +1641,8 @@ bool JoltPhysicsBackend::ShapeCast(const PhysicsShape &source_shape, const glm::
     }
     const JPH::ShapeCastResult &result = collector.mHit;
     hit.body = impl_->GetBodyHandle(result.mBodyID2);
-    if (!hit.body)
+    hit.character = impl_->GetCharacterHandle(result.mBodyID2);
+    if (!hit.body && !hit.character)
     {
         return false;
     }
@@ -1724,11 +1739,24 @@ std::size_t JoltPhysicsBackend::DrainContactEvents(PhysicsContactEvent *events, 
         const RawContact &source = impl_->contact_events[consumed];
         const PhysicsBodyHandle first = impl_->GetBodyHandle(source.first);
         const PhysicsBodyHandle second = impl_->GetBodyHandle(source.second);
-        if (!first || !second)
+        const PhysicsCharacterHandle first_character =
+            impl_->GetCharacterHandle(source.first);
+        const PhysicsCharacterHandle second_character =
+            impl_->GetCharacterHandle(source.second);
+        if ((!first && !first_character) || (!second && !second_character))
         {
             continue;
         }
-        events[count++] = {source.type, first, second, source.position, source.normal, source.sensor};
+        PhysicsContactEvent &target = events[count++];
+        target = {};
+        target.type = source.type;
+        target.first = first;
+        target.second = second;
+        target.first_character = first_character;
+        target.second_character = second_character;
+        target.position = source.position;
+        target.normal = source.normal;
+        target.sensor = source.sensor;
     }
     impl_->contact_events.erase(impl_->contact_events.begin(),
                                 impl_->contact_events.begin() + static_cast<std::ptrdiff_t>(consumed));
@@ -2090,6 +2118,9 @@ PhysicsCharacterHandle JoltPhysicsBackend::CreateCharacter(const PhysicsCharacte
     settings.mCharacterPadding = desc.padding;
     settings.mPenetrationRecoverySpeed = desc.penetration_recovery;
     settings.mEnhancedInternalEdgeRemoval = true;
+    settings.mInnerBodyShape = shape;
+    settings.mInnerBodyLayer = ToJoltLayer(
+        PhysicsMotionType::Kinematic, desc.collision_layer);
     JPH::Ref<JPH::CharacterVirtual> character = new JPH::CharacterVirtual(
         &settings, ToJoltRVec3(desc.position), JPH::Quat::sIdentity(), impl_->physics_system.get());
 
@@ -2115,6 +2146,12 @@ PhysicsCharacterHandle JoltPhysicsBackend::CreateCharacter(const PhysicsCharacte
                                      desc.stick_to_floor_distance, desc.collision_layer, generation});
     }
     const PhysicsCharacterHandle handle{index, generation};
+    const JPH::BodyID inner_body = character->GetInnerBodyID();
+    if (!inner_body.IsInvalid())
+    {
+        impl_->character_body_handles.emplace(
+            inner_body.GetIndexAndSequenceNumber(), handle);
+    }
     ++impl_->character_count;
     return handle;
 }
@@ -2132,6 +2169,12 @@ void JoltPhysicsBackend::DestroyCharacter(PhysicsCharacterHandle character)
     }
     const std::uint32_t index = character.Index();
     Impl::CharacterSlot &slot = impl_->characters[index];
+    const JPH::BodyID inner_body = slot.character->GetInnerBodyID();
+    if (!inner_body.IsInvalid())
+    {
+        impl_->character_body_handles.erase(
+            inner_body.GetIndexAndSequenceNumber());
+    }
     slot.character = nullptr;
     ++slot.generation;
     if (slot.generation == 0)

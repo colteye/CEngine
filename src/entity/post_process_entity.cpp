@@ -85,4 +85,16 @@ void PostProcessEntity::Shutdown(Context &context)
     context.rendering->SetSSAOSettings(Renderer::SSAOSettings{});
 }
 
+void PostProcessEntity::OnEnabledChanged(Context &context, bool enabled)
+{
+    if (enabled)
+    {
+        Update(context, 0.0f);
+    }
+    else
+    {
+        Shutdown(context);
+    }
+}
+
 } // namespace CEngine::Entities

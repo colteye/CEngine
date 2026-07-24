@@ -8,13 +8,13 @@
 //                      |___/
 
 /**
- * @file src/logging/logger.h
+ * @file src/log.h
  * @brief TODO: Describe the purpose of this file.
  * @author Erik Coltey
  */
 
-#ifndef CENGINE_LOGGING_LOGGER_H
-#define CENGINE_LOGGING_LOGGER_H
+#ifndef CENGINE_LOG_H
+#define CENGINE_LOG_H
 
 #include <iostream>
 #include <mutex>

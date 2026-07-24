@@ -237,6 +237,8 @@ class RenderBackend final : public IRenderBackend
      */
     void UpdateMeshInstance(std::uint32_t slot, const glm::mat4 &transform, const Bounds &world_bounds,
                             std::uint32_t flags) override;
+    bool UpdateSkinningPalette(std::uint32_t slot,
+                               std::span<const glm::mat4> palette) override;
 
   private:
     /**

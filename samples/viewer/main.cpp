@@ -15,12 +15,14 @@
 
 #include "assets/store.h"
 #include "assets/scene_asset.h"
+#include "animation/animation_system.h"
 #ifdef CENGINE_ENABLE_AUDIO
 #include "audio/audio_system.h"
 #endif
 #include "context.h"
 #include "entity/entity_factory.h"
 #include "entity/player_entity.h"
+#include "game/game_coordinator.h"
 #include "imgui_platform.h"
 #include "input/actions.h"
 #include "input/sdl/sdl_input_backend.h"
@@ -43,6 +45,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace Renderer = CEngine::Renderer;
 
@@ -165,29 +168,6 @@ std::filesystem::path ProjectRootForScene(const std::filesystem::path &scene_pat
 }
 
 #ifdef CENGINE_ENABLE_OPENGL
-/**
- * @brief TODO: Describe ActivePlayer.
- *
- * @param scene TODO: Describe this parameter.
- * @return TODO: Describe the return value.
- */
-Viewer::PlayerEntity *ActivePlayer(CEngine::Scene::Scene &scene)
-{
-    CEngine::Scene::Entity *entity = scene.GetEntity(scene.Settings().active_entity);
-    if (entity != nullptr && entity->Classname() == "player")
-    {
-        return dynamic_cast<Viewer::PlayerEntity *>(entity);
-    }
-    for (const auto &candidate : scene.Entities())
-    {
-        if (candidate != nullptr && candidate->Classname() == "player")
-        {
-            return dynamic_cast<Viewer::PlayerEntity *>(candidate.get());
-        }
-    }
-    return nullptr;
-}
-
 /**
  * @brief TODO: Describe DrawTuningPanel.
  *
@@ -346,6 +326,7 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
              const std::filesystem::path &project_root, Renderer::RenderSystem &renderer)
 {
     CEngine::Assets::Store assets(project_root);
+    CEngine::Animations::AnimationSystem animations;
     CEngine::Input::InputSystem input(std::make_unique<CEngine::Input::SdlInputBackend>(window));
     const Viewer::Actions actions = Viewer::RegisterActions(input);
 #ifdef CENGINE_ENABLE_AUDIO
@@ -357,10 +338,25 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
     }
 #endif
     CEngine::Entities::EntityFactory entity_factory;
-    entity_factory.Register<Viewer::PlayerEntity, Viewer::Generated::Player>("player", actions);
+    Viewer::GameCoordinator game(actions);
+    if (!game.RegisterEntityTypes(entity_factory))
+    {
+        std::cerr << "Failed to register viewer game entities.\n";
+        return 1;
+    }
     std::unique_ptr<CEngine::Scene::Scene> scene = CEngine::Assets::LoadScene(scene_path, assets, entity_factory);
     if (scene == nullptr)
     {
+        return 1;
+    }
+    Viewer::PlayerRequest local_player;
+    local_player.id = 1;
+    local_player.name = "LocalPlayer";
+    local_player.locally_controlled = true;
+    local_player.primary_view = true;
+    if (!game.AdoptOrAddPlayer(*scene, std::move(local_player)))
+    {
+        std::cerr << "Scene has neither an authored player nor a compatible player_spawn.\n";
         return 1;
     }
     Renderer::AmbientLighting ambient;
@@ -383,6 +379,7 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
 
     CEngine::Context context;
     context.assets = &assets;
+    context.animations = &animations;
     context.rendering = &renderer;
     context.input = &input;
 #ifdef CENGINE_ENABLE_AUDIO
@@ -416,7 +413,7 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
     }
     renderer.SetCameraAspectRatio(static_cast<float>(framebuffer_width) / static_cast<float>(framebuffer_height));
 #ifdef CENGINE_ENABLE_OPENGL
-    Viewer::PlayerEntity *player = ActivePlayer(*scene);
+    Viewer::PlayerEntity *player = game.PrimaryViewPlayer(*scene);
     bool ui_input_mode = true;
     bool show_tuning_panel = true;
     bool tab_was_down = false;
@@ -512,11 +509,6 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
         }
 
 #ifdef CENGINE_ENABLE_AUDIO
-        const Renderer::Camera &active_camera = renderer.ActiveCamera();
-        CEngine::Audio::Listener listener;
-        listener.position = active_camera.position;
-        listener.forward = active_camera.direction;
-        audio.SetListener(listener);
         audio.Update();
 #endif
 

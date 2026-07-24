@@ -1070,7 +1070,10 @@ Additional techniques use the evidence rules in
 ## Animation
 
 > **Status: detailed target contract.** Implement only when the active milestone
-> in `IMPLEMENTATION.md` promotes animation.
+> in `IMPLEMENTATION.md` promotes animation. The concrete ozz-animation
+> dependency, cooked-data migration, renderer boundary, and vertical gates are
+> defined in
+> [`../animation_requirements.md`](../animation_requirements.md).
 
 ### 1. Purpose
 

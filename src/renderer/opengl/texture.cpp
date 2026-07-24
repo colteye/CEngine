@@ -15,7 +15,7 @@
 
 #include "renderer/opengl/texture.h"
 
-#include "logging/logger.h"
+#include "log.h"
 
 #include <algorithm>
 #include <array>

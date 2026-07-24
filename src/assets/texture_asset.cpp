@@ -16,7 +16,7 @@
 #include "assets/texture_asset.h"
 
 #include "assets/reader.h"
-#include "logging/logger.h"
+#include "log.h"
 
 #include <algorithm>
 #include <array>

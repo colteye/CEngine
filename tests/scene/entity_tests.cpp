@@ -17,11 +17,17 @@
 #include "assets/scene_asset.h"
 #include "context.h"
 #include "entity/entity_factory.h"
+#include "entity/audio_entities.h"
+#include "entity/camera_entity.h"
+#include "entity/collider_entity.h"
 #include "entity/fog_entity.h"
 #include "entity/light_entity.h"
+#include "entity/logic_entities.h"
+#include "entity/marker_entities.h"
 #include "entity/post_process_entity.h"
 #include "entity/prop_entity.h"
 #include "entity/skybox_entity.h"
+#include "entity/trigger_entity.h"
 #include "input/input_system.h"
 #include "physics/physics_system.h"
 #include "renderer/render_system.h"
@@ -86,6 +92,37 @@ class CustomEntity final : public Entity
         elapsed += delta_seconds;
     }
     float elapsed = 0.0f;
+};
+
+class InputSinkEntity final : public Entity
+{
+  public:
+    [[nodiscard]] std::string_view Classname() const override
+    {
+        return "test_input_sink";
+    }
+    [[nodiscard]] bool AcceptsInput(std::string_view input) const override
+    {
+        return input == "Record" || Entity::AcceptsInput(input);
+    }
+    bool HandleInput(
+        CEngine::Context &context, const EntityInput &input) override
+    {
+        if (input.name != "Record")
+        {
+            return Entity::HandleInput(context, input);
+        }
+        ++received;
+        last_parameter = input.parameter;
+        last_source = input.source;
+        last_activator = input.activator;
+        return true;
+    }
+
+    std::uint32_t received = 0;
+    std::string last_parameter;
+    EntityHandle last_source;
+    EntityHandle last_activator;
 };
 
 /**
@@ -197,12 +234,154 @@ bool EnvironmentEntitiesOwnTheirFields()
     post_process.ssao_radius = 0.8f;
     return Expect(sky.Classname() == "skybox" && Near(sky.intensity, 1.5f),
                   "skybox should own its environment fields") &&
-           Expect(fog.Classname() == "exponential_height_fog" && Near(fog.density, 0.04f) &&
+           Expect(fog.Classname() == "fog" && Near(fog.density, 0.04f) &&
                       Near(fog.GetTransform().position.z, 2.0f),
                   "fog should use actor height as base height") &&
            Expect(post_process.Classname() == "post_process" && Near(post_process.exposure, 1.25f) &&
                       Near(post_process.ssao_radius, 0.8f),
                   "post-process entity should own the scene image settings");
+}
+
+bool BaseEntitySetOwnsEssentialRuntimeFields()
+{
+    Scene scene;
+    auto &camera =
+        scene.CreateEntity<CEngine::Entities::CameraEntity>("GameplayCamera");
+    camera.vertical_fov_radians = 1.1f;
+    auto &audio = scene.CreateEntity<CEngine::Entities::AudioSourceEntity>(
+        "AmbientLoop");
+    audio.looping = true;
+    auto &environment =
+        scene.CreateEntity<CEngine::Entities::AudioEnvironmentEntity>(
+            "RoomAudio");
+    environment.wet = 0.4f;
+    auto &collider =
+        scene.CreateEntity<CEngine::Entities::ColliderEntity>("WorldCollider");
+    collider.friction = 0.8f;
+    auto &trigger =
+        scene.CreateEntity<CEngine::Entities::TriggerEntity>("DoorTrigger");
+    trigger.fire_once = true;
+    auto &relay =
+        scene.CreateEntity<CEngine::Entities::LogicRelayEntity>("DoorRelay");
+    relay.fire_once = true;
+    auto &timer =
+        scene.CreateEntity<CEngine::Entities::LogicTimerEntity>("Pulse");
+    timer.interval_seconds = 2.0f;
+    auto &automatic =
+        scene.CreateEntity<CEngine::Entities::LogicAutoEntity>("Startup");
+    auto &marker =
+        scene.CreateEntity<CEngine::Entities::MarkerEntity>("PatrolPoint");
+    return Expect(camera.Classname() == "camera" &&
+                      Near(camera.vertical_fov_radians, 1.1f),
+                  "camera should own projection fields") &&
+           Expect(audio.Classname() == "audio_source" && audio.looping,
+                  "audio source should own playback fields") &&
+           Expect(environment.Classname() == "audio_environment" &&
+                      Near(environment.wet, 0.4f),
+                  "audio environment should own room fields") &&
+           Expect(collider.Classname() == "collider" &&
+                      Near(collider.friction, 0.8f),
+                  "collider should own body fields") &&
+           Expect(trigger.Classname() == "trigger_volume" &&
+                      trigger.fire_once,
+                  "trigger should own overlap behavior") &&
+           Expect(relay.Classname() == "logic_relay" && relay.fire_once,
+                  "relay should own fire-once behavior") &&
+           Expect(timer.Classname() == "logic_timer" &&
+                      Near(timer.interval_seconds, 2.0f),
+                  "timer should own interval behavior") &&
+           Expect(automatic.Classname() == "logic_auto" &&
+                      marker.Classname() == "marker",
+                  "startup and spatial marker entities should be concrete") &&
+           Expect(scene.EntityCount() == 9,
+                  "the essential base entity set should be constructible");
+}
+
+bool EntityConnectionsDispatchDelayParametersAndFireLimits()
+{
+    Scene scene;
+    auto &relay =
+        scene.CreateEntity<CEngine::Entities::LogicRelayEntity>("Relay");
+    auto &activator =
+        scene.CreateEntity<CEngine::Entities::MarkerEntity>("Activator");
+    auto &sink = scene.CreateEntity<InputSinkEntity>("Sink");
+    scene.AddConnection({
+        relay.GetHandle(),
+        sink.GetHandle(),
+        "OnTrigger",
+        "Record",
+        "fixed parameter",
+        0.1f,
+        2,
+    });
+    CEngine::Context context;
+    scene.Activate(context);
+    scene.DispatchInput(
+        relay.GetHandle(), "Trigger", activator.GetHandle(),
+        activator.GetHandle(), "ignored parameter");
+    scene.Update(context, 0.05f);
+    if (!Expect(sink.received == 0,
+                "delayed input should not dispatch early"))
+    {
+        return false;
+    }
+    scene.Update(context, 0.05f);
+    if (!Expect(sink.received == 1 &&
+                    sink.last_parameter == "fixed parameter" &&
+                    sink.last_source == relay.GetHandle() &&
+                    sink.last_activator == activator.GetHandle(),
+                "connection should preserve source, activator, and parameter"))
+    {
+        return false;
+    }
+    scene.DispatchInput(
+        relay.GetHandle(), "Trigger", {}, activator.GetHandle());
+    scene.Update(context, 0.1f);
+    scene.DispatchInput(
+        relay.GetHandle(), "Trigger", {}, activator.GetHandle());
+    scene.Update(context, 0.1f);
+    if (!Expect(sink.received == 2,
+                "connection fire limit should suppress later emissions"))
+    {
+        return false;
+    }
+    scene.Stop();
+    scene.Activate(context);
+    scene.DispatchInput(
+        relay.GetHandle(), "Trigger", {}, activator.GetHandle());
+    scene.Update(context, 0.1f);
+    return Expect(
+        sink.received == 3,
+        "scene reactivation should reset relay and connection fire state");
+}
+
+bool CameraEntityOwnsSceneCameraSelection()
+{
+    Scene scene;
+    auto &first =
+        scene.CreateEntity<CEngine::Entities::CameraEntity>("FirstCamera");
+    auto &second =
+        scene.CreateEntity<CEngine::Entities::CameraEntity>("SecondCamera");
+    first.GetTransform().position = {1.0f, 2.0f, 3.0f};
+    first.GetTransform().UpdateWorldMatrix();
+    SceneSettings settings;
+    settings.active_entity = first.GetHandle();
+    scene.SetSettings(settings);
+    CEngine::Renderer::RenderSystem rendering;
+    CEngine::Context context;
+    context.rendering = &rendering;
+    scene.Activate(context);
+    if (!Expect(rendering.ActiveCamera().position ==
+                    first.GetTransform().position,
+                "active camera entity should publish to the renderer"))
+    {
+        return false;
+    }
+    scene.DispatchInput(
+        second.GetHandle(), "Activate", first.GetHandle(),
+        first.GetHandle());
+    return Expect(scene.Settings().active_entity == second.GetHandle(),
+                  "Activate input should change the scene camera");
 }
 
 /**
@@ -386,7 +565,10 @@ int main(int argc, char **argv)
 #endif
     }
     return GenerationalSlotsRejectStaleHandles() && EntityClassesOwnTheirFields() &&
-                   EnvironmentEntitiesOwnTheirFields() && SlotLookupWorks() &&
+                   EnvironmentEntitiesOwnTheirFields() &&
+                   BaseEntitySetOwnsEssentialRuntimeFields() &&
+                   EntityConnectionsDispatchDelayParametersAndFireLimits() &&
+                   CameraEntityOwnsSceneCameraSelection() && SlotLookupWorks() &&
                    LightModesHaveExplicitRuntimeDirectSemantics() && LightRendererRecordFollowsEntityLifetime() &&
                    GameLayerCanAddEntitiesAndDriveLifecycle() && InputSystemOwnsPlatformBackend()
                ? 0

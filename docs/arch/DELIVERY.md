@@ -249,6 +249,7 @@ Dependencies are judged by total owned code and failure risk avoided:
 | Vulkan backend | build only when selected | it does not gate the active milestone backend or create runtime selection machinery |
 | GameNetworkingSockets or ENet | evaluate at M2 | transport supplies tested connection/reliability mechanics while CEngine retains command, snapshot, and replication meaning |
 | miniaudio | use without device I/O | decoding, mixing, buses, effects, and 3D spatialization stay behind CEngine audio commands while SDL3 owns platform devices |
+| ozz-animation | use for the promoted M3 animation slice | compressed runtime clips, sampling, two-pose blending, and local-to-model evaluation stay behind CEngine assets and `AnimationSystem`; CEngine owns playback policy, events, handles, budgets, and GPU skinning |
 
 Dependencies are pinned to immutable revisions or vendored snapshots. Unused
 examples, tests, tools, and backends stay disabled. Third-party types stop at

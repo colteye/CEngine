@@ -35,8 +35,9 @@ The add-on uses native Blender data whenever it represents the same concept:
 | `prop` | mesh | geometry, materials, transform, render visibility |
 | `light` | light | type, color, energy, range, cone/area shape, shadows |
 | `player` | camera | transform, vertical field of view, near/far clip |
+| `player_spawn` | empty | team, spawn group, priority, clearance radius, transform |
 | `skybox` | empty | HDR panorama plus engine settings |
-| `exponential_height_fog` | empty | schema-defined fog settings |
+| `fog` | empty | schema-defined fog settings |
 | `post_process` | empty | schema-defined presentation settings |
 | `physics_constraint` | empty | two physics-enabled prop references, anchors, limits, springs, and optional motor |
 | other game entity | empty | every schema field and transform |

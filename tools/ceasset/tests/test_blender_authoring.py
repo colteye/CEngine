@@ -65,13 +65,23 @@ class BlenderAuthoringTests(unittest.TestCase):
         """TODO: Describe `test_native_blender_types_cover_visual_entities`."""
         self.assertEqual(native_object_type("prop"), "MESH")
         self.assertEqual(native_object_type("light"), "LIGHT")
+        self.assertEqual(native_object_type("camera"), "CAMERA")
         self.assertEqual(native_object_type("player"), "CAMERA")
+        self.assertEqual(native_object_type("audio_source"), "SPEAKER")
+        self.assertEqual(native_object_type("collider"), "MESH")
+        self.assertEqual(native_object_type("trigger_volume"), "MESH")
+        self.assertEqual(native_object_type("player_spawn"), "EMPTY")
         self.assertEqual(native_object_type("post_process"), "EMPTY")
 
     def test_native_mesh_and_light_objects_are_entities_without_metadata(self) -> None:
         """TODO: Describe `test_native_mesh_and_light_objects_are_entities_without_metadata`."""
         self.assertEqual(entity_classname(FakeObject("Mesh", "MESH")), "prop")
         self.assertEqual(entity_classname(FakeObject("Sun", "LIGHT")), "light")
+        self.assertEqual(
+            entity_classname(FakeObject("Camera", "CAMERA")), "camera")
+        self.assertEqual(
+            entity_classname(FakeObject("Sound", "SPEAKER")),
+            "audio_source")
         self.assertEqual(entity_classname(FakeObject("Marker", "EMPTY")), "")
 
     def test_schema_initialization_uses_authored_property_names_and_enum_labels(self) -> None:

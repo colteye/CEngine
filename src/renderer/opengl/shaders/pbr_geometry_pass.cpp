@@ -127,6 +127,7 @@ void PBRGeometryPass::InitializeParameters()
     lightmap_scale_offset_id_ = glGetUniformLocation(shader_id, "lightmap_scale_offset");
     lightmap_rgbm_range_id_ = glGetUniformLocation(shader_id, "lightmap_rgbm_range");
     has_lightmap_id_ = glGetUniformLocation(shader_id, "has_lightmap");
+    skinning_.Initialize(shader_id);
 }
 
 } // namespace CEngine::Renderer::OpenGL

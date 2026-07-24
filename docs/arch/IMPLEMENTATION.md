@@ -105,10 +105,23 @@ owns entity property layouts. The supported field vocabulary includes semantic
 `asset`, `asset_list`, and `entity` references; tooling validates those
 references before writing.
 
+The engine-owned library is the 15 concrete classes documented in
+[`../entity_library.md`](../entity_library.md). Entity schemas declare their
+supported inputs and outputs. Connections carry caller/activator identity,
+parameter, simulation-time delay, and optional fire count; the scene dispatch
+queue is bounded and deterministic. Physics bodies and characters register
+their entity owner so normalized contacts reach trigger/collider behavior on
+the simulation thread.
+
 `Scene` owns entity objects in generation-checked slots. Native entity classes
 inherit their generated property record directly, so there is no parallel
 handwritten property type. Activation initializes in scene order and rolls
 back initialized entities in reverse order on failure. Shutdown is symmetric.
+Games create live entities through `Scene::CreateEntity`; constructor
+arguments establish runtime identity and the initial transform before an
+active scene calls `Initialize`. Player spawn points and their selection
+policy remain game-owned because team, player-type, checkpoint, and authority
+semantics are not engine concepts.
 
 ## Rendering
 
@@ -186,8 +199,10 @@ constraints.
 
 The virtual character path supports Z-up capsules, slopes, stairs, floor
 sticking, gravity, grounding, moving-ground velocity, penetration recovery, and
-height changes. The viewer player uses this path when physics is available and
-falls back to transform movement in tests or tools without physics.
+height changes. Its inner body gives ordinary queries and sensor contacts a
+generation-checked character identity. The viewer player registers that
+character with its scene entity and falls back to transform movement in tests
+or tools without physics.
 
 ## Input
 
@@ -241,9 +256,14 @@ matrix and exclusions.
 
 - [`STATUS.md`](STATUS.md): current initiative, inventory, remaining work, and
   verified commands.
+- [`../animation_requirements.md`](../animation_requirements.md): proposed
+  ozz-animation integration, cooked-data contract, runtime ownership, renderer
+  boundary, and promotion gates.
 - [`../physics_requirements.md`](../physics_requirements.md): physics product
   contract and support matrix.
 - [`../audio_requirements.md`](../audio_requirements.md): audio product contract
   and support matrix.
+- [`../entity_library.md`](../entity_library.md): implemented base entity set,
+  authoring mapping, and deliberate exclusions.
 - [`DELIVERY.md`](DELIVERY.md): historical milestone/performance references.
 - `CORE.md`, `SYSTEMS.md`, `NETWORK.md`: complete target design references.

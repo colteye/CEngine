@@ -16,7 +16,9 @@ Author:
 from __future__ import annotations
 
 import time
+import shutil
 from dataclasses import dataclass
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable
 
@@ -33,7 +35,9 @@ from ceassetlib.collection_export import (
     collection_payload,
     write_collection_asset,
 )
-from ceassetlib.formats import AssetType, asset_type_for_extension
+from ceassetlib.formats import (
+    AssetType, TARGET_AUDIO_EXTENSIONS, asset_type_for_extension,
+)
 from ceassetlib.game_schema import load_bundled_game
 from ceassetlib.blender_scene import blender_scene_settings, scene_description
 from ceassetlib.scene_export import write_scene
@@ -78,6 +82,7 @@ class ExportResult:
     scenes: int = 0
     physics: int = 0
     particles: int = 0
+    audio: int = 0
 
 
 @dataclass(frozen=True)
@@ -86,6 +91,47 @@ class TextureExport:
 
     source: Path
     output: Path
+
+
+@dataclass(frozen=True)
+class AudioExport:
+    """A passthrough audio file referenced by a Blender speaker entity."""
+
+    source: Path
+    output: Path
+    object_name: str
+
+
+def export_speaker_audio(
+    blender: object,
+    blend_source: Path,
+    output_root: Path,
+    objects: list[object],
+) -> list[AudioExport]:
+    """Copy native Blender speaker sounds into the compiled asset tree."""
+    exports: list[AudioExport] = []
+    output_dir = output_dir_for_source(
+        blend_source, output_root) / "audio"
+    for obj in objects:
+        if getattr(obj, "type", "") != "SPEAKER":
+            continue
+        sound = getattr(getattr(obj, "data", None), "sound", None)
+        filepath = str(getattr(sound, "filepath", "") or "")
+        if not filepath:
+            raise RuntimeError(
+                f"audio source has no Blender sound assigned: {obj.name}")
+        source = Path(blender.path.abspath(filepath)).absolute()
+        if source.suffix.lower() not in TARGET_AUDIO_EXTENSIONS or \
+                not source.is_file():
+            raise RuntimeError(
+                f"audio source must reference WAV, FLAC, MP3, or Ogg: "
+                f"{obj.name}")
+        output = output_dir / (
+            f"{clean_asset_filename(str(obj.name))}{source.suffix.lower()}")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, output)
+        exports.append(AudioExport(source, output, str(obj.name)))
+    return exports
 
 
 def log(message: str) -> None:
@@ -984,6 +1030,7 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         asset_path,
         log,
         source_hash,
+        getattr(blender.context, "scene", None),
     )
     log(f"Animation export complete: {len(animation_outputs)} .canim in {elapsed(phase_start)}")
 
@@ -992,9 +1039,12 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
     scene_objects = objects if is_scene else []
     skybox_outputs: dict[str, Path] = {}
     skybox_texture_outputs: list[TextureExport] = []
+    audio_exports: list[AudioExport] = []
     if is_scene:
         skybox_outputs, skybox_texture_outputs = export_skybox_panoramas(
             blender, source, root, scene_objects, log)
+        audio_exports = export_speaker_audio(
+            blender, source, root, scene_objects)
     if is_scene:
         lightmap_placements, lightmap_outputs = load_lightmap_bindings(
             scene_objects,
@@ -1016,6 +1066,9 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
     render_objects = [
         obj for obj in objects
         if str(getattr(obj, "name", "")) not in collision_helper_names and
+        str(obj.get("ce_classname", "") if callable(
+            getattr(obj, "get", None)) else "") not in {
+                "collider", "trigger_volume"} and
         not (
             callable(getattr(obj, "get", None)) and
             bool(obj.get("ce_collision_helper", False))
@@ -1074,10 +1127,24 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
             scene_objects, mesh_outputs_by_name,
             material_outputs_by_name, asset_path,
             lightmap_placements, skybox_outputs, physics_outputs_by_name,
+            {audio.object_name: audio.output for audio in audio_exports},
             resolve_asset_path=lambda value: Path(
-                blender.path.abspath(value)).absolute())
-        description = type(description)(description.entities, blender_scene_settings(blender),
-                                        description.connections)
+                blender.path.abspath(value)).absolute(),
+            skeleton_outputs=skeleton_outputs_by_name,
+            animation_outputs=animation_outputs_by_armature)
+        settings = blender_scene_settings(blender)
+        active_camera = getattr(getattr(blender, "context", None), "scene", None)
+        active_camera = getattr(active_camera, "camera", None)
+        if active_camera is not None:
+            active_name = str(getattr(active_camera, "name", ""))
+            active_index = next((
+                index for index, entity in enumerate(description.entities)
+                if entity.name == active_name
+            ), None)
+            if active_index is not None:
+                settings = replace(settings, active_entity=active_index)
+        description = type(description)(
+            description.entities, settings, description.connections)
         write_scene(scene_output, description, asset_path(scene_output), source_hash)
         scene_outputs.append(scene_output)
         log(f"Scene export complete: {scene_output}")
@@ -1103,7 +1170,7 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         + [animation.output for animation in animation_outputs]
         + [physics.output for physics in physics_outputs]
         + [particle.output for particle in particle_outputs]
-		+ lightmap_outputs,
+        + lightmap_outputs,
         log,
         source_hash,
     )
@@ -1123,6 +1190,14 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
             log,
             source_fingerprint(texture_output.source),
         )
+    for audio_output in audio_exports:
+        register_outputs(
+            project_root,
+            audio_output.source,
+            [audio_output.output],
+            log,
+            source_fingerprint(audio_output.source),
+        )
 
     result = ExportResult(
         len(collection_outputs),
@@ -1135,6 +1210,7 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         len(scene_outputs),
         len(physics_outputs),
         len(particle_outputs),
+        len(audio_exports),
     )
     log(f"Export finished: {export_summary(result, root)} in {elapsed(export_start)}")
     return result
@@ -1178,6 +1254,6 @@ def export_summary(result: ExportResult, output_root: Path | None) -> str:
         f"Exported {result.scenes} .cscene, {result.collections} .casset, {result.meshes} .cmesh, "
         f"{result.materials} .cmat, {result.skeletons} .cskel, "
         f"{result.animations} .canim, {result.physics} .cphys, "
-        f"{result.particles} .cparticle, and "
+        f"{result.particles} .cparticle, {result.audio} audio, and "
         f"{result.textures} .dds assets{destination}"
     )

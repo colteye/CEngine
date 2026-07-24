@@ -50,6 +50,8 @@ class FakeObject:
         self.material_slots = [types.SimpleNamespace(material=material) for material in materials]
         self.instance_collection = instance_collection
         self.props = props or {}
+        self.parent = None
+        self.modifiers = ()
 
     def get(self, key: str, default=None):
         """TODO: Describe `get`.
@@ -131,6 +133,27 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertEqual(prop.values["lightmap_scale"], (0.5, 0.5))
         self.assertEqual(prop.values["lightmap_offset"], (0.5, 0.0))
         self.assertEqual(prop.values["lightmap_rgbm_range"], 12.0)
+
+    def test_skinned_mesh_receives_skeleton_and_default_animation(self) -> None:
+        armature = FakeObject("Rig", "ARMATURE")
+        obj = FakeObject("Character", "MESH")
+        obj.parent = armature
+
+        scene = scene_description(
+            (obj, armature),
+            {"Character": [(Path("Character.cmesh"), "Character")]},
+            {"Character": Path("Character.cmat")},
+            lambda path: path.as_posix(),
+            skeleton_outputs={"Rig": Path("Rig.cskel")},
+            animation_outputs={
+                "Rig": [Path("Rig_Walk.canim"), Path("Rig_Idle.canim")]},
+        )
+
+        prop = scene.entities[0].data
+        self.assertEqual(prop.values["skeleton"].path, "Rig.cskel")
+        self.assertEqual(prop.values["animation"].path, "Rig_Idle.canim")
+        self.assertEqual(prop.values["animation_playback_rate"], 1.0)
+        self.assertTrue(prop.values["animation_looping"])
 
     def test_scene_occluder_becomes_shadow_only_prop_without_lightmap(self) -> None:
         """TODO: Describe `test_scene_occluder_becomes_shadow_only_prop_without_lightmap`."""
@@ -246,6 +269,119 @@ class BlenderSceneTests(unittest.TestCase):
         self.assertEqual(player.values["near_clip"], 0.25)
         self.assertEqual(player.values["far_clip"], 750.0)
 
+    def test_player_spawn_exports_game_owned_selection_metadata(self) -> None:
+        spawn = FakeObject("RedHigh", "EMPTY", props={
+            "ce_classname": "player_spawn",
+            "ce_team": "Red",
+            "ce_spawn_group": 7,
+            "ce_spawn_priority": 10,
+            "ce_spawn_clearance_radius": 1.5,
+        })
+
+        scene = scene_description(
+            (spawn,), {}, {}, lambda path: path.as_posix())
+
+        entity = scene.entities[0].data
+        self.assertEqual(entity.classname, "player_spawn")
+        self.assertEqual(entity.values["team"], 1)
+        self.assertEqual(entity.values["spawn_group"], 7)
+        self.assertEqual(entity.values["priority"], 10)
+        self.assertEqual(entity.values["clearance_radius"], 1.5)
+
+    def test_base_camera_uses_native_blender_camera_settings(self) -> None:
+        camera = types.SimpleNamespace(
+            angle_y=0.9, clip_start=0.2, clip_end=600.0)
+        scene = scene_description(
+            (FakeObject("Camera", "CAMERA", data=camera),),
+            {}, {}, lambda path: path.as_posix())
+
+        entity = scene.entities[0].data
+        self.assertEqual(entity.classname, "camera")
+        self.assertEqual(entity.values["vertical_fov_radians"], 0.9)
+        self.assertEqual(entity.values["near_clip"], 0.2)
+        self.assertEqual(entity.values["far_clip"], 600.0)
+
+    def test_collider_and_trigger_are_physics_only_mesh_entities(self) -> None:
+        objects = (
+            FakeObject("Blocker", "MESH", props={
+                "ce_classname": "collider",
+                "ce_physics_motion": "Dynamic",
+                "ce_mass": 3.0,
+            }),
+            FakeObject("Trigger", "MESH", props={
+                "ce_classname": "trigger_volume",
+                "ce_kinematic": True,
+                "ce_fire_once": True,
+            }),
+        )
+        scene = scene_description(
+            objects, {}, {}, lambda path: path.as_posix(),
+            physics_outputs={
+                "Blocker": Path("Blocker.cphys"),
+                "Trigger": Path("Trigger.cphys"),
+            })
+
+        self.assertEqual(
+            [entity.data.classname for entity in scene.entities],
+            ["collider", "trigger_volume"])
+        self.assertEqual(scene.entities[0].data.values["motion"], 1)
+        self.assertEqual(scene.entities[0].data.values["mass"], 3.0)
+        self.assertTrue(scene.entities[1].data.values["kinematic"])
+        self.assertTrue(scene.entities[1].data.values["fire_once"])
+
+    def test_speaker_exports_native_audio_source_fields(self) -> None:
+        speaker = types.SimpleNamespace(
+            volume=0.7,
+            pitch=1.2,
+            distance_reference=2.0,
+            distance_max=40.0,
+            cone_angle_inner=1.0,
+            cone_angle_outer=2.0,
+            cone_volume_outer=0.25,
+        )
+        scene = scene_description(
+            (FakeObject("Alarm", "SPEAKER", data=speaker),),
+            {}, {}, lambda path: path.as_posix(),
+            audio_outputs={"Alarm": Path("audio/Alarm.ogg")})
+
+        audio = scene.entities[0].data
+        self.assertEqual(audio.classname, "audio_source")
+        self.assertEqual(audio.values["audio"].path, "audio/Alarm.ogg")
+        self.assertEqual(audio.values["gain"], 0.7)
+        self.assertEqual(audio.values["pitch"], 1.2)
+        self.assertEqual(audio.values["min_distance"], 2.0)
+        self.assertEqual(audio.values["max_distance"], 40.0)
+
+    def test_blender_connections_export_schema_checked_io_edges(self) -> None:
+        relay = FakeObject("Relay", "EMPTY", props={
+            "ce_classname": "logic_relay",
+            "ce_connections": ({
+                "event": "OnTrigger",
+                "target": "Timer",
+                "action": "Fire",
+                "parameter": "door",
+                "delay_seconds": 0.25,
+                "times_to_fire": 1,
+            },),
+        })
+        timer = FakeObject("Timer", "EMPTY", props={
+            "ce_classname": "logic_timer",
+        })
+        scene = scene_description(
+            (timer, relay), {}, {}, lambda path: path.as_posix())
+
+        self.assertEqual(len(scene.connections), 1)
+        connection = scene.connections[0]
+        self.assertEqual(
+            scene.entities[connection.source_entity].name, "Relay")
+        self.assertEqual(
+            scene.entities[connection.target_entity].name, "Timer")
+        self.assertEqual(connection.event, "OnTrigger")
+        self.assertEqual(connection.action, "Fire")
+        self.assertEqual(connection.parameter, "door")
+        self.assertEqual(connection.delay_seconds, 0.25)
+        self.assertEqual(connection.times_to_fire, 1)
+
     def test_custom_entity_asset_fields_use_the_packaged_schema(self) -> None:
         """TODO: Describe `test_custom_entity_asset_fields_use_the_packaged_schema`."""
         game = GameSchema(
@@ -287,7 +423,7 @@ class BlenderSceneTests(unittest.TestCase):
             FakeObject("Sky", "EMPTY", props={
                 "ce_classname": "skybox", "ce_intensity": 1.5, "ce_rotation_radians": 0.25}),
             FakeObject("Fog", "EMPTY", props={
-                "ce_classname": "exponential_height_fog", "ce_fog_density": 0.04,
+                "ce_classname": "fog", "ce_fog_density": 0.04,
                 "ce_height_falloff": 0.3, "ce_start_distance": 2.0,
                 "ce_max_opacity": 0.8, "ce_cutoff_distance": 500.0,
                 "ce_inscattering_color": (0.4, 0.5, 0.6)}),

@@ -19,6 +19,9 @@
 #include "renderer/mesh_instance.h"
 
 #include <cstdint>
+#include <span>
+
+#include <glm/mat4x4.hpp>
 
 namespace CEngine::Window
 {
@@ -118,6 +121,8 @@ class IRenderBackend
      */
     virtual void UpdateMeshInstance(std::uint32_t slot, const glm::mat4 &transform, const Bounds &world_bounds,
                                     std::uint32_t flags) = 0;
+    virtual bool UpdateSkinningPalette(std::uint32_t slot,
+                                       std::span<const glm::mat4> palette) = 0;
 };
 
 } // namespace CEngine::Renderer

@@ -32,6 +32,7 @@ add_custom_target(CEngineViewerSchemas
 
 set(VIEWER_GAME_SOURCES
     "${VIEWER_GENERATED_HEADER}"
+    game/game_coordinator.cpp
     entity/player_entity.cpp
     input/actions.cpp
 )

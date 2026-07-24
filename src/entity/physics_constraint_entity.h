@@ -52,6 +52,7 @@ class PhysicsConstraintEntity final : public Scene::Entity,
     void Shutdown(Context &context) override;
 
   private:
+    void OnEnabledChanged(Context &context, bool enabled) override;
     PhysicsConstraintHandle constraint_;
 };
 

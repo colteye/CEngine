@@ -258,13 +258,14 @@ class FakeVertexGroup:
 class FakeBone:
     """TODO: Describe `FakeBone`."""
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, parent: "FakeBone | None" = None) -> None:
         """TODO: Describe `__init__`.
 
         Args:
             name: TODO: Describe this parameter.
         """
         self.name = name
+        self.parent = parent
 
 
 class FakeArmatureData:
@@ -272,7 +273,8 @@ class FakeArmatureData:
 
     def __init__(self) -> None:
         """TODO: Describe `__init__`."""
-        self.bones = [FakeBone("root"), FakeBone("spine")]
+        root = FakeBone("root")
+        self.bones = [root, FakeBone("spine", root)]
 
 
 class FakeArmature:

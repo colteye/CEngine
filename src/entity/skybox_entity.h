@@ -59,6 +59,7 @@ class SkyboxEntity final : public Scene::Entity, public Generated::EngineEntitie
     void Shutdown(Context &context) override;
 
   private:
+    void OnEnabledChanged(Context &context, bool enabled) override;
     std::shared_ptr<const Renderer::Texture> panorama_;
 };
 

@@ -15,7 +15,7 @@
 
 #include "assets/particle_asset.h"
 
-#include "logging/logger.h"
+#include "log.h"
 
 namespace CEngine::Assets
 {

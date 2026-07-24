@@ -16,6 +16,9 @@
 #ifndef CENGINE_ENTITY_PROP_ENTITY_H
 #define CENGINE_ENTITY_PROP_ENTITY_H
 
+#include "animation/animation_system.h"
+#include "assets/animation_asset.h"
+#include "assets/skeleton_asset.h"
 #include "engine/engine_entities.generated.h"
 #include "entity/entity.h"
 #include "physics/physics_types.h"
@@ -45,6 +48,8 @@ class PropEntity final : public Scene::Entity, public Generated::EngineEntities:
      * @return TODO: Describe the return value.
      */
     [[nodiscard]] std::string_view Classname() const override;
+    [[nodiscard]] bool AcceptsInput(std::string_view input) const override;
+    bool HandleInput(Context &context, const Scene::EntityInput &input) override;
     /**
      * @brief TODO: Describe Initialize.
      *
@@ -99,9 +104,13 @@ class PropEntity final : public Scene::Entity, public Generated::EngineEntities:
      * @return TODO: Describe the return value.
      */
     [[nodiscard]] std::uint32_t BuildMeshInstanceFlags() const;
+    void UpdatePresentation(Context &context);
 
     Renderer::MeshInstanceHandle renderer_mesh_instance_;
     PhysicsBodyHandle physics_body_;
+    std::shared_ptr<const Assets::Skeleton> skeleton_asset_;
+    std::shared_ptr<const Assets::Animation> animation_asset_;
+    Animations::AnimationInstanceHandle animation_instance_;
 };
 
 } // namespace CEngine::Entities

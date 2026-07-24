@@ -26,6 +26,7 @@ sys.path.insert(0, str(ROOT.parent / "blender_addon"))
 from ceassetlib.assetfile import make_asset_desc, write_binary_asset
 from ceassetlib.formats import AssetType
 from ceassetlib.game_schema import load_bundled_game, make_schema_entity
+from ceassetlib.ids import fnv1a
 from ceassetlib.scene_export import (
     Reference, EntityConnection, EntityDescription,
     SceneDescription, Transform, write_scene,
@@ -57,6 +58,7 @@ def main() -> int:
     }
     mesh_payload = pack_record(game, "mesh", {
         "flags": 0,
+        "skeleton_guid": bytes(16),
         "bounds_min": (0.0, 0.0, 0.0),
         "bounds_max": (1.0, 1.0, 0.0),
         "lods": [
@@ -90,13 +92,19 @@ def main() -> int:
             shape_type=ShapeType.BOX,
             half_extents=(1.0, 2.0, 3.0))))
     write_binary_asset(args.output.parent / "python_fixture.cphys", physics_desc)
+    identity_transform = {
+        "translation": (0.0, 0.0, 0.0),
+        "rotation": (0.0, 0.0, 0.0, 1.0),
+        "scale": (1.0, 1.0, 1.0),
+    }
     skeleton_desc = make_asset_desc(
         AssetType.SKELETON, "python_fixture.cskel", 0,
         pack_record(game, "skeleton", {
             "name": "FixtureRig",
             "bones": [{
                 "name": "Root", "parent": -1,
-                "armature_from_bone": (
+                "rest": identity_transform,
+                "joint_from_armature_bind": (
                     1.0, 0.0, 0.0, 0.0,
                     0.0, 1.0, 0.0, 0.0,
                     0.0, 0.0, 1.0, 0.0,
@@ -111,11 +119,20 @@ def main() -> int:
     animation_desc = make_asset_desc(
         AssetType.ANIMATION, "python_fixture.canim", 0,
         pack_record(game, "animation", {
-            "name": "Idle", "skeleton": skeleton_ref, "fps": 24.0,
-            "start": 0.0, "end": 1.0,
-            "tracks": [{"path": "Root.location", "component": 0, "keys": [
-                {"frame": 0.0, "value": 0.0, "interpolation": 1},
-                {"frame": 1.0, "value": 1.0, "interpolation": 1},
+            "name": "Idle",
+            "skeleton": skeleton_ref,
+            "duration": 1.0,
+            "events": [{
+                "time": 0.25,
+                "id": fnv1a(b"Footstep"),
+                "name": "Footstep",
+            }],
+            "tracks": [{"samples": [
+                {"time": 0.0, "value": identity_transform},
+                {"time": 1.0, "value": {
+                    **identity_transform,
+                    "translation": (1.0, 0.0, 0.0),
+                }},
             ]}],
         }))
     write_binary_asset(args.output.parent / "python_fixture.canim", animation_desc)
@@ -197,7 +214,7 @@ def main() -> int:
     ), name="SceneLook")
     write_scene(args.output, SceneDescription(
         (entity, target, prop, anchor, constraint, post_process),
-        connections=(EntityConnection(0, "OnReady", 1, "Enable"),)),
+        connections=(EntityConnection(0, "OnEnabled", 1, "Enable"),)),
         "tests/python_fixture.cscene")
     return 0
 

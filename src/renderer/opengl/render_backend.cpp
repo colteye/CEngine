@@ -395,6 +395,17 @@ void RenderBackend::Shutdown()
     DestroyFrameResources();
     shadow_system_.Destroy();
 
+    for (DrawItem &item : draw_items_)
+    {
+        if (item.joint_palette_texture != 0)
+        {
+            glDeleteTextures(1, &item.joint_palette_texture);
+        }
+        if (item.joint_palette_buffer != 0)
+        {
+            glDeleteBuffers(1, &item.joint_palette_buffer);
+        }
+    }
     draw_items_.clear();
     camera_distance_squared_.clear();
     render_queues_.ClearAndReserve(0);
@@ -533,6 +544,43 @@ void RenderBackend::UpdateMeshInstance(std::uint32_t slot, const glm::mat4 &tran
     draw_items_[slot].flags = flags;
 }
 
+bool RenderBackend::UpdateSkinningPalette(
+    std::uint32_t slot, std::span<const glm::mat4> palette)
+{
+    if (slot >= draw_items_.size() || draw_items_[slot].mesh == nullptr ||
+        !draw_items_[slot].mesh->skinned || palette.empty() ||
+        palette.size() > 1024u)
+    {
+        return false;
+    }
+    DrawItem &item = draw_items_[slot];
+    while (glGetError() != GL_NO_ERROR)
+    {
+    }
+    if (item.joint_palette_buffer == 0)
+    {
+        glGenBuffers(1, &item.joint_palette_buffer);
+    }
+    if (item.joint_palette_texture == 0)
+    {
+        glGenTextures(1, &item.joint_palette_texture);
+    }
+    glBindBuffer(GL_TEXTURE_BUFFER, item.joint_palette_buffer);
+    glBufferData(GL_TEXTURE_BUFFER,
+                 static_cast<GLsizeiptr>(palette.size_bytes()),
+                 palette.data(), GL_STREAM_DRAW);
+    glBindTexture(GL_TEXTURE_BUFFER, item.joint_palette_texture);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, item.joint_palette_buffer);
+    glBindTexture(GL_TEXTURE_BUFFER, 0);
+    glBindBuffer(GL_TEXTURE_BUFFER, 0);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        return false;
+    }
+    item.joint_count = static_cast<std::uint32_t>(palette.size());
+    return true;
+}
+
 /**
  * @brief TODO: Describe RenderBackend::RemoveMeshInstance.
  *
@@ -564,6 +612,14 @@ void RenderBackend::RemoveMeshInstance(std::uint32_t slot)
     if (draw_items_[slot].material != nullptr)
     {
         RemoveMaterial(draw_items_[slot].material);
+    }
+    if (draw_items_[slot].joint_palette_texture != 0)
+    {
+        glDeleteTextures(1, &draw_items_[slot].joint_palette_texture);
+    }
+    if (draw_items_[slot].joint_palette_buffer != 0)
+    {
+        glDeleteBuffers(1, &draw_items_[slot].joint_palette_buffer);
     }
     draw_items_[slot] = {};
 }
@@ -606,6 +662,12 @@ MeshResources RenderBackend::UploadMesh(const Mesh &mesh)
                           reinterpret_cast<void *>(offsetof(MeshVertex, lightmap_uv)));
     glEnableVertexAttribArray(3);
     glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void *>(offsetof(MeshVertex, tangent)));
+    glEnableVertexAttribArray(5);
+    glVertexAttribIPointer(5, 4, GL_UNSIGNED_SHORT, stride,
+                          reinterpret_cast<void *>(offsetof(MeshVertex, joints)));
+    glEnableVertexAttribArray(6);
+    glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, stride,
+                          reinterpret_cast<void *>(offsetof(MeshVertex, weights)));
 
     glGenBuffers(1, &buffers.index_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers.index_buffer);
@@ -869,6 +931,10 @@ void RenderBackend::BuildRenderQueues()
         {
             continue;
         }
+        if (item.mesh != nullptr && item.mesh->skinned && item.joint_count == 0u)
+        {
+            continue;
+        }
         if ((item.flags & MeshInstanceFlagVisible) == 0)
         {
             continue;
@@ -948,6 +1014,8 @@ void RenderBackend::RenderGeometryPass()
                                                  item.lightmap_tex);
         shader_passes_.pbr_geometry->UpdateObject(item.transform, *item.material, item.lightmap_scale,
                                                   item.lightmap_offset, item.lightmap_rgbm_range);
+        shader_passes_.pbr_geometry->UpdateSkinning(
+            item.joint_palette_texture, item.joint_count);
         Draw(item);
     }
     glBindVertexArray(0);
@@ -1275,6 +1343,7 @@ void RenderBackend::RenderForwardQueue(const std::vector<uint32_t> &queue, bool 
         shader->SetTextures(item.albedo_tex, item.normal_tex, item.metallic_roughness_ao_tex, item.lightmap_tex);
         shader->UpdateObject(item.transform, *item.material, item.lightmap_scale, item.lightmap_offset,
                              item.lightmap_rgbm_range);
+        shader->UpdateSkinning(item.joint_palette_texture, item.joint_count);
         Draw(item);
     }
 

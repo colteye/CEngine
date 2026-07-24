@@ -174,15 +174,27 @@ def _new_entity_object(context, classname: str):
         context.collection.objects.link(obj)
         obj.location = context.scene.cursor.location
         _select_only(context, obj)
+    elif object_type == "SPEAKER":
+        data = bpy.data.speakers.new(name)
+        obj = bpy.data.objects.new(name, data)
+        context.collection.objects.link(obj)
+        obj.location = context.scene.cursor.location
+        _select_only(context, obj)
     else:
         obj = bpy.data.objects.new(name, None)
         context.collection.objects.link(obj)
         obj.location = context.scene.cursor.location
         obj.empty_display_type = {
             "skybox": "SPHERE",
-            "exponential_height_fog": "CUBE",
+            "fog": "CUBE",
             "post_process": "CIRCLE",
             "physics_constraint": "ARROWS",
+            "logic_relay": "ARROWS",
+            "logic_timer": "CIRCLE",
+            "logic_auto": "CIRCLE",
+            "player_spawn": "CONE",
+            "marker": "PLAIN_AXES",
+            "audio_environment": "SPHERE",
         }.get(classname, "PLAIN_AXES")
         obj.empty_display_size = 1.0
         _select_only(context, obj)
@@ -205,11 +217,17 @@ def _apply_native_defaults(obj, schema: dict[str, object]) -> None:
         data.energy = float(fields["intensity"]["default"])
         data.cutoff_distance = float(fields["range"]["default"])
         data.use_shadow = True
-    elif classname == "player" and obj.type == "CAMERA":
+    elif classname in {"camera", "player"} and obj.type == "CAMERA":
         data = obj.data
         data.angle_y = float(fields["vertical_fov_radians"]["default"])
         data.clip_start = float(fields["near_clip"]["default"])
         data.clip_end = float(fields["far_clip"]["default"])
+    elif classname == "audio_source" and obj.type == "SPEAKER":
+        data = obj.data
+        data.volume = float(fields["gain"]["default"])
+        data.pitch = float(fields["pitch"]["default"])
+        data.distance_reference = float(fields["min_distance"]["default"])
+        data.distance_max = float(fields["max_distance"]["default"])
 
 
 def _draw_id_property(layout, obj, key: str, label: str) -> None:
@@ -297,8 +315,9 @@ def _draw_entity_fields(layout, obj, schema: dict[str, object]) -> None:
         schema: TODO: Describe this parameter.
     """
     classname = str(schema["classname"])
-    if classname == "prop":
-        layout.prop(obj, "hide_render", text="Hidden in Engine")
+    if classname in {"prop", "collider", "trigger_volume"}:
+        if classname == "prop":
+            layout.prop(obj, "hide_render", text="Hidden in Engine")
         row = layout.row(align=True)
         row.label(text="Collider")
         collider = str(obj.get("ce_collider", "Box"))
@@ -328,10 +347,19 @@ def _draw_entity_fields(layout, obj, schema: dict[str, object]) -> None:
                 layout.prop(obj.data, "size_y")
         layout.prop(obj.data, "use_shadow", text="Cast Shadows")
         layout.prop(obj, "hide_render", text="Disabled")
-    elif classname == "player" and obj.type == "CAMERA":
+    elif classname in {"camera", "player"} and obj.type == "CAMERA":
         layout.prop(obj.data, "angle_y", text="Vertical Field of View")
         layout.prop(obj.data, "clip_start", text="Near Clip")
         layout.prop(obj.data, "clip_end", text="Far Clip")
+    elif classname == "audio_source" and obj.type == "SPEAKER":
+        layout.prop(obj.data, "sound")
+        layout.prop(obj.data, "volume", text="Gain")
+        layout.prop(obj.data, "pitch")
+        layout.prop(obj.data, "distance_reference", text="Minimum Distance")
+        layout.prop(obj.data, "distance_max", text="Maximum Distance")
+        layout.prop(obj.data, "cone_angle_inner", text="Inner Cone")
+        layout.prop(obj.data, "cone_angle_outer", text="Outer Cone")
+        layout.prop(obj.data, "cone_volume_outer", text="Outer Cone Gain")
 
     hidden_native_fields = {
         "prop": {
@@ -343,6 +371,13 @@ def _draw_entity_fields(layout, obj, schema: dict[str, object]) -> None:
             "outer_angle_radians", "area_size",
         },
         "player": {"vertical_fov_radians", "near_clip", "far_clip"},
+        "camera": {"vertical_fov_radians", "near_clip", "far_clip"},
+        "audio_source": {
+            "audio", "gain", "pitch", "min_distance", "max_distance",
+            "cone_inner_angle", "cone_outer_angle", "cone_outer_gain",
+        },
+        "collider": {"collision"},
+        "trigger_volume": {"collision"},
     }.get(classname, set())
     hidden_native_flags = {
         "prop": {"visible"},
@@ -374,6 +409,34 @@ def _draw_entity_fields(layout, obj, schema: dict[str, object]) -> None:
             _draw_id_property(
                 layout, obj, property_name(field),
                 display_name(str(field["name"])))
+
+
+def _draw_connections(layout, obj, schema: dict[str, object]) -> None:
+    """Draw Source-style output connections owned by the active entity."""
+    box = layout.box()
+    row = box.row(align=True)
+    row.label(text="Outputs", icon="NODETREE")
+    row.operator(
+        CENGINE_OT_add_connection.bl_idname, text="", icon="ADD")
+    outputs = ", ".join(
+        str(item["name"]) for item in schema.get("outputs", ()))
+    outputs = ", ".join(filter(None, (outputs, "OnEnabled, OnDisabled")))
+    box.label(text=f"Available: {outputs}", icon="INFO")
+    connections = getattr(obj, "cengine_connections", ())
+    for index, connection in enumerate(connections):
+        item = box.box()
+        header = item.row(align=True)
+        header.label(text=f"Connection {index + 1}")
+        remove = header.operator(
+            CENGINE_OT_remove_connection.bl_idname, text="", icon="X")
+        remove.index = index
+        item.prop(connection, "event")
+        item.prop(connection, "target")
+        item.prop(connection, "action")
+        item.prop(connection, "parameter")
+        split = item.split(factor=0.6)
+        split.prop(connection, "delay_seconds")
+        split.prop(connection, "times_to_fire")
 
 
 def _enum_value_items(operator, context):
@@ -409,6 +472,24 @@ def _enum_value_items(operator, context):
 
 
 if bpy is not None:
+
+    class CENGINE_PG_entity_connection(bpy.types.PropertyGroup):
+        """An authored output-to-input edge exported into the scene."""
+
+        event: bpy.props.StringProperty(  # type: ignore[valid-type]
+            name="Output", default="OnEnabled")
+        target: bpy.props.PointerProperty(  # type: ignore[valid-type]
+            name="Target", type=bpy.types.Object)
+        action: bpy.props.StringProperty(  # type: ignore[valid-type]
+            name="Input", default="Enable")
+        parameter: bpy.props.StringProperty(  # type: ignore[valid-type]
+            name="Parameter", default="")
+        delay_seconds: bpy.props.FloatProperty(  # type: ignore[valid-type]
+            name="Delay", default=0.0, min=0.0, unit="TIME")
+        times_to_fire: bpy.props.IntProperty(  # type: ignore[valid-type]
+            name="Fire Count", description="Zero means unlimited",
+            default=0, min=0)
+
 
     class CENGINE_PG_scene_settings(bpy.types.PropertyGroup):
         """TODO: Describe `CENGINE_PG_scene_settings`."""
@@ -563,6 +644,47 @@ if bpy is not None:
             return {"FINISHED"}
 
 
+    class CENGINE_OT_add_connection(bpy.types.Operator):
+        """Add an entity output connection."""
+
+        bl_idname = "cengine.add_connection"
+        bl_label = "Add Entity Connection"
+        bl_options = {"REGISTER", "UNDO"}
+
+        def execute(self, context):
+            obj = context.active_object
+            if obj is None:
+                return {"CANCELLED"}
+            connection = obj.cengine_connections.add()
+            schema = entity_schema(exporter.GAME_SCHEMA, obj)
+            outputs = tuple(schema.get("outputs", ())) if schema else ()
+            connection.event = (
+                str(outputs[0]["name"]) if outputs else "OnEnabled")
+            obj.cengine_connection_index = len(obj.cengine_connections) - 1
+            return {"FINISHED"}
+
+
+    class CENGINE_OT_remove_connection(bpy.types.Operator):
+        """Remove one entity output connection."""
+
+        bl_idname = "cengine.remove_connection"
+        bl_label = "Remove Entity Connection"
+        bl_options = {"REGISTER", "UNDO"}
+
+        index: bpy.props.IntProperty(default=-1)  # type: ignore[valid-type]
+
+        def execute(self, context):
+            obj = context.active_object
+            if obj is None or not 0 <= self.index < len(
+                    obj.cengine_connections):
+                return {"CANCELLED"}
+            obj.cengine_connections.remove(self.index)
+            obj.cengine_connection_index = min(
+                obj.cengine_connection_index,
+                max(0, len(obj.cengine_connections) - 1))
+            return {"FINISHED"}
+
+
     class CENGINE_MT_add_entity(bpy.types.Menu):
         """TODO: Describe `CENGINE_MT_add_entity`."""
 
@@ -583,8 +705,12 @@ if bpy is not None:
                     text=display_name(classname),
                     icon={
                         "prop": "MESH_CUBE",
+                        "collider": "MESH_CUBE",
+                        "trigger_volume": "CUBE",
                         "light": "LIGHT",
+                        "camera": "CAMERA_DATA",
                         "player": "CAMERA_DATA",
+                        "audio_source": "OUTLINER_OB_SPEAKER",
                     }.get(classname, "EMPTY_AXIS"),
                 )
                 operator.entity_type = classname
@@ -909,7 +1035,8 @@ if bpy is not None:
                 TODO: Describe the produced value.
             """
             obj = context.active_object
-            if obj is None or entity_classname(obj) != "prop":
+            if obj is None or entity_classname(obj) not in {
+                    "prop", "collider", "trigger_volume"}:
                 return {"CANCELLED"}
             collision_name = str(
                 obj.get("ce_collision_object", "") or "")
@@ -955,9 +1082,9 @@ if bpy is not None:
             """
             obj = context.active_object
             classname = entity_classname(obj) if obj is not None else ""
-            if classname == "player" and obj.type == "CAMERA":
+            if classname in {"camera", "player"} and obj.type == "CAMERA":
                 context.scene.camera = obj
-                self.report({"INFO"}, "The player camera is now the scene camera")
+                self.report({"INFO"}, "The camera is now the active scene camera")
                 return {"FINISHED"}
             if classname == "post_process":
                 exposure = max(1.0e-6, float(obj.get("ce_exposure", 1.0)))
@@ -1139,8 +1266,12 @@ if bpy is not None:
                 text=display_name(classname),
                 icon={
                     "prop": "MESH_DATA",
+                    "collider": "MESH_DATA",
+                    "trigger_volume": "MESH_DATA",
                     "light": "LIGHT_DATA",
+                    "camera": "CAMERA_DATA",
                     "player": "CAMERA_DATA",
+                    "audio_source": "OUTLINER_OB_SPEAKER",
                 }.get(classname, "EMPTY_DATA"),
             )
             if CLASSNAME_PROPERTY not in obj:
@@ -1153,7 +1284,8 @@ if bpy is not None:
                 icon="FILE_REFRESH",
             )
             _draw_entity_fields(layout, obj, schema)
-            if classname in {"player", "skybox", "post_process"}:
+            _draw_connections(layout, obj, schema)
+            if classname in {"camera", "player", "skybox", "post_process"}:
                 layout.operator(
                     CENGINE_OT_preview_entity.bl_idname, icon="HIDE_OFF")
 
@@ -1228,10 +1360,13 @@ if bpy is not None:
 
 
     CLASSES = (
+        CENGINE_PG_entity_connection,
         CENGINE_PG_scene_settings,
         CENGINE_OT_export_assets,
         CENGINE_OT_set_collection_type,
         CENGINE_OT_add_entity,
+        CENGINE_OT_add_connection,
+        CENGINE_OT_remove_connection,
         CENGINE_MT_add_entity,
         CENGINE_OT_initialize_entity,
         CENGINE_OT_initialize_material,
@@ -1260,6 +1395,10 @@ def register() -> None:
         bpy.utils.register_class(cls)
     bpy.types.Scene.cengine_settings = bpy.props.PointerProperty(
         type=CENGINE_PG_scene_settings)
+    bpy.types.Object.cengine_connections = bpy.props.CollectionProperty(
+        type=CENGINE_PG_entity_connection)
+    bpy.types.Object.cengine_connection_index = bpy.props.IntProperty(
+        default=0, min=0)
     bpy.types.VIEW3D_MT_add.append(draw_add_menu)
     bpy.types.TOPBAR_MT_file_export.append(draw_export_menu)
 
@@ -1271,5 +1410,7 @@ def unregister() -> None:
     bpy.types.TOPBAR_MT_file_export.remove(draw_export_menu)
     bpy.types.VIEW3D_MT_add.remove(draw_add_menu)
     del bpy.types.Scene.cengine_settings
+    del bpy.types.Object.cengine_connection_index
+    del bpy.types.Object.cengine_connections
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)

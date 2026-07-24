@@ -86,6 +86,7 @@ void DepthOnly::InitializeParameters()
     base_color_factor_id_ = glGetUniformLocation(shader_id, "base_color_factor");
     alpha_cutoff_id_ = glGetUniformLocation(shader_id, "alpha_cutoff");
     alpha_test_id_ = glGetUniformLocation(shader_id, "alpha_test");
+    skinning_.Initialize(shader_id);
 }
 
 } // namespace CEngine::Renderer::OpenGL

@@ -88,6 +88,8 @@ def entity_classname(obj: object) -> str:
     return {
         "MESH": "prop",
         "LIGHT": "light",
+        "CAMERA": "camera",
+        "SPEAKER": "audio_source",
     }.get(str(getattr(obj, "type", "")), "")
 
 
@@ -102,8 +104,12 @@ def native_object_type(classname: str) -> str:
     """
     return {
         "prop": "MESH",
+        "collider": "MESH",
+        "trigger_volume": "MESH",
         "light": "LIGHT",
+        "camera": "CAMERA",
         "player": "CAMERA",
+        "audio_source": "SPEAKER",
     }.get(classname, "EMPTY")
 
 
@@ -180,9 +186,11 @@ def initialize_entity_properties(
     """
     if overwrite_classname:
         obj[CLASSNAME_PROPERTY] = str(schema["classname"])
-    if schema["classname"] == "prop" and COLLIDER_PROPERTY not in obj:
+    if schema["classname"] in {"prop", "collider", "trigger_volume"} and \
+            COLLIDER_PROPERTY not in obj:
         obj[COLLIDER_PROPERTY] = "Box"
-    if schema["classname"] == "prop" and "ce_collision_object" not in obj:
+    if schema["classname"] in {"prop", "collider", "trigger_volume"} and \
+            "ce_collision_object" not in obj:
         obj["ce_collision_object"] = ""
     for field, member in iter_property_fields(schema):
         descriptor = member or field
@@ -217,6 +225,9 @@ def initialize_entity_properties(
             # Blender releases differ slightly in the ID-property metadata
             # accepted here. The property itself remains fully usable.
             continue
+    if schema["classname"] == "trigger_volume":
+        obj["ce_physics_motion"] = (
+            "Kinematic" if bool(obj.get("ce_kinematic", False)) else "Static")
 
 
 def enum_items(field: dict[str, object]) -> tuple[tuple[str, str, str], ...]:
@@ -274,11 +285,15 @@ def validate_entities(
     enabled_skyboxes = 0
     enabled_fog = 0
     enabled_post_process = 0
+    enabled_audio_environment = 0
     physics_names = {
         str(getattr(obj, "name", ""))
         for obj in objects
-        if entity_classname(obj) == "prop" and
-        str(_get_property(obj, "ce_physics_motion", "None")).lower() != "none"
+        if entity_classname(obj) in {"prop", "collider"} and
+        str(_get_property(
+            obj, "ce_physics_motion",
+            "None" if entity_classname(obj) == "prop" else "Static"
+        )).lower() != "none"
     }
     objects_by_name = {
         str(getattr(obj, "name", "")): obj for obj in objects
@@ -294,7 +309,7 @@ def validate_entities(
             continue
         expected = native_object_type(classname)
         actual = str(getattr(obj, "type", ""))
-        if expected in {"MESH", "LIGHT", "CAMERA"} and actual != expected:
+        if expected in {"MESH", "LIGHT", "CAMERA", "SPEAKER"} and actual != expected:
             issues.append(
                 EntityIssue(
                     name,
@@ -304,7 +319,9 @@ def validate_entities(
         for field, member in iter_property_fields(schema):
             if member is not None or field["type"] not in ("asset", "asset_list"):
                 continue
-            if classname in {"prop", "skybox"}:
+            if classname in {
+                    "prop", "collider", "trigger_volume", "audio_source",
+                    "skybox"}:
                 continue
             getter = getattr(obj, "get", None)
             value = getter(property_name(field), "") if callable(getter) else ""
@@ -336,7 +353,7 @@ def validate_entities(
                     if reference not in physics_names:
                         issues.append(EntityIssue(
                             name,
-                            f"{label} must name a prop with physics enabled"))
+                            f"{label} must name a prop or collider with physics enabled"))
             constraint_type = str(
                 getter("ce_type", "Fixed")
                 if callable(getter) else "Fixed").lower()
@@ -351,16 +368,26 @@ def validate_entities(
                     if callable(getter) else 0.0) <= 0.0:
                 issues.append(EntityIssue(
                     name, "Motor Force Limit must be positive"))
-        if classname == "prop":
+        if classname in {"prop", "collider", "trigger_volume"}:
             motion = str(
-                getter("ce_physics_motion", "None")
-                if callable(getter) else "None"
+                ("Kinematic" if bool(getter("ce_kinematic", False))
+                 else "Static")
+                if classname == "trigger_volume" and callable(getter)
+                else getter(
+                    "ce_physics_motion",
+                    "None" if classname == "prop" else "Static")
+                if callable(getter)
+                else "None"
             ).lower()
             collider = str(
                 getter(COLLIDER_PROPERTY, "Box")
                 if callable(getter) else "Box"
             ).lower()
-            if motion not in {"none", "static", "dynamic", "kinematic"}:
+            allowed_motions = (
+                {"none", "static", "dynamic", "kinematic"}
+                if classname == "prop"
+                else {"static", "dynamic", "kinematic"})
+            if motion not in allowed_motions:
                 issues.append(EntityIssue(name, "Physics Motion is invalid"))
             if collider not in {
                 "box", "sphere", "capsule", "cylinder",
@@ -388,21 +415,66 @@ def validate_entities(
                         name, "Collision Object must be a mesh"))
                 elif getattr(collision_source, "parent", None) is not obj:
                     issues.append(EntityIssue(
-                        name, "Collision Object must be parented to this prop"))
+                    name, "Collision Object must be parented to this entity"))
         getter = getattr(obj, "get", None)
         enabled = bool(getter("ce_enabled", True) if callable(getter) else True)
         if enabled and classname == "skybox":
             enabled_skyboxes += 1
-        elif enabled and classname == "exponential_height_fog":
+        elif enabled and classname == "fog":
             enabled_fog += 1
         elif enabled and classname == "post_process":
             enabled_post_process += 1
+        elif enabled and classname == "audio_environment":
+            enabled_audio_environment += 1
+        connections = getattr(obj, "cengine_connections", None)
+        if connections is None:
+            connections = _get_property(obj, "ce_connections", ()) or ()
+        source_outputs = {
+            str(endpoint["name"]) for endpoint in schema.get("outputs", ())
+        } | {"OnEnabled", "OnDisabled"}
+        for connection in connections:
+            connection_get = (
+                connection.get
+                if callable(getattr(connection, "get", None))
+                else lambda key, default=None: getattr(
+                    connection, key, default)
+            )
+            event = str(connection_get("event", "") or "")
+            action = str(connection_get("action", "") or "")
+            target = connection_get("target", None)
+            target_name = str(getattr(target, "name", target or ""))
+            target_object = objects_by_name.get(target_name)
+            target_classname = (
+                entity_classname(target_object)
+                if target_object is not None else "")
+            target_schema = (
+                game_schema.entity(target_classname)
+                if target_classname else None)
+            if event not in source_outputs:
+                issues.append(EntityIssue(
+                    name, f"connection output {event!r} is not supported"))
+            if target_schema is None:
+                issues.append(EntityIssue(
+                    name,
+                    f"connection target {target_name!r} is not an entity"))
+                continue
+            target_inputs = {
+                str(endpoint["name"])
+                for endpoint in target_schema.get("inputs", ())
+            } | {"Enable", "Disable", "Toggle"}
+            if action not in target_inputs:
+                issues.append(EntityIssue(
+                    name,
+                    f"{target_name} does not support input {action!r}"))
     if enabled_skyboxes > 1:
         issues.append(EntityIssue("Scene", "only one skybox may be enabled"))
     if enabled_fog > 1:
         issues.append(EntityIssue("Scene", "only one height-fog entity may be enabled"))
     if enabled_post_process > 1:
         issues.append(EntityIssue("Scene", "only one post-process entity may be enabled"))
+    if enabled_audio_environment > 1:
+        issues.append(EntityIssue(
+            "Scene", "only one audio-environment entity may be enabled"))
     return tuple(issues)
 
 

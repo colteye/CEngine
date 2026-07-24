@@ -102,7 +102,7 @@ class SceneExportTests(unittest.TestCase):
                     name="Camera",
                 ),
             ),
-            settings=SceneSettings(active_player_entity=2),
+            settings=SceneSettings(active_entity=2),
             connections=(EntityConnection(0, "OnEnabled", 1, "Show", 0.25),),
         )
 
@@ -129,19 +129,24 @@ class SceneExportTests(unittest.TestCase):
                     "prop", transform=Transform(),
                     mesh=Reference(
                         AssetType.MESH, "../bad.cmesh", guid(9)))),)))
-        with self.assertRaisesRegex(ValueError, "active player entity index"):
+        with self.assertRaisesRegex(ValueError, "active entity index"):
             build_scene_payload(SceneDescription(
                 (EntityDescription(self.player()),),
-                SceneSettings(active_player_entity=4)))
-        with self.assertRaisesRegex(ValueError, "must reference a player"):
+                SceneSettings(active_entity=4)))
+        with self.assertRaisesRegex(ValueError, "must be enabled"):
+            build_scene_payload(SceneDescription(
+                (EntityDescription(self.entity(
+                    "light", transform=Transform()), flags=0),),
+                SceneSettings(active_entity=0)))
+        with self.assertRaisesRegex(ValueError, "camera or player"):
             build_scene_payload(SceneDescription(
                 (EntityDescription(self.entity(
                     "light", transform=Transform())),),
-                SceneSettings(active_player_entity=0)))
+                SceneSettings(active_entity=0)))
         with self.assertRaisesRegex(ValueError, "connection entity index"):
             build_scene_payload(SceneDescription(
                 (EntityDescription(self.player()),),
-                connections=(EntityConnection(0, "OnReady", 2, "Enable"),)))
+                connections=(EntityConnection(0, "OnEnabled", 2, "Enable"),)))
         mesh = Reference(AssetType.MESH, "assets/compiled/prop.cmesh", guid(10))
         lightmap = Reference(AssetType.TEXTURE, "assets/compiled/lightmap.dds", guid(11))
         collision = Reference(

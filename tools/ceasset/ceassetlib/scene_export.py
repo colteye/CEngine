@@ -91,7 +91,7 @@ class SceneSettings:
     ambient_color: tuple[float, float, float] = (0.0, 0.0, 0.0)
     exposure: float = 1.0
     gravity: tuple[float, float, float] = (0.0, 0.0, -9.81)
-    active_player_entity: int | None = None
+    active_entity: int | None = None
 
 
 @dataclass(frozen=True)
@@ -103,6 +103,8 @@ class EntityConnection:
     target_entity: int
     action: str
     delay_seconds: float = 0.0
+    parameter: str = ""
+    times_to_fire: int = 0
 
 
 @dataclass(frozen=True)
@@ -389,22 +391,30 @@ def build_scene_payload(scene: SceneDescription) -> bytes:
            bool(entity.data.values.get("enabled", True)) and bool(entity.flags & 1)
            for entity in entities) > 1:
         raise ValueError("scene may contain at most one enabled skybox")
-    if sum(entity.data.classname == "exponential_height_fog" and
+    if sum(entity.data.classname == "fog" and
            bool(entity.data.values.get("enabled", True)) and bool(entity.flags & 1)
            for entity in entities) > 1:
         raise ValueError("scene may contain at most one enabled exponential height fog")
     if sum(entity.data.classname == "post_process" and bool(entity.flags & 1)
            for entity in entities) > 1:
         raise ValueError("scene may contain at most one enabled post-process entity")
+    if sum(entity.data.classname == "audio_environment" and bool(entity.flags & 1)
+           for entity in entities) > 1:
+        raise ValueError(
+            "scene may contain at most one enabled audio-environment entity")
 
     assets, asset_indices = _collect_assets(entities)
-    active_player = INVALID_INDEX
-    if scene.settings.active_player_entity is not None:
-        if not 0 <= scene.settings.active_player_entity < len(entities):
-            raise ValueError("active player entity index is invalid")
-        if _class_info(entities[scene.settings.active_player_entity].data)[0] != "player":
-            raise ValueError("active player entity must reference a player")
-        active_player = scene.settings.active_player_entity
+    active_entity = INVALID_INDEX
+    if scene.settings.active_entity is not None:
+        if not 0 <= scene.settings.active_entity < len(entities):
+            raise ValueError("active entity index is invalid")
+        if not bool(entities[scene.settings.active_entity].flags & 1):
+            raise ValueError("active entity must be enabled")
+        if entities[scene.settings.active_entity].data.classname not in {
+                "camera", "player"}:
+            raise ValueError(
+                "active entity must reference a camera or player")
+        active_entity = scene.settings.active_entity
 
     asset_rows = [
         {"guid": asset.guid, "type": int(asset.asset_type), "path": asset.path}
@@ -443,19 +453,41 @@ def build_scene_payload(scene: SceneDescription) -> bytes:
 
     connection_rows: list[dict[str, object]] = []
     for connection in sorted(scene.connections,
-            key=lambda item: (item.source_entity, item.event, item.target_entity, item.action, item.delay_seconds)):
+            key=lambda item: (
+                item.source_entity, item.event, item.target_entity, item.action,
+                item.delay_seconds, item.parameter, item.times_to_fire)):
         if not 0 <= connection.source_entity < len(entities) or not 0 <= connection.target_entity < len(entities):
             raise ValueError("scene connection entity index is invalid")
         if not connection.event or not connection.action:
             raise ValueError("scene connection names must not be empty")
         if not math.isfinite(connection.delay_seconds) or connection.delay_seconds < 0.0:
             raise ValueError("scene connection delay must be finite and nonnegative")
+        if connection.times_to_fire < 0:
+            raise ValueError("scene connection fire count must be nonnegative")
+        source_schema = entities[connection.source_entity].data.schema
+        target_schema = entities[connection.target_entity].data.schema
+        source_outputs = {
+            str(item["name"]) for item in source_schema.get("outputs", ())
+        } | {"OnEnabled", "OnDisabled"}
+        target_inputs = {
+            str(item["name"]) for item in target_schema.get("inputs", ())
+        } | {"Enable", "Disable", "Toggle"}
+        if connection.event not in source_outputs:
+            raise ValueError(
+                f"{entities[connection.source_entity].data.classname} "
+                f"has no output {connection.event}")
+        if connection.action not in target_inputs:
+            raise ValueError(
+                f"{entities[connection.target_entity].data.classname} "
+                f"has no input {connection.action}")
         connection_rows.append({
             "source": connection.source_entity,
             "target": connection.target_entity,
             "event": connection.event,
             "action": connection.action,
+            "parameter": connection.parameter,
             "delay": connection.delay_seconds,
+            "times_to_fire": connection.times_to_fire,
         })
 
     return pack_record(GAME_SCHEMA, "scene", {
@@ -463,7 +495,7 @@ def build_scene_payload(scene: SceneDescription) -> bytes:
             "ambient_color": scene.settings.ambient_color,
             "exposure": scene.settings.exposure,
             "gravity": scene.settings.gravity,
-            "active_entity": active_player,
+            "active_entity": active_entity,
         },
         "assets": asset_rows,
         "entities": entity_rows,

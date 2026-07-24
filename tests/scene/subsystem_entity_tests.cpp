@@ -20,6 +20,7 @@
 #include "entity/fog_entity.h"
 #include "entity/light_entity.h"
 #include "entity/player_entity.h"
+#include "game/game_coordinator.h"
 #include "entity/prop_entity.h"
 #include "entity/skybox_entity.h"
 #include "input/actions.h"
@@ -219,6 +220,34 @@ bool JoltQueriesAndContactsWork()
             physics.UpdateCharacter(character, 1.0f / 60.0f) && physics.GetCharacterState(character, character_state) &&
             character_state.position.x > 0.0f && physics.SetCharacterHeight(character, 1.2f),
         "virtual character should move, report state, and crouch");
+    PhysicsBodyDesc character_sensor_desc;
+    character_sensor_desc.position = {character_state.position.x, 0.0f, 0.6f};
+    character_sensor_desc.sensor = true;
+    const PhysicsBodyHandle character_sensor =
+        physics.CreateBody(character_sensor_desc, box);
+    physics.Step(1.0f / 60.0f);
+    PhysicsContactEvent character_events[8];
+    const std::size_t character_event_count =
+        physics.DrainContactEvents(character_events, 8);
+    const bool character_sensor_result = Expect(
+        std::any_of(
+            character_events, character_events + character_event_count,
+            [character, character_sensor](const PhysicsContactEvent &event) {
+                return event.type == PhysicsContactType::Begin &&
+                       event.sensor &&
+                       ((event.first == character_sensor &&
+                         event.second_character == character) ||
+                        (event.second == character_sensor &&
+                         event.first_character == character));
+            }),
+        "virtual character proxy should publish sensor contacts for triggers");
+    physics.DestroyBody(character_sensor);
+    PhysicsQueryHit character_hit;
+    const bool character_query_result = Expect(
+        physics.RayCast(
+            {-5.0f, 0.0f, 0.6f}, {10.0f, 0.0f, 0.0f}, character_hit) &&
+            character_hit.character == character && !character_hit.body,
+        "physics queries should identify virtual character proxies");
     physics.DestroyCharacter(character);
     const bool character_cleanup = Expect(physics.CharacterCount() == 0 && !physics.IsValid(character),
                                           "destroyed character handles should become stale");
@@ -226,7 +255,8 @@ bool JoltQueriesAndContactsWork()
     physics.DestroyBody(character_floor);
     physics.DestroyBody(target);
     return ray_result && shape_cast_result && overlap_result && plane_result && contact_result && constraint_result &&
-           character_result && character_cleanup;
+           character_result && character_sensor_result &&
+           character_query_result && character_cleanup;
 }
 #endif
 
@@ -243,8 +273,9 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
     CEngine::Input::InputSystem input;
     const Viewer::Actions actions = Viewer::RegisterActions(input);
     CEngine::Entities::EntityFactory factory;
-    if (!Expect(factory.Register<Viewer::PlayerEntity, Viewer::Generated::Player>("player", actions),
-                "viewer player type should register"))
+    Viewer::GameCoordinator game(actions);
+    if (!Expect(game.RegisterEntityTypes(factory),
+                "viewer game entity types should register"))
     {
         return false;
     }
@@ -318,7 +349,7 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
         {
             found_skybox = true;
         }
-        if (entity->Classname() == "exponential_height_fog")
+        if (entity->Classname() == "fog")
         {
             found_fog = true;
         }

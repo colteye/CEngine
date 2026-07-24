@@ -80,6 +80,7 @@ class LightEntity final : public Scene::Entity, public Generated::EngineEntities
      * @return TODO: Describe the return value.
      */
     [[nodiscard]] Renderer::Light RenderLight() const;
+    void OnEnabledChanged(Context &context, bool enabled) override;
     Renderer::LightHandle renderer_light_;
 };
 

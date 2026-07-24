@@ -138,6 +138,7 @@ struct PhysicsBodyState
 struct PhysicsQueryHit
 {
     PhysicsBodyHandle body;
+    PhysicsCharacterHandle character;
     glm::vec3 position = glm::vec3(0.0f);
     glm::vec3 normal = glm::vec3(0.0f);
     float fraction = 0.0f;
@@ -162,6 +163,8 @@ struct PhysicsContactEvent
     PhysicsContactType type = PhysicsContactType::Begin;
     PhysicsBodyHandle first;
     PhysicsBodyHandle second;
+    PhysicsCharacterHandle first_character;
+    PhysicsCharacterHandle second_character;
     glm::vec3 position = glm::vec3(0.0f);
     glm::vec3 normal = glm::vec3(0.0f);
     bool sensor = false;

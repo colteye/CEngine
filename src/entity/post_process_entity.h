@@ -49,6 +49,9 @@ class PostProcessEntity final : public Scene::Entity, public Generated::EngineEn
      * @param context TODO: Describe this parameter.
      */
     void Shutdown(Context &context) override;
+
+  private:
+    void OnEnabledChanged(Context &context, bool enabled) override;
 };
 
 } // namespace CEngine::Entities

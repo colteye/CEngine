@@ -87,6 +87,10 @@ class VulkanRenderBackend final : public IRenderBackend
      */
     void UpdateMeshInstance(std::uint32_t slot, const glm::mat4 &transform, const Bounds &world_bounds,
                             std::uint32_t flags) override;
+    bool UpdateSkinningPalette(std::uint32_t, std::span<const glm::mat4>) override
+    {
+        return false;
+    }
 
   private:
     /**

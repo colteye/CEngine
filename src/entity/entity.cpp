@@ -15,10 +15,62 @@
 
 #include "entity/entity.h"
 
+#include "context.h"
+#include "scene/scene.h"
+
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace CEngine::Scene
 {
+
+bool Entity::AcceptsInput(std::string_view input) const
+{
+    return input == "Enable" || input == "Disable" || input == "Toggle";
+}
+
+bool Entity::HasOutput(std::string_view output) const
+{
+    return output == "OnEnabled" || output == "OnDisabled";
+}
+
+bool Entity::HandleInput(Context &context, const EntityInput &input)
+{
+    if (input.name == "Enable")
+    {
+        return SetEnabled(context, true);
+    }
+    if (input.name == "Disable")
+    {
+        return SetEnabled(context, false);
+    }
+    if (input.name == "Toggle")
+    {
+        return SetEnabled(context, !Enabled());
+    }
+    return false;
+}
+
+bool Entity::SetEnabled(Context &context, bool enabled)
+{
+    if (Enabled() == enabled)
+    {
+        return true;
+    }
+    if (enabled)
+    {
+        flags_ |= EntityEnabled;
+    }
+    else
+    {
+        flags_ &= ~EntityEnabled;
+    }
+    OnEnabledChanged(context, enabled);
+    if (context.scene != nullptr)
+    {
+        context.scene->Emit(id_, enabled ? "OnEnabled" : "OnDisabled", id_);
+    }
+    return true;
+}
 
 /**
  * @brief TODO: Describe Transform::UpdateWorldMatrix.

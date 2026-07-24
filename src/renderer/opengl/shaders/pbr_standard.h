@@ -18,6 +18,7 @@
 
 #include "lighting_bindings.h"
 #include "shader.h"
+#include "skinning.h"
 
 #include "renderer/material.h"
 
@@ -80,6 +81,10 @@ class PBRStandard
      * @param lightmap TODO: Describe this parameter.
      */
     void SetTextures(GLuint albedo, GLuint normal, GLuint metallic_roughness_ao, GLuint lightmap);
+    void UpdateSkinning(GLuint texture, std::uint32_t joint_count) const
+    {
+        skinning_.Bind(texture, joint_count);
+    }
 
   private:
     /**
@@ -119,6 +124,7 @@ class PBRStandard
     GLint lightmap_scale_offset_id_ = -1;
     GLint lightmap_rgbm_range_id_ = -1;
     GLint has_lightmap_id_ = -1;
+    SkinningUniforms skinning_;
 };
 
 } // namespace CEngine::Renderer::OpenGL

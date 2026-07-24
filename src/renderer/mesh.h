@@ -64,6 +64,8 @@ struct Mesh
 {
     std::string name;
     std::vector<MeshLod> lods;
+    std::array<std::uint8_t, 16> skeleton_guid = {};
+    bool skinned = false;
     bool has_lightmap_uv = false;
     Bounds local_bounds;
     /**

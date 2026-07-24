@@ -40,6 +40,31 @@ using EntityHandle = Handle<EntitySlotTag>;
 
 inline constexpr std::uint32_t EntityEnabled = 1u << 0u;
 
+struct EntityInput
+{
+    EntityHandle source;
+    EntityHandle activator;
+    std::string_view name;
+    std::string_view parameter;
+};
+
+enum class EntityContactPhase : std::uint8_t
+{
+    Begin,
+    Persist,
+    End,
+};
+
+struct EntityContact
+{
+    EntityHandle other;
+    EntityContactPhase phase = EntityContactPhase::Begin;
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec3 normal = glm::vec3(0.0f);
+    bool sensor = false;
+    bool other_is_character = false;
+};
+
 /**
  * @brief TODO: Describe Transform.
  */
@@ -94,6 +119,13 @@ class Entity
      * @return TODO: Describe the return value.
      */
     [[nodiscard]] virtual std::string_view Classname() const = 0;
+
+    [[nodiscard]] virtual bool AcceptsInput(std::string_view input) const;
+    [[nodiscard]] virtual bool HasOutput(std::string_view output) const;
+    virtual bool HandleInput(Context &context, const EntityInput &input);
+    virtual void OnPhysicsContact(Context & /*unused*/, const EntityContact & /*unused*/)
+    {
+    }
 
     /**
      * @brief TODO: Describe Initialize.
@@ -156,6 +188,7 @@ class Entity
     {
         flags_ = flags;
     }
+    bool SetEnabled(Context &context, bool enabled);
     /**
      * @brief TODO: Describe Enabled.
      *
@@ -191,6 +224,10 @@ class Entity
      * @param flags TODO: Describe this parameter.
      */
     explicit Entity(std::uint32_t flags = EntityEnabled) : flags_(flags)
+    {
+    }
+
+    virtual void OnEnabledChanged(Context & /*unused*/, bool /*unused*/)
     {
     }
 

@@ -16,9 +16,10 @@
 #include "assets/mesh_asset.h"
 
 #include "engine/engine_entities.generated.h"
-#include "logging/logger.h"
+#include "log.h"
 
 #include <cmath>
+#include <algorithm>
 
 #include <glm/geometric.hpp>
 
@@ -46,7 +47,7 @@ glm::vec3 Tangent(const glm::vec3 &raw, const glm::vec3 &normal)
     return tangent / std::sqrt(length);
 }
 
-bool BuildLod(const Wire::MeshLod &source, Renderer::MeshLod &lod)
+bool BuildLod(const Wire::MeshLod &source, bool skinned, Renderer::MeshLod &lod)
 {
     if (source.indices.empty() || source.indices.size() % 3u != 0u)
     {
@@ -67,6 +68,27 @@ bool BuildLod(const Wire::MeshLod &source, Renderer::MeshLod &lod)
         output.tangent = glm::vec3(0.0f);
         output.joints = input.joints;
         output.weights = {input.weights[0], input.weights[1], input.weights[2], input.weights[3]};
+        float weight_sum = 0.0f;
+        for (std::size_t influence = 0; influence < input.weights.size(); ++influence)
+        {
+            if (input.weights[influence] == 0.0f && input.joints[influence] != 0u)
+            {
+                Logging::Logger::Get().Error("assets", "zero-weight mesh influence has a joint index");
+                return false;
+            }
+            if (input.joints[influence] >= 1024u)
+            {
+                Logging::Logger::Get().Error("assets", "mesh joint index exceeds animation format capacity");
+                return false;
+            }
+            weight_sum += input.weights[influence];
+        }
+        if ((skinned && std::abs(weight_sum - 1.0f) > 1.0e-3f) ||
+            (!skinned && (weight_sum != 0.0f || input.joints != std::array<std::uint16_t, 4>{})))
+        {
+            Logging::Logger::Get().Error("assets", "mesh skin weights do not match its skinning flag");
+            return false;
+        }
     }
     for (std::uint32_t index : lod.indices)
     {
@@ -111,7 +133,18 @@ bool LoadMeshAsset(const std::filesystem::path &path, Renderer::Mesh &mesh)
 
     Renderer::Mesh loaded;
     loaded.name = path.stem().string();
+    loaded.skinned = (decoded.flags & 1u) != 0u;
+    loaded.skeleton_guid = decoded.skeleton_guid;
     loaded.has_lightmap_uv = (decoded.flags & 2u) != 0u;
+    const bool has_skeleton_guid =
+        std::any_of(loaded.skeleton_guid.begin(), loaded.skeleton_guid.end(), [](std::uint8_t value) {
+            return value != 0u;
+        });
+    if (loaded.skinned != has_skeleton_guid)
+    {
+        Logging::Logger::Get().Error("assets", "mesh skinning flag and skeleton GUID disagree");
+        return false;
+    }
     loaded.local_bounds.min = {decoded.bounds_min[0], decoded.bounds_min[1], decoded.bounds_min[2]};
     loaded.local_bounds.max = {decoded.bounds_max[0], decoded.bounds_max[1], decoded.bounds_max[2]};
     loaded.local_bounds.valid = !decoded.lods.front().vertices.empty();
@@ -119,7 +152,8 @@ bool LoadMeshAsset(const std::filesystem::path &path, Renderer::Mesh &mesh)
     float previous = 2.0f;
     for (std::size_t index = 0; index < decoded.lods.size(); ++index)
     {
-        if (decoded.lods[index].screen_size >= previous || !BuildLod(decoded.lods[index], loaded.lods[index]))
+        if (decoded.lods[index].screen_size >= previous ||
+            !BuildLod(decoded.lods[index], loaded.skinned, loaded.lods[index]))
         {
             Logging::Logger::Get().Error("assets", "mesh LOD order is invalid");
             return false;

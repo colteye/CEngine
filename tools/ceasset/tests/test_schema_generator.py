@@ -63,6 +63,7 @@ class SchemaGeneratorTests(unittest.TestCase):
         self.assertEqual(
             includes,
             {
+                "#include <cmath>",
                 "#include <cstddef>",
                 "#include <cstdint>",
                 "#include <array>",
@@ -79,6 +80,8 @@ class SchemaGeneratorTests(unittest.TestCase):
         self.assertIn("CEngine::Assets::Reader reader", source)
         self.assertIn("reader.U32", source)
         self.assertIn("reader.F32", source)
+        self.assertIn("std::isfinite", source)
+        self.assertNotIn("Assets::IsFinite", source)
         self.assertNotIn("bytes[offset + 3u]) << 24u", source)
 
     def test_game_file_contains_data_not_cpp_bindings(self) -> None:

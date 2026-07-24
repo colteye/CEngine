@@ -7,7 +7,7 @@
 #                       __/ |
 #                      |___/
 
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.24)
 
 project(CEngine VERSION 0.1.0 LANGUAGES C CXX)
 
@@ -66,7 +66,6 @@ add_custom_target(CEngineEngineSchemas
         "${CENGINE_ENGINE_GENERATED_HEADER}"
         "${CENGINE_ENGINE_SCHEMA_BUNDLE}"
 )
-
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 function(ce_setup_opengl out_target)
@@ -182,6 +181,24 @@ if(CENGINE_ENABLE_JOLT_PHYSICS)
     FetchContent_MakeAvailable(JoltPhysics)
 endif()
 
+include(FetchContent)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(ozz_build_tools OFF CACHE BOOL "" FORCE)
+set(ozz_build_fbx OFF CACHE BOOL "" FORCE)
+set(ozz_build_gltf OFF CACHE BOOL "" FORCE)
+set(ozz_build_data OFF CACHE BOOL "" FORCE)
+set(ozz_build_samples OFF CACHE BOOL "" FORCE)
+set(ozz_build_howtos OFF CACHE BOOL "" FORCE)
+set(ozz_build_tests OFF CACHE BOOL "" FORCE)
+set(ozz_build_postfix OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    ozz_animation
+    GIT_REPOSITORY https://github.com/guillaumeblanc/ozz-animation.git
+    # ozz-animation 0.16.0, pinned to an immutable revision.
+    GIT_TAG 6cbdc790123aa4731d82e255df187b3a8a808256
+)
+FetchContent_MakeAvailable(ozz_animation)
+
 if(CENGINE_ENABLE_OPENGL)
     set(CENGINE_OPENGL_SHADER_SOURCES
         src/renderer/opengl/glsl/deferred_lighting.frag
@@ -200,6 +217,7 @@ if(CENGINE_ENABLE_OPENGL)
         src/renderer/opengl/glsl/point_shadow_depth.vert
         src/renderer/opengl/glsl/point_shadow_depth.frag
         src/renderer/opengl/glsl/shadow_sampling.glsl
+        src/renderer/opengl/glsl/skinning.glsl
         src/renderer/opengl/glsl/pbr_standard.vert
         src/renderer/opengl/glsl/pbr_standard.frag
         src/renderer/opengl/glsl/ssao.vert
@@ -229,14 +247,19 @@ add_dependencies(CEngineAssets CEngineEngineSchemas)
 add_library(CEngineScene STATIC
     "${CENGINE_ENGINE_GENERATED_HEADER}"
     src/assets/scene_asset.cpp
+    src/entity/audio_entities.cpp
+    src/entity/camera_entity.cpp
+    src/entity/collider_entity.cpp
     src/entity/fog_entity.cpp
     src/entity/entity.cpp
     src/entity/entity_factory.cpp
     src/entity/light_entity.cpp
+    src/entity/logic_entities.cpp
     src/entity/physics_constraint_entity.cpp
     src/entity/post_process_entity.cpp
     src/entity/prop_entity.cpp
     src/entity/skybox_entity.cpp
+    src/entity/trigger_entity.cpp
     src/scene/scene.cpp
 )
 add_dependencies(CEngineScene CEngineEngineSchemas)
@@ -301,6 +324,18 @@ if(CENGINE_BUILD_TESTS)
     add_test(NAME asset_runtime
         COMMAND CEngineAssetTests "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(asset_runtime PROPERTIES FIXTURES_REQUIRED python_assets)
+    add_executable(CEngineAnimationSystemTests
+        tests/animation/animation_system_tests.cpp
+    )
+    target_link_libraries(CEngineAnimationSystemTests PRIVATE CEngineCore)
+    if(MSVC)
+        target_compile_options(CEngineAnimationSystemTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+    else()
+        target_compile_options(CEngineAnimationSystemTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME animation_system
+        COMMAND CEngineAnimationSystemTests "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(animation_system PROPERTIES FIXTURES_REQUIRED python_assets)
     add_executable(CEngineStoreTests tests/assets/store_tests.cpp)
     target_link_libraries(CEngineStoreTests PRIVATE CEngineAssets)
     if(MSVC)
@@ -361,6 +396,8 @@ if(CENGINE_BUILD_TESTS)
 endif()
 
 set(CENGINE_CORE_SOURCES
+    src/animation/animation_system.cpp
+    src/animation/ozz/ozz_animation_backend.cpp
     src/physics/physics_system.cpp
     src/renderer/camera.cpp
     src/input/sdl/sdl_input_backend.cpp
@@ -432,6 +469,7 @@ target_include_directories(CEngineCore
 
 target_link_libraries(CEngineCore PUBLIC ${CENGINE_SDL3_TARGET})
 target_link_libraries(CEngineCore PUBLIC CEngineAssets)
+target_link_libraries(CEngineCore PRIVATE ozz_animation_offline)
 target_link_libraries(CEngineCore PRIVATE ${CMAKE_DL_LIBS})
 target_link_libraries(CEngineScene PUBLIC CEngineCore)
 

@@ -18,10 +18,11 @@
 #include "assets/store.h"
 #include "engine/engine_entities.generated.h"
 #include "entity/entity_factory.h"
+#include "entity/audio_entities.h"
 #include "entity/fog_entity.h"
 #include "entity/post_process_entity.h"
 #include "entity/skybox_entity.h"
-#include "logging/logger.h"
+#include "log.h"
 #include "scene/scene.h"
 
 #include <limits>
@@ -124,6 +125,7 @@ std::unique_ptr<Scene::Scene> LoadSceneInternal(const std::filesystem::path &pat
     std::uint32_t skyboxes = 0;
     std::uint32_t fogs = 0;
     std::uint32_t post_processes = 0;
+    std::uint32_t audio_environments = 0;
     for (const auto &entity : scene->Entities())
     {
         if (entity == nullptr || !entity->Enabled())
@@ -132,11 +134,12 @@ std::unique_ptr<Scene::Scene> LoadSceneInternal(const std::filesystem::path &pat
         }
         skyboxes += entity->Classname() == "skybox" &&
                     dynamic_cast<const Entities::SkyboxEntity &>(*entity).enabled;
-        fogs += entity->Classname() == "exponential_height_fog" &&
+        fogs += entity->Classname() == "fog" &&
                 dynamic_cast<const Entities::FogEntity &>(*entity).enabled;
         post_processes += entity->Classname() == "post_process";
+        audio_environments += entity->Classname() == "audio_environment";
     }
-    if (skyboxes > 1u || fogs > 1u || post_processes > 1u)
+    if (skyboxes > 1u || fogs > 1u || post_processes > 1u || audio_environments > 1u)
     {
         Logging::Logger::Get().Error("assets", "scene has duplicate global presentation entities");
         return nullptr;
@@ -150,7 +153,11 @@ std::unique_ptr<Scene::Scene> LoadSceneInternal(const std::filesystem::path &pat
     if (decoded.settings.active_entity != 0xffffffffu)
     {
         if (decoded.settings.active_entity >= entities.size() ||
-            !entities[decoded.settings.active_entity]->Enabled())
+            !entities[decoded.settings.active_entity]->Enabled() ||
+            (entities[decoded.settings.active_entity]->Classname() !=
+                 "camera" &&
+             entities[decoded.settings.active_entity]->Classname() !=
+                 "player"))
         {
             Logging::Logger::Get().Error("assets", "scene active entity is invalid");
             return nullptr;
@@ -172,7 +179,9 @@ std::unique_ptr<Scene::Scene> LoadSceneInternal(const std::filesystem::path &pat
                 entities[connection.target]->GetHandle(),
                 connection.event,
                 connection.action,
+                connection.parameter,
                 connection.delay,
+                connection.times_to_fire,
             });
         }
     }

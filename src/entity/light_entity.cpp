@@ -93,6 +93,11 @@ void LightEntity::Update(Context &context, float /*unused*/)
     context.rendering->UpdateLight(renderer_light_, RenderLight());
 }
 
+void LightEntity::OnEnabledChanged(Context &context, bool /*enabled*/)
+{
+    Update(context, 0.0f);
+}
+
 /**
  * @brief TODO: Describe LightEntity::Shutdown.
  *

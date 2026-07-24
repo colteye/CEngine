@@ -27,7 +27,7 @@ from .game_schema import (
 )
 from .ids import guid_from_stable_name
 from .scene_export import (
-    Reference, EntityDescription,
+    Reference, EntityConnection, EntityDescription,
     SceneDescription, SceneSettings, Transform,
 )
 
@@ -121,13 +121,26 @@ def _native_schema_value(
     """
     name = str(field["name"])
     data = getattr(obj, "data", None)
-    if classname == "player" and getattr(obj, "type", "") == "CAMERA":
+    if classname in {"camera", "player"} and \
+            getattr(obj, "type", "") == "CAMERA":
         if name == "vertical_fov_radians":
             return getattr(data, "angle_y", default)
         if name == "near_clip":
             return getattr(data, "clip_start", default)
         if name == "far_clip":
             return getattr(data, "clip_end", default)
+    if classname == "audio_source" and getattr(obj, "type", "") == "SPEAKER":
+        native = {
+            "gain": "volume",
+            "pitch": "pitch",
+            "min_distance": "distance_reference",
+            "max_distance": "distance_max",
+            "cone_inner_angle": "cone_angle_inner",
+            "cone_outer_angle": "cone_angle_outer",
+            "cone_outer_gain": "cone_volume_outer",
+        }.get(name)
+        if native is not None:
+            return getattr(data, native, default)
     return _property(obj, _property_name(field), default)
 
 
@@ -161,6 +174,7 @@ def schema_entity(
     asset_path: Callable[[Path], str] | None = None,
     resolve_asset_path: Callable[[str], Path] | None = None,
     entity_indices: dict[str, int] | None = None,
+    asset_overrides: dict[str, Reference | tuple[Reference, ...] | None] | None = None,
 ) -> SchemaEntity:
     """TODO: Describe `schema_entity`.
 
@@ -216,6 +230,9 @@ def schema_entity(
                 raise ValueError(
                     f"{schema['classname']}.{name} must contain {expected} values")
         elif field_type in ("asset", "asset_list"):
+            if asset_overrides is not None and name in asset_overrides:
+                values[name] = asset_overrides[name]
+                continue
             if asset_path is None or resolve_asset_path is None:
                 raise ValueError(
                     f"generic Blender entity assets require a path resolver: "
@@ -321,6 +338,18 @@ def _reference(asset_type: AssetType, path: Path, asset_path: Callable[[Path], s
     return Reference(asset_type, relative, guid_from_stable_name(relative))
 
 
+def _mesh_armature(obj: object) -> object | None:
+    parent = getattr(obj, "parent", None)
+    if getattr(parent, "type", "") == "ARMATURE":
+        return parent
+    for modifier in getattr(obj, "modifiers", ()):
+        if getattr(modifier, "type", "") == "ARMATURE":
+            armature = getattr(modifier, "object", None)
+            if armature is not None:
+                return armature
+    return None
+
+
 def scene_description(
     objects: Iterable[object],
     mesh_outputs: dict[str, list[tuple[Path, str]]],
@@ -329,8 +358,11 @@ def scene_description(
     lightmaps: dict[str, LightmapPlacement] | None = None,
     skybox_outputs: dict[str, Path] | None = None,
     physics_outputs: dict[str, Path] | None = None,
+    audio_outputs: dict[str, Path] | None = None,
     game_schema: GameSchema | None = None,
     resolve_asset_path: Callable[[str], Path] | None = None,
+    skeleton_outputs: dict[str, Path] | None = None,
+    animation_outputs: dict[str, list[Path]] | None = None,
 ) -> SceneDescription:
     """TODO: Describe `scene_description`.
 
@@ -353,6 +385,7 @@ def scene_description(
     schemas = game_schema or load_bundled_game()
     deferred_constraints: list[object] = []
     physics_entity_indices: dict[str, int] = {}
+    object_entity_indices: dict[str, int] = {}
     collision_helper_names = {
         str(_property(obj, "ce_collision_object", "") or "")
         for obj in objects
@@ -373,6 +406,26 @@ def scene_description(
         if obj_type == "MESH":
             if bool(_property(obj, "ce_collision_helper", False)) or \
                     name in collision_helper_names:
+                continue
+            if classname in {"collider", "trigger_volume"}:
+                collision_output = (physics_outputs or {}).get(name)
+                if collision_output is None:
+                    raise ValueError(
+                        f"physics entity has no generated .cphys: {name}")
+                schema = schemas.entity(classname)
+                if schema is None:
+                    raise ValueError(
+                        f"game schema does not define {classname}")
+                data = schema_entity(
+                    obj, schema, transform, asset_path, resolve_asset_path,
+                    asset_overrides={
+                        "collision": _reference(
+                            AssetType.PHYSICS, collision_output, asset_path),
+                    })
+                object_entity_indices[name] = len(entities)
+                if classname == "collider":
+                    physics_entity_indices[name] = len(entities)
+                entities.append(EntityDescription(data, name))
                 continue
             outputs = mesh_outputs.get(name, ())
             if not outputs:
@@ -395,6 +448,24 @@ def scene_description(
             placement = lightmaps.get(name) if lightmaps is not None else None
             if placement is not None and motion in (2, 3):
                 raise ValueError(f"a movable prop may not have a baked lightmap: {name}")
+            armature = _mesh_armature(obj)
+            skeleton_output = (
+                (skeleton_outputs or {}).get(
+                    str(getattr(armature, "name", "")))
+                if armature is not None else None
+            )
+            clips = (
+                (animation_outputs or {}).get(
+                    str(getattr(armature, "name", "")), ())
+                if armature is not None else ()
+            )
+            if armature is not None and skeleton_output is None:
+                raise ValueError(
+                    f"skinned mesh has no generated .cskel: {name}")
+            if armature is not None and not clips:
+                raise ValueError(
+                    f"skinned mesh has no generated .canim: {name}")
+            object_entity_indices[name] = len(entities)
             for section_index, (output, material_name) in enumerate(outputs):
                 material_output = material_outputs.get(material_name)
                 if material_output is None:
@@ -402,6 +473,16 @@ def scene_description(
                 data = make_schema_entity(
                     schemas, "prop",
                     mesh=_reference(AssetType.MESH, output, asset_path),
+                    skeleton=_reference(
+                        AssetType.SKELETON, skeleton_output, asset_path
+                    ) if skeleton_output is not None else None,
+                    animation=_reference(
+                        AssetType.ANIMATION, sorted(clips)[0], asset_path
+                    ) if clips else None,
+                    animation_playback_rate=float(_property(
+                        obj, "ce_animation_playback_rate", 1.0)),
+                    animation_looping=bool(_property(
+                        obj, "ce_animation_looping", True)),
                     transform=transform,
                     materials=(_reference(AssetType.MATERIAL, material_output, asset_path),),
                     lightmap=_reference(AssetType.TEXTURE, placement.texture, asset_path) if placement else None,
@@ -474,11 +555,29 @@ def scene_description(
                     float(getattr(light, "size_y", 1.0))),
                 enabled=not bool(getattr(obj, "hide_render", False)),
                 casts_shadows=bool(getattr(light, "use_shadow", True)))
+        elif obj_type == "SPEAKER":
+            if classname not in ("", "audio_source"):
+                raise ValueError(
+                    f"unsupported Blender speaker entity classname: {classname}")
+            output = (audio_outputs or {}).get(name)
+            if output is None:
+                raise ValueError(
+                    f"audio source has no exported audio file: {name}")
+            schema = schemas.entity("audio_source")
+            if schema is None:
+                raise ValueError("game schema does not define audio sources")
+            data = schema_entity(
+                obj, schema, transform, asset_path, resolve_asset_path,
+                asset_overrides={
+                    "audio": _reference(AssetType.AUDIO, output, asset_path),
+                })
         elif obj_type == "EMPTY" and getattr(obj, "instance_collection", None) is not None:
             # Blender's dependency graph exposes the expanded objects as normal
             # mesh entries. The collection marker itself is not an entity.
             continue
         elif obj_type in ("EMPTY", "CAMERA"):
+            if obj_type == "CAMERA" and not classname:
+                classname = "camera"
             if classname in ("", "empty"):
                 continue
             elif classname == "skybox":
@@ -502,6 +601,7 @@ def scene_description(
                     obj, schema, transform, asset_path, resolve_asset_path)
         else:
             continue
+        object_entity_indices[name] = len(entities)
         entities.append(EntityDescription(data, name))
 
     constraint_schema = schemas.entity("physics_constraint")
@@ -516,6 +616,36 @@ def scene_description(
             raise ValueError(
                 f"physics constraint must reference two different props: {name}")
         entities.append(EntityDescription(data, name))
+        object_entity_indices[name] = len(entities) - 1
     if not entities:
         raise ValueError("scene contains no exportable entities")
-    return SceneDescription(tuple(entities))
+    connections: list[EntityConnection] = []
+    for obj in sorted(objects, key=lambda value: str(getattr(value, "name", ""))):
+        source_name = str(getattr(obj, "name", ""))
+        if source_name not in object_entity_indices:
+            continue
+        authored = getattr(obj, "cengine_connections", None)
+        if authored is None:
+            authored = _property(obj, "ce_connections", ()) or ()
+        for connection in authored:
+            getter = (
+                connection.get
+                if callable(getattr(connection, "get", None))
+                else lambda key, default=None: getattr(connection, key, default)
+            )
+            target = getter("target", None)
+            target_name = str(getattr(target, "name", target or ""))
+            if target_name not in object_entity_indices:
+                raise ValueError(
+                    f"{source_name} connection target is not an exported entity: "
+                    f"{target_name!r}")
+            connections.append(EntityConnection(
+                object_entity_indices[source_name],
+                str(getter("event", "") or ""),
+                object_entity_indices[target_name],
+                str(getter("action", "") or ""),
+                float(getter("delay_seconds", 0.0)),
+                str(getter("parameter", "") or ""),
+                int(getter("times_to_fire", 0)),
+            ))
+    return SceneDescription(tuple(entities), connections=tuple(connections))

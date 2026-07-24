@@ -265,6 +265,32 @@ void RenderSystem::UpdateMeshInstance(MeshInstanceHandle handle, const glm::mat4
     ++mesh_instance_revision_;
 }
 
+bool RenderSystem::UpdateMeshSkinning(
+    MeshInstanceHandle handle, std::span<const glm::mat4> palette)
+{
+    const MeshInstance *instance = ResolveMeshInstance(handle);
+    if (instance == nullptr || instance->mesh == nullptr ||
+        !instance->mesh->skinned || palette.empty() || palette.size() > 1024u ||
+        backend_ == nullptr)
+    {
+        return false;
+    }
+    for (const glm::mat4 &matrix : palette)
+    {
+        for (std::size_t column = 0; column < 4u; ++column)
+        {
+            for (std::size_t row = 0; row < 4u; ++row)
+            {
+                if (!std::isfinite(matrix[column][row]))
+                {
+                    return false;
+                }
+            }
+        }
+    }
+    return backend_->UpdateSkinningPalette(handle.Index(), palette);
+}
+
 /**
  * @brief TODO: Describe RenderSystem::RegisterLight.
  *

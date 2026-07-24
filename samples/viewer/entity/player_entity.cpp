@@ -20,6 +20,7 @@
 #include "physics/physics_system.h"
 #include "renderer/camera.h"
 #include "renderer/render_system.h"
+#include "scene/scene.h"
 
 #include <algorithm>
 #include <cmath>
@@ -28,6 +29,25 @@
 
 namespace Viewer
 {
+
+PlayerEntity::PlayerEntity(
+    Actions actions, PlayerRuntimeConfig config)
+    : actions_(actions), player_id_(config.id), team_(config.team),
+      locally_controlled_(config.locally_controlled)
+{
+    GetTransform() = config.transform;
+}
+
+void PlayerEntity::ConfigureRuntime(
+    std::uint64_t id, Generated::PlayerTeam team,
+    bool locally_controlled, Actions actions)
+{
+    player_id_ = id;
+    team_ = team;
+    locally_controlled_ = locally_controlled;
+    actions_ = actions;
+}
+
 /**
  * @brief TODO: Describe PlayerEntity::Classname.
  *
@@ -60,6 +80,11 @@ void PlayerEntity::Initialize(CEngine::Context &context)
         desc.step_height = step_height;
         desc.stick_to_floor_distance = stick_to_floor_distance;
         character_ = context.physics->CreateCharacter(desc);
+        if (character_ && context.scene != nullptr)
+        {
+            context.scene->RegisterPhysicsCharacter(
+                character_, GetHandle());
+        }
     }
 }
 
@@ -75,7 +100,7 @@ void PlayerEntity::Update(CEngine::Context &context, float delta_seconds)
     {
         return;
     }
-    if (context.input != nullptr)
+    if (locally_controlled_ && context.input != nullptr)
     {
         look_angles_ += glm::vec2(context.input->Value(actions_.look_yaw), context.input->Value(actions_.look_pitch));
     }
@@ -88,11 +113,17 @@ void PlayerEntity::Update(CEngine::Context &context, float delta_seconds)
         glm::normalize(glm::vec3(std::cos(look_angles_.x), std::sin(look_angles_.x), 0.0f));
     const glm::vec3 right = glm::normalize(glm::cross(planar_forward, up));
     auto &transform = GetTransform();
-    const float speed =
-        move_speed * (context.input != nullptr && context.input->Value(actions_.sprint) > 0.5f ? 3.0f : 1.0f);
-    const glm::vec3 movement = context.input != nullptr ? planar_forward * context.input->Value(actions_.move_forward) +
-                                                              right * context.input->Value(actions_.move_right)
-                                                        : glm::vec3(0.0f);
+    const float speed = move_speed *
+                        (locally_controlled_ && context.input != nullptr &&
+                                 context.input->Value(actions_.sprint) > 0.5f
+                             ? 3.0f
+                             : 1.0f);
+    const glm::vec3 movement =
+        locally_controlled_ && context.input != nullptr
+            ? planar_forward *
+                      context.input->Value(actions_.move_forward) +
+                  right * context.input->Value(actions_.move_right)
+            : glm::vec3(0.0f);
     if (context.physics != nullptr && character_)
     {
         PhysicsCharacterState state;
@@ -100,7 +131,9 @@ void PlayerEntity::Update(CEngine::Context &context, float delta_seconds)
         {
             glm::vec3 velocity = movement * speed;
             velocity.z = state.velocity.z;
-            if (state.grounded && context.input != nullptr && context.input->Value(actions_.jump) > 0.5f)
+            if (state.grounded && locally_controlled_ &&
+                context.input != nullptr &&
+                context.input->Value(actions_.jump) > 0.5f)
             {
                 velocity.z = jump_speed;
             }
@@ -120,7 +153,8 @@ void PlayerEntity::Update(CEngine::Context &context, float delta_seconds)
     transform.dirty = true;
     transform.UpdateWorldMatrix();
 
-    if (context.rendering != nullptr)
+    if (context.rendering != nullptr && context.scene != nullptr &&
+        context.scene->Settings().active_entity == GetHandle())
     {
         CEngine::Renderer::Camera camera;
         camera.position = transform.position;
@@ -145,6 +179,10 @@ void PlayerEntity::Shutdown(CEngine::Context &context)
 {
     if (context.physics != nullptr && character_)
     {
+        if (context.scene != nullptr)
+        {
+            context.scene->UnregisterPhysicsCharacter(character_);
+        }
         context.physics->DestroyCharacter(character_);
     }
     character_ = {};

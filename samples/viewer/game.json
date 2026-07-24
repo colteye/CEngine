@@ -17,8 +17,46 @@
   },
   "entities": [
     {
+      "classname": "player_spawn",
+      "version": 1,
+      "inputs": [],
+      "outputs": [],
+      "fields": [
+        {"name": "transform", "type": "transform"},
+        {
+          "name": "team",
+          "type": "enum",
+          "enum": "PlayerTeam",
+          "default": 0,
+          "blender_property": "ce_team",
+          "values": {"Any": 0, "Red": 1, "Blue": 2}
+        },
+        {
+          "name": "spawn_group",
+          "type": "u32",
+          "default": 0,
+          "blender_property": "ce_spawn_group"
+        },
+        {
+          "name": "priority",
+          "type": "u32",
+          "default": 0,
+          "blender_property": "ce_spawn_priority"
+        },
+        {
+          "name": "clearance_radius",
+          "type": "f32",
+          "default": 1.0,
+          "min": 0.0,
+          "blender_property": "ce_spawn_clearance_radius"
+        }
+      ]
+    },
+    {
       "classname": "player",
       "version": 1,
+      "inputs": [],
+      "outputs": [],
       "fields": [
         {"name": "transform", "type": "transform"},
         {

@@ -16,6 +16,7 @@
 #include "entity/physics_constraint_entity.h"
 
 #include "context.h"
+#include "entity/collider_entity.h"
 #include "entity/prop_entity.h"
 #include "physics/physics_system.h"
 #include "scene/scene.h"
@@ -80,13 +81,21 @@ PhysicsMotorMode MotorMode(Generated::EngineEntities::PhysicsMotorKind value)
  * @param index TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-PropEntity *BodyEntity(Scene::Scene &scene, std::uint32_t index)
+PhysicsBodyHandle Body(Scene::Scene &scene, std::uint32_t index)
 {
     if (index >= scene.Entities().size())
     {
-        return nullptr;
+        return {};
     }
-    return dynamic_cast<PropEntity *>(scene.Entities()[index].get());
+    if (const auto *prop = dynamic_cast<PropEntity *>(scene.Entities()[index].get()))
+    {
+        return prop->PhysicsBody();
+    }
+    if (const auto *collider = dynamic_cast<ColliderEntity *>(scene.Entities()[index].get()))
+    {
+        return collider->PhysicsBody();
+    }
+    return {};
 }
 
 } // namespace
@@ -113,17 +122,17 @@ void PhysicsConstraintEntity::Initialize(Context &context)
         throw std::runtime_error("physics constraint requires an active scene and physics system");
     }
 
-    PropEntity *first = BodyEntity(*context.scene, first_entity);
-    PropEntity *second = BodyEntity(*context.scene, second_entity);
-    if (first == nullptr || second == nullptr || !first->PhysicsBody() || !second->PhysicsBody())
+    const PhysicsBodyHandle first = Body(*context.scene, first_entity);
+    const PhysicsBodyHandle second = Body(*context.scene, second_entity);
+    if (!first || !second)
     {
         throw std::runtime_error("physics constraint must reference two initialized physics props");
     }
 
     PhysicsConstraintDesc desc;
     desc.type = ConstraintType(type);
-    desc.first = first->PhysicsBody();
-    desc.second = second->PhysicsBody();
+    desc.first = first;
+    desc.second = second;
     desc.first_anchor = GetTransform().position;
     desc.second_anchor = {second_anchor.x, second_anchor.y, second_anchor.z};
     desc.axis = {axis.x, axis.y, axis.z};
@@ -157,6 +166,15 @@ void PhysicsConstraintEntity::Shutdown(Context &context)
         context.physics->DestroyConstraint(constraint_);
     }
     constraint_ = {};
+}
+
+void PhysicsConstraintEntity::OnEnabledChanged(Context &context, bool runtime_enabled)
+{
+    if (context.physics != nullptr && constraint_)
+    {
+        context.physics->SetConstraintEnabled(
+            constraint_, runtime_enabled && enabled);
+    }
 }
 
 } // namespace CEngine::Entities

@@ -25,6 +25,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace CEngine::Window
@@ -196,6 +197,8 @@ class RenderSystem
      * @param flags TODO: Describe this parameter.
      */
     void UpdateMeshInstance(MeshInstanceHandle handle, const glm::mat4 &transform, std::uint32_t flags);
+    bool UpdateMeshSkinning(MeshInstanceHandle handle,
+                            std::span<const glm::mat4> palette);
 
     /**
      * @brief TODO: Describe RegisterLight.

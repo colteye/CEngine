@@ -17,6 +17,8 @@
 
 #include "input/input_system.h"
 
+#include <string>
+
 namespace Viewer
 {
 
@@ -26,15 +28,24 @@ namespace Viewer
  * @param input TODO: Describe this parameter.
  * @return TODO: Describe the return value.
  */
-Actions RegisterActions(CEngine::Input::InputSystem &input)
+Actions RegisterActions(
+    CEngine::Input::InputSystem &input, std::string_view prefix)
 {
+    const auto action_name = [prefix](std::string_view name) {
+        return prefix.empty()
+                   ? std::string(name)
+                   : std::string(prefix) + "." + std::string(name);
+    };
     Actions actions;
-    actions.move_forward = input.RegisterAction("move_forward");
-    actions.move_right = input.RegisterAction("move_right");
-    actions.look_yaw = input.RegisterAction("look_yaw");
-    actions.look_pitch = input.RegisterAction("look_pitch");
-    actions.sprint = input.RegisterAction("sprint");
-    actions.jump = input.RegisterAction("jump");
+    actions.move_forward =
+        input.RegisterAction(action_name("move_forward"));
+    actions.move_right =
+        input.RegisterAction(action_name("move_right"));
+    actions.look_yaw = input.RegisterAction(action_name("look_yaw"));
+    actions.look_pitch =
+        input.RegisterAction(action_name("look_pitch"));
+    actions.sprint = input.RegisterAction(action_name("sprint"));
+    actions.jump = input.RegisterAction(action_name("jump"));
 
     input.BindKey(actions.move_forward, CEngine::Input::Key::W, 1.0f);
     input.BindKey(actions.move_forward, CEngine::Input::Key::S, -1.0f);

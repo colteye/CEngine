@@ -15,6 +15,10 @@ layout(location = 1) in vec2 i_vertex_uv;
 layout(location = 2) in vec3 i_normal_pos;
 layout(location = 3) in vec3 i_tangent_pos;
 layout(location = 4) in vec2 i_lightmap_uv;
+layout(location = 5) in uvec4 i_joints;
+layout(location = 6) in vec4 i_weights;
+
+#include "skinning.glsl"
 
 // Output data will be interpolated for each fragment.
 out vec3 normal_pos_world;
@@ -33,13 +37,15 @@ uniform mat4 projection; // projection matrix.
 void main(){
 
 	// Output position of the vertex, in clip space : MVP * position.
-    gl_Position = projection * view * model * vec4(i_vertex_pos, 1);
+    mat4 skin = cengine_skin_matrix(i_joints, i_weights);
+    vec4 local_position = skin * vec4(i_vertex_pos, 1.0);
+    gl_Position = projection * view * model * local_position;
 
-    vertex_pos_world = vec3(model * vec4(i_vertex_pos, 1.0));
+    vertex_pos_world = vec3(model * local_position);
 	
 	// Convert normal basis vectors into world space.
-	normal_pos_world = normalize(mat3(model) * i_normal_pos);
-	tangent_pos_world = normalize(mat3(model) * i_tangent_pos);
+	normal_pos_world = normalize(mat3(model * skin) * i_normal_pos);
+	tangent_pos_world = normalize(mat3(model * skin) * i_tangent_pos);
 	bitangent_pos_world = cross(normal_pos_world, tangent_pos_world);
 
     // UV of the vertex.

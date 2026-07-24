@@ -37,6 +37,40 @@ from ceassetlib.wire import unpack_record
 
 ASSET_HEADER = struct.Struct("<4sHHI16sQ16sQQQ")
 GAME_SCHEMA = load_bundled_game()
+IDENTITY = [
+    [1.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0],
+]
+
+
+class FakeBone:
+    def __init__(self, name: str, parent: "FakeBone | None" = None) -> None:
+        self.name = name
+        self.parent = parent
+        self.matrix_local = IDENTITY
+
+
+class FakePoseBone:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.matrix = IDENTITY
+
+
+class FakePoseBones(list):
+    def get(self, name: str):
+        return next((bone for bone in self if bone.name == name), None)
+
+
+class FakeScene:
+    def __init__(self) -> None:
+        self.frame_current = 0
+        self.frame_subframe = 0.0
+
+    def frame_set(self, frame: int, subframe: float = 0.0) -> None:
+        self.frame_current = frame
+        self.frame_subframe = subframe
 
 
 class FakeKeyframe:
@@ -84,6 +118,7 @@ class FakeAction:
         self.fcurves = [
             FakeFcurve('pose.bones["root"].location', 0, [FakeKeyframe(1.0, 0.0), FakeKeyframe(24.0, 1.0, "LINEAR")])
         ]
+        self.pose_markers = []
 
 
 class FakeStrip:
@@ -138,6 +173,11 @@ class FakeObject:
         self.name = name
         self.type = obj_type
         self.animation_data = animation_data
+        if obj_type == "ARMATURE":
+            root = FakeBone("root")
+            self.data = type("FakeArmatureData", (), {"bones": [root]})()
+            self.pose = type(
+                "FakePose", (), {"bones": FakePoseBones([FakePoseBone("root")])})()
 
 
 class BlenderAnimationTests(unittest.TestCase):
@@ -169,26 +209,28 @@ class BlenderAnimationTests(unittest.TestCase):
 
         self.assertEqual(targets, [(armature, action)])
 
-    def test_animation_payload_records_fcurves_and_keyframes(self) -> None:
-        """TODO: Describe `test_animation_payload_records_fcurves_and_keyframes`."""
+    def test_animation_payload_records_sampled_local_poses(self) -> None:
+        """TODO: Describe `test_animation_payload_records_sampled_local_poses`."""
         action = FakeAction("Walk")
         armature = FakeObject("ARM_Hero", "ARMATURE", FakeAnimationData(action))
 
         payload = animation_payload(
             Path("hero.blend"), armature, action, 24.0,
             "assets/compiled/hero/skeletons/ARM_Hero.cskel",
+            FakeScene(),
         )
 
         decoded = unpack_record(GAME_SCHEMA, "animation", payload)
-        self.assertEqual(decoded["fps"], 24.0)
-        self.assertEqual(decoded["start"], 1.0)
+        self.assertAlmostEqual(decoded["duration"], 23.0 / 24.0)
         self.assertEqual(decoded["name"], "Walk")
         self.assertEqual(decoded["skeleton"]["path"],
                          "assets/compiled/hero/skeletons/ARM_Hero.cskel")
         self.assertEqual(len(decoded["tracks"]), 1)
-        self.assertEqual(decoded["tracks"][0]["path"],
-                         'pose.bones["root"].location')
-        self.assertEqual(decoded["tracks"][0]["keys"][1]["interpolation"], 2)
+        self.assertEqual(len(decoded["tracks"][0]["samples"]), 24)
+        self.assertEqual(
+            decoded["tracks"][0]["samples"][0]["value"]["translation"],
+            [0.0, 0.0, 0.0],
+        )
 
     def test_write_animation_asset_writes_common_canim(self) -> None:
         """TODO: Describe `test_write_animation_asset_writes_common_canim`."""
@@ -206,6 +248,7 @@ class BlenderAnimationTests(unittest.TestCase):
                 action,
                 24.0,
                 lambda name: root / "compiled" / "hero" / "skeletons" / f"{name}.cskel",
+                scene=FakeScene(),
             )
 
             data = export.output.read_bytes()

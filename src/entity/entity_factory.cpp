@@ -16,13 +16,19 @@
 #include "entity/entity_factory.h"
 
 #include "engine/engine_entities.generated.h"
+#include "entity/audio_entities.h"
+#include "entity/camera_entity.h"
+#include "entity/collider_entity.h"
 #include "entity/fog_entity.h"
 #include "entity/light_entity.h"
+#include "entity/logic_entities.h"
+#include "entity/marker_entities.h"
 #include "entity/physics_constraint_entity.h"
 #include "entity/post_process_entity.h"
 #include "entity/prop_entity.h"
 #include "entity/skybox_entity.h"
-#include "logging/logger.h"
+#include "entity/trigger_entity.h"
+#include "log.h"
 
 namespace CEngine::Entities
 {
@@ -36,8 +42,17 @@ EntityFactory::EntityFactory()
     Register<PhysicsConstraintEntity, Generated::EngineEntities::PhysicsConstraint>("physics_constraint");
     Register<LightEntity, Generated::EngineEntities::Light>("light");
     Register<SkyboxEntity, Generated::EngineEntities::Skybox>("skybox");
-    Register<FogEntity, Generated::EngineEntities::ExponentialHeightFog>("exponential_height_fog");
+    Register<FogEntity, Generated::EngineEntities::Fog>("fog");
     Register<PostProcessEntity, Generated::EngineEntities::PostProcess>("post_process");
+    Register<CameraEntity, Generated::EngineEntities::Camera>("camera");
+    Register<AudioSourceEntity, Generated::EngineEntities::AudioSource>("audio_source");
+    Register<AudioEnvironmentEntity, Generated::EngineEntities::AudioEnvironment>("audio_environment");
+    Register<ColliderEntity, Generated::EngineEntities::Collider>("collider");
+    Register<TriggerEntity, Generated::EngineEntities::TriggerVolume>("trigger_volume");
+    Register<LogicRelayEntity, Generated::EngineEntities::LogicRelay>("logic_relay");
+    Register<LogicTimerEntity, Generated::EngineEntities::LogicTimer>("logic_timer");
+    Register<LogicAutoEntity, Generated::EngineEntities::LogicAuto>("logic_auto");
+    Register<MarkerEntity, Generated::EngineEntities::Marker>("marker");
 }
 
 /**

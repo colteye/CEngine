@@ -50,6 +50,9 @@ struct DrawItem
     glm::vec2 lightmap_scale = glm::vec2(1.0f);
     glm::vec2 lightmap_offset = glm::vec2(0.0f);
     float lightmap_rgbm_range = 8.0f;
+    GLuint joint_palette_buffer = 0;
+    GLuint joint_palette_texture = 0;
+    std::uint32_t joint_count = 0;
 };
 
 /**

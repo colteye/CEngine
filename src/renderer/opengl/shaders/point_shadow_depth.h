@@ -18,6 +18,7 @@
 
 #include "renderer/material.h"
 #include "shader.h"
+#include "skinning.h"
 
 #include <glm/glm.hpp>
 
@@ -57,6 +58,10 @@ class PointShadowDepth
      * @param albedo_texture TODO: Describe this parameter.
      */
     void UpdateObject(const glm::mat4 &model, const Material &material, GLuint albedo_texture) const;
+    void UpdateSkinning(GLuint texture, std::uint32_t joint_count) const
+    {
+        skinning_.Bind(texture, joint_count);
+    }
 
   private:
     /**
@@ -74,6 +79,7 @@ class PointShadowDepth
     GLint base_color_factor_id_ = -1;
     GLint alpha_cutoff_id_ = -1;
     GLint alpha_test_id_ = -1;
+    SkinningUniforms skinning_;
 };
 
 } // namespace CEngine::Renderer::OpenGL
