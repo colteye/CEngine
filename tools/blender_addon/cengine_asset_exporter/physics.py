@@ -289,11 +289,12 @@ def _mesh_geometry(obj: object) -> tuple[
         if len(polygon_vertices) < 3:
             continue
         for index in range(1, len(polygon_vertices) - 1):
-            # Axis conversion changes handedness, so reverse the source winding.
+            # Blender X/Y to engine -Y/+X is a proper rotation (determinant
+            # +1), so the source winding and its outward normal are preserved.
             indices.extend((
                 polygon_vertices[0],
-                polygon_vertices[index + 1],
                 polygon_vertices[index],
+                polygon_vertices[index + 1],
             ))
     return vertices, indices
 

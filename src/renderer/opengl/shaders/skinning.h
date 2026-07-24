@@ -17,6 +17,7 @@
 #define CENGINE_RENDERER_OPENGL_SHADERS_SKINNING_H
 
 #include "shader.h"
+#include "texture_units.h"
 
 #include <cstdint>
 
@@ -62,13 +63,9 @@ class SkinningUniforms
 
     void Bind(GLuint texture, std::uint32_t joint_count) const
     {
-        // Units 14 and 15 are the IBL cubemaps. Keep the texture-buffer
-        // sampler on a distinct unit so forward PBR never aliases sampler
-        // types within one program.
-        constexpr GLint TextureUnit = 10;
-        glActiveTexture(GL_TEXTURE0 + TextureUnit);
+        glActiveTexture(GL_TEXTURE0 + TextureUnits::SkinningPalette);
         glBindTexture(GL_TEXTURE_BUFFER, texture != 0 ? texture : fallback_palette_texture_);
-        glUniform1i(palette_id_, TextureUnit);
+        glUniform1i(palette_id_, TextureUnits::SkinningPalette);
         glUniform1i(joint_count_id_, static_cast<GLint>(joint_count));
     }
 

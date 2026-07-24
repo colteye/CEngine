@@ -162,6 +162,23 @@ int main(int argc, char **argv)
                 "UI frame should use full drawable pixel dimensions") ||
         !Expect(!first_frame.Empty(), "visible screen should produce geometry"))
         return 1;
+    bool found_svg_icon = false;
+    for (const CEngine::Renderer::UiBatch &batch : first_frame.batches)
+    {
+        if (batch.texture == nullptr || batch.texture->width != 32 || batch.texture->height != 32)
+            continue;
+        for (std::size_t offset = 0; offset + 3 < batch.texture->rgba.size(); offset += 4)
+        {
+            const auto &pixels = batch.texture->rgba;
+            if (pixels[offset] > pixels[offset + 2] && pixels[offset + 3] > 0)
+            {
+                found_svg_icon = true;
+                break;
+            }
+        }
+    }
+    if (!Expect(found_svg_icon, "inline SVG should rasterize into a premultiplied RGBA UI texture"))
+        return 1;
 
     CEngine::Input::InputEvent down;
     down.type = CEngine::Input::InputEventType::PointerButtonDown;

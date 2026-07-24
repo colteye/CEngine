@@ -197,14 +197,16 @@ Cooked asset payloads use one schema-owned version-one format.
 - The HTML/CSS parser, layout, interaction, and frame-generation source is
   engine-owned under `src/ui/html`, derived from RmlUi 6.2, and compiled
   directly into `CEngineCore`. RmlUi is no longer fetched or linked as a
-  dependency; FreeType 2.14.3 remains pinned for font rasterization.
+  dependency. Its SVG module is copied into the same engine tree; FreeType
+  2.14.3 and LunaSVG 3.0.0 remain pinned for low-level rasterization.
 - A read-only content-rooted file adapter rejects absolute paths and parent
   traversal. Engine-owned focus, hit testing, layout, and generated font
   atlases feed a renderer-neutral `UiFrame`.
 - The UI runtime composes at full drawable resolution. Standard CSS `px`
   values are treated as logical pixels and scale once for high-DPI output.
-  OpenGL draws `UiFrame` last with generated texture caching and premultiplied
-  alpha; parser/layout types do not cross the renderer boundary.
+  Static inline SVG icons rasterize into the same neutral premultiplied RGBA
+  textures as font atlases. OpenGL draws `UiFrame` last with generated texture
+  caching; parser/layout/SVG types do not cross the renderer boundary.
 - UI pointer input has one authority: ordered normalized SDL events. Motion,
   button, and wheel events carry logical-window coordinates which are converted
   once at the UI boundary; pressed state remains inside the UI runtime across
@@ -272,9 +274,10 @@ Cooked asset payloads use one schema-owned version-one format.
 - Vulkan accepts the neutral UI frame at the `RenderSystem` boundary but does
   not draw it or particle billboards while that backend's general mesh path
   remains incomplete.
-- HTML external image URLs are rejected until they can resolve through cooked
-  `Store` textures. The UI facade exposes semantic click/change actions and
-  narrow text/form updates, not scripting or a browser DOM.
+- HTML image URLs are rejected until they can resolve through cooked `Store`
+  textures; the approved icon path is static inline SVG. The UI facade exposes
+  semantic click/change actions and narrow text/form updates, not scripting or
+  a browser DOM.
 
 These are explicit limits, not placeholder interfaces.
 
@@ -378,3 +381,21 @@ git diff --check
 - all 139 Python asset tests passed with two intentional skips;
 - source/build searches found no RmlUi fetch, linked target, old authored
   `.rml`/`.rcss` files, `text/rcss` links, or authored `dp` units.
+
+Inline SVG icon support was verified on 2026-07-24 with:
+
+```sh
+cmake --preset mac-debug
+cmake --build --preset mac-debug -j 8
+ctest --test-dir build/mac-debug --output-on-failure
+python3 -m unittest discover -s tools/ceasset/tests
+cmake --build --preset mac-debug --target format-check
+git diff --check
+```
+
+- all 18 CTest cases passed, with the two display-dependent OpenGL pixel tests
+  retaining their expected headless skips;
+- the UI lifecycle test rasterizes an ordinary inline `svg`/`path` icon at 2x
+  drawable density and verifies its 32-square premultiplied RGBA texture;
+- all 141 Python asset tests passed with two intentional skips;
+- the complete build, format check, and diff hygiene check passed.

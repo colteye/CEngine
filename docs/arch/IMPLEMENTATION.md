@@ -265,8 +265,9 @@ derived from RmlUi 6.2 and retains that provenance internally, while CEngine's
 content contract is a documented `.html`/`.css` subset. It consumes one ordered
 normalized `InputSystem` event stream; pointer positions are converted once
 from logical window coordinates to full drawable pixels. The runtime retains
-hover, focus, and pressed state across event-free frames, owns HTML/CSS layout
-and FreeType atlas generation, then emits one renderer-neutral `UiFrame`.
+hover, focus, and pressed state across event-free frames, owns HTML/CSS layout,
+FreeType atlas generation, and static inline SVG rasterization, then emits one
+renderer-neutral `UiFrame`.
 `RenderSystem` owns the submitted frame. The compiled graphics backend draws
 it as the final 2D pass; OpenGL implements that pass now. See
 [`../ui.md`](../ui.md) for the exact API and current limits.

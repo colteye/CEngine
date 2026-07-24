@@ -36,7 +36,9 @@ glm::mat4 PoseTransform(const glm::vec3 &position, const glm::vec3 &forward, con
 {
     glm::mat4 result(1.0f);
     result[0] = glm::vec4(forward, 0.0f);
-    result[1] = glm::vec4(right, 0.0f);
+    // Mesh local +Y is left. Negating the world-space right vector keeps the
+    // view-model basis right-handed, so culling sees the authored winding.
+    result[1] = glm::vec4(-right, 0.0f);
     result[2] = glm::vec4(up, 0.0f);
     result[3] = glm::vec4(position, 1.0f);
     return result;
@@ -171,7 +173,7 @@ bool PhysicsBallWeapon::Fire(CEngine::Context &context, const PhysicsBallWeaponP
     desc.mass = BallMass;
     desc.friction = 0.88f;
     desc.restitution = 0.28f;
-    desc.linear_velocity = pose.inherited_velocity + aim * LaunchSpeed;
+    desc.linear_velocity = aim * LaunchSpeed;
     desc.linear_damping = 0.035f;
     desc.angular_damping = 0.025f;
     desc.continuous = true;

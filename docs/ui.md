@@ -5,9 +5,11 @@ The parser, layout, interaction, and frame-generation sources live under
 `src/ui`; the derived core is under `src/ui/html` and compiles directly into
 `CEngineCore`. RmlUi is not fetched, linked, or exposed as an engine backend.
 
-The runtime is derived from RmlUi 6.2, whose MIT license and exact source
-revision are recorded beside the implementation. Its inherited internal names
-are provenance, not CEngine content formats or public API.
+The runtime is derived from RmlUi 6.2 Core and SVG sources, whose MIT license
+and exact source revision are recorded beside the implementation. Its
+inherited internal names are provenance, not CEngine content formats or public
+API. LunaSVG is a pinned low-level rasterization dependency, not an engine
+backend or authoring format.
 
 ## Public boundary
 
@@ -54,12 +56,12 @@ SDL event
   -> compiled graphics backend
 ```
 
-The runtime emits CPU geometry and generated FreeType atlases into `UiFrame`.
-That frame contains no parser, layout, or graphics-API types. Composition uses
-the full drawable dimensions. CSS `px` is interpreted as a logical pixel and
-scaled once at layout time, preserving the previous physical size on high-DPI
-windows. OpenGL uploads and draws the frame as the final two-dimensional pass
-using premultiplied alpha.
+The runtime emits CPU geometry, generated FreeType atlases, and rasterized SVG
+textures into `UiFrame`. That frame contains no parser, layout, SVG, or
+graphics-API types. Composition uses the full drawable dimensions. CSS `px` is
+interpreted as a logical pixel and scaled once at layout time, preserving the
+previous physical size on high-DPI windows. OpenGL uploads and draws the frame
+as the final two-dimensional pass using premultiplied alpha.
 
 Pointer input has one source: the ordered normalized event stream. Motion,
 button, and wheel events each carry their own logical-window position, which
@@ -68,8 +70,9 @@ between events, so a hold can span any number of event-free frames without
 polling a second cursor position.
 
 The read-only file interface is rooted at the content directory and rejects
-absolute paths and parent traversal. FreeType remains a pinned external
-dependency; the HTML/CSS implementation itself is in the engine tree.
+absolute paths and parent traversal. FreeType and LunaSVG are pinned
+rasterization dependencies; the HTML/CSS/SVG integration implementation itself
+is in the engine tree.
 
 ## Approved HTML subset
 
@@ -89,10 +92,23 @@ Documents use normal `.html` files with an `<html>` root, `<head>`, and
 ```
 
 The approved elements are `html`, `head`, `title`, `link`, `body`, `div`,
-`span`, `section`, `p`, `h1`, `h2`, `h3`, `label`, `button`, and `input`.
-Inputs support `type="range"` and `type="checkbox"` with `min`, `max`, `step`,
-`value`, and `checked`. The author-facing attributes are `id`, `class`, and
-those form attributes.
+`span`, `section`, `p`, `h1`, `h2`, `h3`, `label`, `button`, `input`, and
+static inline `svg`. Inputs support `type="range"` and `type="checkbox"` with
+`min`, `max`, `step`, `value`, and `checked`. The author-facing attributes are
+`id`, `class`, and those form attributes.
+
+Inline SVG is the approved icon path and uses ordinary markup:
+
+```html
+<svg width="16" height="16" viewBox="0 0 16 16">
+    <path fill="#15130f" d="M3 2 L14 8 L3 14 Z"/>
+</svg>
+```
+
+The approved static SVG subset includes `svg`, `g`, `path`, `rect`, `circle`,
+`ellipse`, `line`, `polyline`, and `polygon`, with dimensions, `viewBox`,
+paths, fills, strokes, and transforms. SVG scripts, animation, navigation, and
+network resources are outside the contract.
 
 This is intentionally a strict, script-free subset. Tags must be nested
 correctly and void elements should be self-closed. There is no JavaScript,
@@ -145,8 +161,9 @@ The viewer does not link or initialize ImGui.
 - The OpenGL backend draws `UiFrame`; Vulkan still compiles against the same
   neutral frame boundary but does not draw UI while its general render path is
   incomplete.
-- External HTML image URLs are rejected until they can resolve through the
-  cooked `Store` texture path. Generated FreeType atlases are supported.
+- Ordinary HTML image URLs are rejected until they can resolve through the
+  cooked `Store` texture path. Icons use approved inline SVG; generated
+  FreeType atlases are also supported.
 - The facade exposes semantic click/change actions, screen visibility, modal
   focus, fonts, narrow text/form updates, and composition. General DOM access,
   scripting, localization, animation helpers, and game-specific widgets remain

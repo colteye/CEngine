@@ -283,7 +283,7 @@ std::shared_ptr<const CEngine::Assets::Particle> MakeMuzzleParticles()
     particles->speed = {0.9f, 2.8f};
     particles->spread = 0.45f;
     particles->gravity = {0.0f, 0.0f, -1.2f};
-    particles->size = {0.11f, 0.015f};
+    particles->size = {0.24f, 0.035f};
     particles->start_color = {1.0f, 0.42f, 0.06f, 1.0f};
     particles->end_color = {1.0f, 0.03f, 0.0f, 0.0f};
     return particles;

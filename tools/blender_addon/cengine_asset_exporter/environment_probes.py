@@ -177,8 +177,9 @@ def bake_environment_probes(
 
     camera_data = blender.data.cameras.new("CEngineEnvironmentProbeBake")
     camera_data.type = "PERSP"
+    # A cubemap face must be exactly 90 degrees. Assigning lens after angle
+    # silently recomputes Blender's FOV and creates overlaps and seams.
     camera_data.angle = math.pi * 0.5
-    camera_data.lens = 16.0
     camera = blender.data.objects.new(
         "CEngineEnvironmentProbeBake", camera_data)
     scene.collection.objects.link(camera)
@@ -190,6 +191,8 @@ def bake_environment_probes(
         "resolution_y": scene.render.resolution_y,
         "resolution_percentage": scene.render.resolution_percentage,
         "film_transparent": scene.render.film_transparent,
+        "use_compositing": scene.render.use_compositing,
+        "use_sequencer": scene.render.use_sequencer,
         "filepath": scene.render.filepath,
         "file_format": scene.render.image_settings.file_format,
         "color_mode": scene.render.image_settings.color_mode,
@@ -205,6 +208,10 @@ def bake_environment_probes(
         scene.render.resolution_y = settings.resolution
         scene.render.resolution_percentage = 100
         scene.render.film_transparent = False
+        # Probe captures need the camera's render layer. Authored compositors
+        # and sequencer strips may intentionally replace it with a fixed image.
+        scene.render.use_compositing = False
+        scene.render.use_sequencer = False
         scene.render.image_settings.file_format = "OPEN_EXR"
         scene.render.image_settings.color_mode = "RGBA"
         scene.render.image_settings.color_depth = "32"
@@ -282,6 +289,8 @@ def bake_environment_probes(
         scene.render.resolution_percentage = previous[
             "resolution_percentage"]
         scene.render.film_transparent = previous["film_transparent"]
+        scene.render.use_compositing = previous["use_compositing"]
+        scene.render.use_sequencer = previous["use_sequencer"]
         scene.render.filepath = previous["filepath"]
         scene.render.image_settings.file_format = previous["file_format"]
         scene.render.image_settings.color_mode = previous["color_mode"]

@@ -141,7 +141,6 @@ void PlayerEntity::Update(CEngine::Context &context, float delta_seconds)
     {
         movement /= movement_length;
     }
-    glm::vec3 inherited_velocity(0.0f);
     if (context.physics != nullptr && character_)
     {
         PhysicsCharacterState state;
@@ -160,7 +159,6 @@ void PlayerEntity::Update(CEngine::Context &context, float delta_seconds)
             if (context.physics->GetCharacterState(character_, state))
             {
                 transform.position = state.position;
-                inherited_velocity = state.velocity;
             }
         }
     }
@@ -199,7 +197,6 @@ void PlayerEntity::Update(CEngine::Context &context, float delta_seconds)
     weapon_pose.aim_direction = forward;
     weapon_pose.right = right;
     weapon_pose.up = view_up;
-    weapon_pose.inherited_velocity = inherited_velocity;
     weapon_pose.first_person = view_mode == Generated::PlayerViewMode::FirstPerson;
     weapon_.Update(context, delta_seconds, has_local_input && context.input->Value(actions_.fire) > 0.5f, weapon_pose);
 }

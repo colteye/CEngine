@@ -199,9 +199,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(ozz_animation)
 
-# The UI parser, layout, interaction, and frame-generation source is owned
-# directly under src/ui/html. FreeType remains the one external UI dependency
-# and supplies font rasterization.
+# The UI parser, layout, interaction, frame-generation, and SVG integration
+# source is owned directly under src/ui/html. FreeType and LunaSVG supply the
+# low-level font and vector rasterization used by that engine code.
 set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
@@ -218,6 +218,22 @@ FetchContent_MakeAvailable(freetype)
 if(NOT TARGET Freetype::Freetype)
     add_library(Freetype::Freetype ALIAS freetype-interface)
 endif()
+
+set(LUNASVG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(PLUTOVG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    plutovg
+    GIT_REPOSITORY https://github.com/sammycage/plutovg.git
+    # PlutoVG 0.0.4, the LunaSVG 3.0.0 raster backend.
+    GIT_TAG 0e4604d0dc29e3c58abaa9b9e9a5a64f8199c9bf
+)
+FetchContent_Declare(
+    lunasvg
+    GIT_REPOSITORY https://github.com/sammycage/lunasvg.git
+    # LunaSVG 3.0.0, the minimum API expected by the upstream SVG module.
+    GIT_TAG 4628afe29312e0fa09517ce54cd3403443d119d9
+)
+FetchContent_MakeAvailable(lunasvg)
 
 if(CENGINE_ENABLE_OPENGL)
     set(CENGINE_OPENGL_SHADER_SOURCES
@@ -481,6 +497,7 @@ endif()
 
 file(GLOB_RECURSE CENGINE_UI_HTML_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/html/Source/Core/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/html/Source/SVG/*.cpp"
 )
 
 set(CENGINE_CORE_SOURCES
@@ -570,10 +587,12 @@ target_link_libraries(CEngineCore PUBLIC ${CENGINE_SDL3_TARGET})
 target_link_libraries(CEngineCore PUBLIC CEngineAssets)
 target_link_libraries(CEngineCore PRIVATE ozz_animation_offline)
 target_link_libraries(CEngineCore PRIVATE Freetype::Freetype)
+target_link_libraries(CEngineCore PRIVATE lunasvg::lunasvg)
 target_link_libraries(CEngineCore PRIVATE ${CMAKE_DL_LIBS})
 target_link_libraries(CEngineScene PUBLIC CEngineCore)
 target_compile_definitions(CEngineCore PRIVATE
     RMLUI_FONT_ENGINE_FREETYPE
+    RMLUI_SVG_PLUGIN
     RMLUI_STATIC_LIB
     RMLUI_VERSION="6.2-cengine"
 )

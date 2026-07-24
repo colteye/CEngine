@@ -37,6 +37,7 @@
 #include <memory>
 #include <vector>
 
+#include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace
@@ -391,21 +392,17 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
 #ifdef CENGINE_ENABLE_JOLT_PHYSICS
     std::size_t viewer_mesh_instance_count = 0;
     bool collision_result =
-        Expect(physics.BodyCount() == 1,
-               "Sponza should create one static structural collision body");
+        Expect(physics.BodyCount() == 1, "Sponza should create one static structural collision body");
     Viewer::PlayerRequest player_request;
     player_request.id = 1;
     player_request.name = "SponzaTestPlayer";
     player_request.locally_controlled = true;
     player_request.primary_view = true;
     collision_result =
-        Expect(game.AddPlayer(*scene, player_request),
-               "Sponza should spawn the viewer character") &&
-        collision_result;
+        Expect(game.AddPlayer(*scene, player_request), "Sponza should spawn the viewer character") && collision_result;
     Viewer::PlayerEntity *player = game.PrimaryViewPlayer(*scene);
     collision_result =
-        Expect(player != nullptr && physics.CharacterCount() == 1,
-               "Sponza should create one Jolt character") &&
+        Expect(player != nullptr && physics.CharacterCount() == 1, "Sponza should create one Jolt character") &&
         collision_result;
     if (player != nullptr)
     {
@@ -415,10 +412,29 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
         {
             scene->Update(context, FixedDelta);
         }
-        collision_result =
-            Expect(std::abs(player->GetTransform().position.z) < 0.15f,
-                   "Sponza collision should keep the viewer's feet at the spawn") &&
-            collision_result;
+        collision_result = Expect(std::abs(player->GetTransform().position.z) < 0.15f,
+                                  "Sponza collision should keep the viewer's feet at the spawn") &&
+                           collision_result;
+
+        PhysicsShape projectile_shape;
+        projectile_shape.type = PhysicsShapeType::Sphere;
+        projectile_shape.radius = 0.18f;
+        PhysicsBodyDesc projectile_desc;
+        projectile_desc.motion_type = PhysicsMotionType::Dynamic;
+        projectile_desc.position = {4.0f, 0.0f, 1.5f};
+        projectile_desc.linear_velocity = {0.0f, 0.0f, -18.0f};
+        projectile_desc.continuous = true;
+        const PhysicsBodyHandle projectile = physics.CreateBody(projectile_desc, projectile_shape);
+        for (int tick = 0; tick < 120; ++tick)
+        {
+            scene->Update(context, FixedDelta);
+        }
+        PhysicsBodyState projectile_state;
+        collision_result = Expect(projectile && physics.GetBodyState(projectile, projectile_state) &&
+                                      projectile_state.position.z > 0.05f,
+                                  "Sponza collision should support dynamic rigid bodies above the authored floor") &&
+                           collision_result;
+        physics.DestroyBody(projectile);
     }
 #else
     constexpr std::size_t viewer_mesh_instance_count = 0;
@@ -446,6 +462,19 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
     std::size_t point_count = 0;
     std::size_t environment_probe_count = 0;
     bool environment_probes_are_valid = true;
+    std::vector<const CEngine::Renderer::Texture *> environment_probe_panoramas;
+    const auto probe_covers = [&](const glm::vec3 &position) {
+        return std::any_of(renderer.GetEnvironmentProbes().begin(), renderer.GetEnvironmentProbes().end(),
+                           [&](const CEngine::Renderer::EnvironmentProbe &probe) {
+                               if (!probe.enabled || probe.panorama == nullptr)
+                               {
+                                   return false;
+                               }
+                               const glm::vec3 local =
+                                   glm::vec3(glm::inverse(probe.transform) * glm::vec4(position, 1.0f));
+                               return glm::all(glm::lessThanEqual(glm::abs(local), glm::vec3(1.0f)));
+                           });
+    };
     for (const auto &probe : renderer.GetEnvironmentProbes())
     {
         if (probe.panorama == nullptr)
@@ -453,10 +482,15 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
             continue;
         }
         ++environment_probe_count;
-        environment_probes_are_valid =
-            environment_probes_are_valid && probe.enabled && !probe.panorama->Empty() &&
-            probe.intensity > 0.0f && probe.blend_distance > 0.0f;
+        environment_probe_panoramas.push_back(probe.panorama.get());
+        environment_probes_are_valid = environment_probes_are_valid && probe.enabled && !probe.panorama->Empty() &&
+                                       probe.intensity > 0.0f && probe.blend_distance > 0.0f;
     }
+    const bool environment_probe_captures_are_distinct =
+        environment_probes_are_valid && environment_probe_panoramas.size() == 3 &&
+        environment_probe_panoramas[0]->mips.front().data != environment_probe_panoramas[1]->mips.front().data &&
+        environment_probe_panoramas[0]->mips.front().data != environment_probe_panoramas[2]->mips.front().data &&
+        environment_probe_panoramas[1]->mips.front().data != environment_probe_panoramas[2]->mips.front().data;
     const CEngine::Renderer::Light *sun = nullptr;
     for (const auto &light : lights)
     {
@@ -483,6 +517,11 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
                   "authored skybox should replace fallback ambient lighting with IBL") &&
            Expect(environment_probe_count == 3 && environment_probes_are_valid,
                   "Sponza should bind three baked local dynamic-lighting probes") &&
+           Expect(environment_probe_captures_are_distinct,
+                  "Sponza probes should contain distinct location-specific captures") &&
+           Expect(probe_covers({4.8f, 0.0f, 1.5f}) && probe_covers({0.0f, -12.0f, 1.5f}) &&
+                      probe_covers({0.0f, 12.0f, 1.5f}),
+                  "Sponza probes should cover the playable front area and both hallway ends") &&
            Expect(found_fog && fog.enabled && fog.density > 0.0f,
                   "authored exponential height fog should reach the renderer") &&
            Expect(lights.size() == expected_realtime_lights,

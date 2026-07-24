@@ -24,7 +24,6 @@ struct PhysicsBallWeaponPose
     glm::vec3 aim_direction = glm::vec3(1.0f, 0.0f, 0.0f);
     glm::vec3 right = glm::vec3(0.0f, -1.0f, 0.0f);
     glm::vec3 up = glm::vec3(0.0f, 0.0f, 1.0f);
-    glm::vec3 inherited_velocity = glm::vec3(0.0f);
     bool first_person = true;
 };
 

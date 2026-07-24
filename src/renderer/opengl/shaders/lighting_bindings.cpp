@@ -16,6 +16,7 @@
 #include "lighting_bindings.h"
 
 #include "renderer/light.h"
+#include "renderer/opengl/shaders/texture_units.h"
 #include "renderer/render_system.h"
 
 #include <algorithm>
@@ -32,8 +33,6 @@ namespace
 {
 constexpr GLuint KDirectLightBindingPoint = 0;
 constexpr GLuint KShadowBindingPoint = 1;
-constexpr GLint KShadowAtlasTextureUnit = 5;
-constexpr GLint KPointShadowFirstTextureUnit = 6;
 
 /**
  * @brief TODO: Describe SameShadowData.
@@ -212,15 +211,15 @@ void ShadowSamplers::Initialize(GLuint shader_id)
 void ShadowSamplers::Bind(GLuint atlas_texture,
                           const std::array<GLuint, ShadowLimits::KMaxPointShadows> &point_textures) const
 {
-    glActiveTexture(GL_TEXTURE0 + KShadowAtlasTextureUnit);
+    glActiveTexture(GL_TEXTURE0 + TextureUnits::ShadowAtlas);
     glBindTexture(GL_TEXTURE_2D, atlas_texture);
-    glUniform1i(atlas, KShadowAtlasTextureUnit);
+    glUniform1i(atlas, TextureUnits::ShadowAtlas);
 
     for (int index = 0; index < ShadowLimits::KMaxPointShadows; ++index)
     {
-        glActiveTexture(GL_TEXTURE0 + KPointShadowFirstTextureUnit + index);
+        glActiveTexture(GL_TEXTURE0 + TextureUnits::PointShadowFirst + index);
         glBindTexture(GL_TEXTURE_CUBE_MAP, point_textures[index]);
-        glUniform1i(point_maps[index], KPointShadowFirstTextureUnit + index);
+        glUniform1i(point_maps[index], TextureUnits::PointShadowFirst + index);
     }
 }
 
@@ -283,14 +282,12 @@ void EnvironmentUniforms::Initialize(GLuint shader_id)
 void EnvironmentUniforms::BindAndUpload(const RenderSystem &rendering, GLuint irradiance_texture,
                                         GLuint prefiltered_texture) const
 {
-    constexpr GLint KIrradianceTextureUnit = 14;
-    constexpr GLint KPrefilteredTextureUnit = 15;
-    glActiveTexture(GL_TEXTURE0 + KIrradianceTextureUnit);
+    glActiveTexture(GL_TEXTURE0 + TextureUnits::GlobalIrradiance);
     glBindTexture(GL_TEXTURE_CUBE_MAP, irradiance_texture);
-    glUniform1i(irradiance, KIrradianceTextureUnit);
-    glActiveTexture(GL_TEXTURE0 + KPrefilteredTextureUnit);
+    glUniform1i(irradiance, TextureUnits::GlobalIrradiance);
+    glActiveTexture(GL_TEXTURE0 + TextureUnits::GlobalPrefiltered);
     glBindTexture(GL_TEXTURE_CUBE_MAP, prefiltered_texture);
-    glUniform1i(prefiltered, KPrefilteredTextureUnit);
+    glUniform1i(prefiltered, TextureUnits::GlobalPrefiltered);
 
     const ImageBasedLighting &ibl = rendering.GetImageBasedLighting();
     glUniform1i(ibl_enabled, static_cast<GLint>(ibl.enabled && irradiance_texture != 0 && prefiltered_texture != 0));
@@ -333,8 +330,7 @@ void EnvironmentProbeUniforms::BindAndUpload(std::span<const EnvironmentProbeBin
 
     for (std::size_t index = 0; index < KMaxBoundEnvironmentProbes; ++index)
     {
-        constexpr GLint FirstProbeTextureUnit = 10;
-        const GLint irradiance_unit = FirstProbeTextureUnit + static_cast<GLint>(index * 2u);
+        const GLint irradiance_unit = TextureUnits::EnvironmentProbeFirst + static_cast<GLint>(index * 2u);
         const GLint prefiltered_unit = irradiance_unit + 1;
         const bool active = index < probe_count && probes[index].probe != nullptr;
         glActiveTexture(GL_TEXTURE0 + irradiance_unit);

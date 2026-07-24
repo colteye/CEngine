@@ -146,6 +146,19 @@ class BlenderPhysicsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid"):
             validate_shape(shape)
 
+    def test_triangle_mesh_preserves_front_face_winding(self) -> None:
+        """Blender-to-engine conversion is a rotation, not a reflection."""
+        obj = FakeObject("Floor", ce_collider="triangle_mesh")
+        shape = collision_shape_for_object(obj)
+
+        self.assertEqual(shape.indices[:3], [0, 1, 2])
+        first, second, third = (
+            shape.vertices[index] for index in shape.indices[:3]
+        )
+        ab = tuple(second[axis] - first[axis] for axis in range(3))
+        ac = tuple(third[axis] - first[axis] for axis in range(3))
+        self.assertGreater(ab[0] * ac[1] - ab[1] * ac[0], 0.0)
+
     def test_dynamic_triangle_mesh_has_actionable_error(self) -> None:
         """TODO: Describe `test_dynamic_triangle_mesh_has_actionable_error`."""
         with tempfile.TemporaryDirectory() as tmp:

@@ -44,6 +44,24 @@ bool Near(float left, float right)
     return std::abs(left - right) < 0.0001f;
 }
 
+const CEngine::Renderer::MeshInstance *FindMeshInstance(const CEngine::Renderer::RenderSystem &rendering,
+                                                        std::string_view mesh_name)
+{
+    for (const CEngine::Renderer::MeshInstance &instance : rendering.GetMeshInstances())
+    {
+        if (instance.mesh != nullptr && instance.mesh->name == mesh_name)
+        {
+            return &instance;
+        }
+    }
+    return nullptr;
+}
+
+bool RightHanded(const glm::mat4 &transform)
+{
+    return glm::dot(glm::cross(glm::vec3(transform[0]), glm::vec3(transform[1])), glm::vec3(transform[2])) > 0.0f;
+}
+
 Viewer::PlayerSpawnEntity &AddSpawn(CEngine::Scene::Scene &scene, std::string_view name, glm::vec3 position,
                                     Viewer::Generated::PlayerTeam team, std::uint32_t priority = 0)
 {
@@ -96,14 +114,25 @@ bool PlayerCrouchesAndFiresPhysicsBalls()
                                  "Control should shrink the character and lower its camera");
 
     input.Set(actions.crouch, 0.0f);
+    input.Set(actions.move_right, 1.0f);
     input.Set(actions.fire, 1.0f);
     scene.Update(context, 0.2f);
-    const bool fired = Expect(!player.IsCrouched() && player.ProjectileCount() == 1 && physics.BodyCount() == 2 &&
-                                  rendering.GetMeshInstances().size() == 4 &&
-                                  rendering.GetParticleEmitterCount() == 1 && rendering.GetParticleDraws().size() == 12,
-                              "primary fire should create one visible dynamic physics ball and a muzzle burst");
+    const CEngine::Renderer::MeshInstance *launcher = FindMeshInstance(rendering, "PhysicsBallLauncher");
+    const CEngine::Renderer::MeshInstance *ball = FindMeshInstance(rendering, "PhysicsBall");
+    const bool fired =
+        Expect(!player.IsCrouched() && player.ProjectileCount() == 1 && physics.BodyCount() == 2 &&
+                   rendering.GetMeshInstances().size() == 4 && rendering.GetParticleEmitterCount() == 1 &&
+                   rendering.GetParticleDraws().size() == 12,
+               "primary fire should create one visible dynamic physics ball and a muzzle burst") &&
+        Expect(launcher != nullptr && RightHanded(launcher->transform),
+               "the first-person launcher transform should preserve outward face winding") &&
+        Expect(ball != nullptr && Near(ball->transform[3].y - player.GetTransform().position.y, -0.19f),
+               "a moving player should still launch the ball strictly along the camera forward axis") &&
+        Expect(!rendering.GetParticleDraws().empty() && Near(rendering.GetParticleDraws().front().size, 0.24f),
+               "the muzzle burst should use the enlarged evaluation size");
 
     input.Set(actions.fire, 0.0f);
+    input.Set(actions.move_right, 0.0f);
     scene.Update(context, 1.0f / 60.0f);
     const bool retained =
         Expect(player.ProjectileCount() == 1 && physics.IsValid(ground) && !rendering.GetParticleDraws().empty(),

@@ -13,3 +13,9 @@ body {
     height: 60px;
     background-color: #d6a85f;
 }
+
+#test-icon {
+    position: absolute;
+    left: 160px;
+    top: 20px;
+}
