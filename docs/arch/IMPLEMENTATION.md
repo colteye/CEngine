@@ -46,12 +46,16 @@ at 60 Hz, performs at most four catch-up ticks, and drops older excess time.
 One scene tick is:
 
 ```text
+RenderSystem::UpdateParticles
 Entity::Update
 PhysicsSystem::Step(fixed_delta)
 Entity::LateUpdate
 RenderSystem::Render
 ```
 
+Particles from the previous tick advance before entity updates, so current-tick
+bursts are presented once at age zero. Particle simulation uses the same fixed
+simulation delta as gameplay and does not advance from presentation time.
 Kinematic targets and character commands are issued in `Update`. Dynamic body
 state is copied to entity transforms in `LateUpdate`. `PhysicsSystem::Step`
 advances exactly once and never owns another clock.
@@ -62,7 +66,7 @@ The representation follows lifetime:
 
 | Value | Representation | Reason |
 | --- | --- | --- |
-| reusable entity, mesh-instance, light, body, constraint, character, or audio-voice slot | tagged 64-bit `Handle<Tag>` packing a 32-bit index and generation | stale references must fail after slot reuse and unrelated handle domains must not mix |
+| reusable entity, mesh-instance, particle-emitter, light, body, constraint, character, or audio-voice slot | tagged 64-bit `Handle<Tag>` packing a 32-bit index and generation | stale references must fail after slot reuse and unrelated handle domains must not mix |
 | append-only input action | tagged `ActionHandle` with a fixed generation | actions share the typed handle representation but are never removed or reused |
 | serialized entity or asset table position | `uint32_t` | it is a file-local index, not a live runtime identity |
 | cooked asset identity | validated `Reference{path, guid, type}` | immutable assets do not need mutable runtime handles |
@@ -106,7 +110,7 @@ owns entity property layouts. The supported field vocabulary includes semantic
 `asset`, `asset_list`, and `entity` references; tooling validates those
 references before writing.
 
-The engine-owned library is the 15 concrete classes documented in
+The engine-owned library is the 16 concrete classes documented in
 [`../entity_library.md`](../entity_library.md). Entity schemas declare their
 supported inputs and outputs. Connections carry caller/activator identity,
 parameter, simulation-time delay, and optional fire count; the scene dispatch
@@ -155,6 +159,15 @@ corresponding retained mesh instance outlives them. OpenGL uploads one AoS
 vertex buffer and one index buffer per shared mesh and reference-counts its
 private GPU resources. Draws use `glDrawElements`.
 
+`ParticleEmitter` is the separate retained placement and capacity record for a
+shared immutable `.cparticle` definition and optional resolved texture. The
+renderer owns generation-checked emitter slots and bounded CPU simulation.
+Looping rate emission and explicit bursts share the same lifetime, cone
+velocity, gravity, size, color, local/world-space, and blend semantics. OpenGL
+draws the resulting particles as depth-tested camera-facing billboards in scene
+HDR before presentation; untextured particles use the built-in soft-disc
+coverage.
+
 The compiled `IRenderBackend` boundary exists because OpenGL and Vulkan have
 different resource implementations. It is not a runtime plugin registry.
 Vulkan remains an incomplete compiled alternative.
@@ -177,8 +190,16 @@ Static diffuse transport is one HDR lightmap assembled from two linear Cycles
 passes: indirect from baked and mixed lights plus the World, and direct from
 baked lights plus the World. Mixed direct lighting remains runtime work.
 Because the global environment has no local visibility, OpenGL applies global
-runtime IBL only to non-lightmapped surfaces; future spatial reflection probes
-are a separate indirect-specular path.
+runtime IBL only to non-lightmapped surfaces.
+
+`EnvironmentProbe` is a narrow retained renderer record containing a baked HDR
+panorama, a box transform, edge blend distance, intensity, and enabled state.
+The OpenGL backend converts each panorama to irradiance and roughness-prefiltered
+cubemaps, selects at most two camera-local probes, blends their box influence,
+and uses box-projected parallax for specular reflection. This local IBL is
+evaluated only for non-lightmapped surfaces: static diffuse transport remains
+owned by lightmaps, while dynamic props, the view weapon, and projectiles
+receive locally occluded GI and reflections.
 
 ## Physics
 
@@ -235,17 +256,20 @@ do not cross the backend.
 generation-checked handles. Element clicks and form changes become semantic
 `UiEvent` actions; narrow text, numeric-value, and checked-state setters support
 live HUDs and game-owned tuning. Game code does not receive DOM pointers or
-RmlUi callbacks.
+parser callbacks.
 
-RmlUi is a private implementation under `src/ui/rmlui`, not a renderer backend
-and not a public engine dependency. It consumes one ordered normalized
-`InputSystem` event stream; pointer positions are converted once from logical
-window coordinates to full drawable pixels. RmlUi retains hover, focus, and
-pressed state across event-free frames, owns RML/RCSS layout and FreeType atlas
-generation, then emits one renderer-neutral `UiFrame`. `RenderSystem` owns the
-submitted frame. The compiled graphics backend draws it as the final 2D pass;
-OpenGL implements that pass now. See [`../ui.md`](../ui.md) for the exact API
-and current limits.
+The parser, CSS layout, interaction, and frame-generation implementation is
+engine-owned under `src/ui/html` and compiled directly into `CEngineCore`; it
+is not a renderer backend or linked RmlUi dependency. The implementation is
+derived from RmlUi 6.2 and retains that provenance internally, while CEngine's
+content contract is a documented `.html`/`.css` subset. It consumes one ordered
+normalized `InputSystem` event stream; pointer positions are converted once
+from logical window coordinates to full drawable pixels. The runtime retains
+hover, focus, and pressed state across event-free frames, owns HTML/CSS layout
+and FreeType atlas generation, then emits one renderer-neutral `UiFrame`.
+`RenderSystem` owns the submitted frame. The compiled graphics backend draws
+it as the final 2D pass; OpenGL implements that pass now. See
+[`../ui.md`](../ui.md) for the exact API and current limits.
 
 ## Window and platform
 

@@ -468,10 +468,10 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
         std::cerr << "Failed to initialize game UI.\n";
         return 1;
     }
-    const CEngine::UI::UiScreenHandle start_menu = ui.LoadScreen("ui/viewer/start_menu.rml");
-    const CEngine::UI::UiScreenHandle hud = ui.LoadScreen("ui/viewer/hud.rml");
+    const CEngine::UI::UiScreenHandle start_menu = ui.LoadScreen("ui/viewer/start_menu.html");
+    const CEngine::UI::UiScreenHandle hud = ui.LoadScreen("ui/viewer/hud.html");
 #ifdef CENGINE_ENABLE_OPENGL
-    const CEngine::UI::UiScreenHandle tuning_menu = ui.LoadScreen("ui/viewer/tuning.rml");
+    const CEngine::UI::UiScreenHandle tuning_menu = ui.LoadScreen("ui/viewer/tuning.html");
 #endif
     if (!start_menu || !hud ||
 #ifdef CENGINE_ENABLE_OPENGL
@@ -597,7 +597,7 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
     bool ui_input_mode = false;
     bool show_tuning_panel = false;
     bool tab_was_down = false;
-    bool shift_was_down = false;
+    bool tuning_was_down = false;
     TuningOverrides tuning_overrides;
 #endif
     bool game_started = false;
@@ -669,9 +669,8 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
             input.SetPointerCaptured(!ui_input_mode);
         }
         tab_was_down = tab_down;
-        const bool shift_down =
-            input.IsDown(CEngine::Input::Key::LeftShift) || input.IsDown(CEngine::Input::Key::RightShift);
-        if (game_started && shift_down && !shift_was_down)
+        const bool tuning_down = input.IsDown(CEngine::Input::Key::F1);
+        if (game_started && tuning_down && !tuning_was_down)
         {
             show_tuning_panel = !show_tuning_panel;
             ui_input_mode = show_tuning_panel;
@@ -685,7 +684,7 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
             }
             input.SetPointerCaptured(!ui_input_mode);
         }
-        shift_was_down = shift_down;
+        tuning_was_down = tuning_down;
         if (!game_started || ui_input_mode)
         {
             input.Set(actions.move_forward, 0.0f);
@@ -694,6 +693,8 @@ int RunScene(CEngine::Window::WindowSystem &window, const std::filesystem::path 
             input.Set(actions.look_pitch, 0.0f);
             input.Set(actions.sprint, 0.0f);
             input.Set(actions.jump, 0.0f);
+            input.Set(actions.crouch, 0.0f);
+            input.Set(actions.fire, 0.0f);
         }
 #endif
 

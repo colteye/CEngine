@@ -52,7 +52,8 @@ void PBRStandard::Use() const
  */
 void PBRStandard::UpdateFrame(RenderSystem &rendering, const ShadowGpuData &shadow_data, GLuint shadow_atlas,
                               const std::array<GLuint, ShadowLimits::KMaxPointShadows> &point_shadow_maps,
-                              GLuint irradiance_map, GLuint prefiltered_map)
+                              GLuint irradiance_map, GLuint prefiltered_map,
+                              std::span<const EnvironmentProbeBinding> probes)
 {
     const CameraFrameData &camera_frame_data = rendering.GetCameraFrameData();
     glUniform3fv(cam_pos_id_, 1, glm::value_ptr(camera_frame_data.camera_position));
@@ -63,6 +64,7 @@ void PBRStandard::UpdateFrame(RenderSystem &rendering, const ShadowGpuData &shad
     shadow_buffer_.Upload(shadow_data);
     shadow_samplers_.Bind(shadow_atlas, point_shadow_maps);
     environment_uniforms_.BindAndUpload(rendering, irradiance_map, prefiltered_map);
+    environment_probe_uniforms_.BindAndUpload(probes);
 }
 
 /**
@@ -96,6 +98,7 @@ void PBRStandard::InitializeParameters()
     shadow_samplers_.Initialize(shader_id);
     ambient_uniforms_.Initialize(shader_id);
     environment_uniforms_.Initialize(shader_id);
+    environment_probe_uniforms_.Initialize(shader_id);
 
     cam_pos_id_ = glGetUniformLocation(shader_id, "cam_pos_world");
 

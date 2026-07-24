@@ -578,6 +578,23 @@
       ]
     },
     {
+      "classname": "environment_probe",
+      "version": 1,
+      "inputs": [],
+      "outputs": [],
+      "fields": [
+        {"name": "transform", "type": "transform"},
+        {"name": "panorama", "type": "asset", "asset_type": "texture"},
+        {"name": "blend_distance", "type": "f32", "default": 1.0, "min": 0.0},
+        {"name": "intensity", "type": "f32", "default": 1.0, "min": 0.0},
+        {
+          "name": "flags",
+          "type": "flags",
+          "members": [{"name": "enabled", "bit": 0, "default": true}]
+        }
+      ]
+    },
+    {
       "classname": "fog",
       "version": 1,
       "inputs": [],

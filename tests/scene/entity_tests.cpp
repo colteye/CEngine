@@ -157,6 +157,11 @@ class FakeInputBackend final : public CEngine::Input::IInputBackend
     {
         return {4.0f, -2.0f};
     }
+    [[nodiscard]] bool IsPointerDown(
+        CEngine::Input::PointerButton button) const override
+    {
+        return button == CEngine::Input::PointerButton::Primary;
+    }
     /**
      * @brief TODO: Describe SetPointerCaptured.
      *
@@ -495,13 +500,18 @@ bool InputSystemOwnsPlatformBackend()
     CEngine::Input::InputSystem input(std::move(backend));
     const auto move = input.RegisterAction("move");
     const auto look = input.RegisterAction("look");
+    const auto fire = input.RegisterAction("fire");
     input.BindKey(move, CEngine::Input::Key::W);
     input.BindPointerAxis(look, CEngine::Input::PointerAxis::X, 0.5f);
+    input.BindPointerButton(
+        fire, CEngine::Input::PointerButton::Primary);
     input.Set(move, -1.0f);
     input.BeginFrame();
     return Expect(backend_ptr->frames == 1, "input system should begin its platform backend frame") &&
            Expect(Near(input.Value(move), 1.0f), "registered key binding should produce its logical action") &&
            Expect(Near(input.Value(look), 2.0f), "registered pointer binding should scale its logical action") &&
+           Expect(Near(input.Value(fire), 1.0f),
+                  "registered pointer button should produce its logical action") &&
            Expect(input.IsDown(CEngine::Input::Key::W) && input.PointerDelta() == glm::vec2(4.0f, -2.0f),
                   "input system should expose backend-neutral device state");
 }

@@ -324,6 +324,17 @@ glm::vec2 SdlInputBackend::PointerPosition() const
     return pointer_position_;
 }
 
+bool SdlInputBackend::IsPointerDown(PointerButton button) const
+{
+    constexpr std::array<Uint32, 3> ButtonMasks = {
+        SDL_BUTTON_LMASK,
+        SDL_BUTTON_RMASK,
+        SDL_BUTTON_MMASK,
+    };
+    const auto index = static_cast<std::size_t>(button);
+    return index < ButtonMasks.size() && (SDL_GetMouseState(nullptr, nullptr) & ButtonMasks[index]) != 0;
+}
+
 void SdlInputBackend::SetPointerCaptured(bool captured)
 {
     SDL_Window *window = SdlWindow(window_);

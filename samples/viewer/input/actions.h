@@ -39,6 +39,8 @@ struct Actions
     CEngine::Input::ActionHandle look_pitch;
     CEngine::Input::ActionHandle sprint;
     CEngine::Input::ActionHandle jump;
+    CEngine::Input::ActionHandle crouch;
+    CEngine::Input::ActionHandle fire;
 };
 
 /**

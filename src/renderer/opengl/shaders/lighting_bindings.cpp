@@ -18,7 +18,9 @@
 #include "renderer/light.h"
 #include "renderer/render_system.h"
 
+#include <algorithm>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 #include <string>
@@ -304,6 +306,68 @@ void EnvironmentUniforms::BindAndUpload(const RenderSystem &rendering, GLuint ir
     glUniform1f(fog_start_distance, fog.start_distance);
     glUniform1f(fog_max_opacity, fog.max_opacity);
     glUniform1f(fog_cutoff_distance, fog.cutoff_distance);
+}
+
+void EnvironmentProbeUniforms::Initialize(GLuint shader_id)
+{
+    count = glGetUniformLocation(shader_id, "environment_probe_count");
+    world_to_local = glGetUniformLocation(shader_id, "environment_probe_world_to_local[0]");
+    local_to_world = glGetUniformLocation(shader_id, "environment_probe_local_to_world[0]");
+    position_intensity = glGetUniformLocation(shader_id, "environment_probe_position_intensity[0]");
+    extents_blend = glGetUniformLocation(shader_id, "environment_probe_extents_blend[0]");
+    for (std::size_t index = 0; index < KMaxBoundEnvironmentProbes; ++index)
+    {
+        const std::string suffix = std::to_string(index);
+        irradiance[index] = glGetUniformLocation(shader_id, ("environment_probe_irradiance_" + suffix).c_str());
+        prefiltered[index] = glGetUniformLocation(shader_id, ("environment_probe_prefiltered_" + suffix).c_str());
+    }
+}
+
+void EnvironmentProbeUniforms::BindAndUpload(std::span<const EnvironmentProbeBinding> probes) const
+{
+    const std::size_t probe_count = std::min(probes.size(), KMaxBoundEnvironmentProbes);
+    std::array<glm::mat4, KMaxBoundEnvironmentProbes> world_to_local_values{};
+    std::array<glm::mat4, KMaxBoundEnvironmentProbes> local_to_world_values{};
+    std::array<glm::vec4, KMaxBoundEnvironmentProbes> position_intensity_values{};
+    std::array<glm::vec4, KMaxBoundEnvironmentProbes> extents_blend_values{};
+
+    for (std::size_t index = 0; index < KMaxBoundEnvironmentProbes; ++index)
+    {
+        constexpr GLint FirstProbeTextureUnit = 10;
+        const GLint irradiance_unit = FirstProbeTextureUnit + static_cast<GLint>(index * 2u);
+        const GLint prefiltered_unit = irradiance_unit + 1;
+        const bool active = index < probe_count && probes[index].probe != nullptr;
+        glActiveTexture(GL_TEXTURE0 + irradiance_unit);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, active ? probes[index].irradiance : 0);
+        glUniform1i(irradiance[index], irradiance_unit);
+        glActiveTexture(GL_TEXTURE0 + prefiltered_unit);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, active ? probes[index].prefiltered : 0);
+        glUniform1i(prefiltered[index], prefiltered_unit);
+        if (!active)
+        {
+            world_to_local_values[index] = glm::mat4(1.0f);
+            local_to_world_values[index] = glm::mat4(1.0f);
+            continue;
+        }
+
+        const EnvironmentProbe &probe = *probes[index].probe;
+        local_to_world_values[index] = probe.transform;
+        world_to_local_values[index] = glm::inverse(probe.transform);
+        position_intensity_values[index] = glm::vec4(glm::vec3(probe.transform[3]), probe.intensity);
+        extents_blend_values[index] =
+            glm::vec4(glm::length(glm::vec3(probe.transform[0])), glm::length(glm::vec3(probe.transform[1])),
+                      glm::length(glm::vec3(probe.transform[2])), probe.blend_distance);
+    }
+
+    glUniform1i(count, static_cast<GLint>(probe_count));
+    glUniformMatrix4fv(world_to_local, static_cast<GLsizei>(KMaxBoundEnvironmentProbes), GL_FALSE,
+                       glm::value_ptr(world_to_local_values[0]));
+    glUniformMatrix4fv(local_to_world, static_cast<GLsizei>(KMaxBoundEnvironmentProbes), GL_FALSE,
+                       glm::value_ptr(local_to_world_values[0]));
+    glUniform4fv(position_intensity, static_cast<GLsizei>(KMaxBoundEnvironmentProbes),
+                 glm::value_ptr(position_intensity_values[0]));
+    glUniform4fv(extents_blend, static_cast<GLsizei>(KMaxBoundEnvironmentProbes),
+                 glm::value_ptr(extents_blend_values[0]));
 }
 
 } // namespace CEngine::Renderer::OpenGL

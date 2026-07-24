@@ -1,6 +1,6 @@
 # Architecture Implementation Status
 
-> **Status: current implementation inventory, verified 2026-07-23.**
+> **Status: current implementation inventory, verified 2026-07-24.**
 > Historical M0 step plans are obsolete and are not an implementation
 > checklist.
 
@@ -13,9 +13,9 @@ Cooked asset payloads use one schema-owned version-one format.
 
 ### Base entities and scene logic
 
-- The engine library contains 15 concrete classes: prop, collider, trigger
+- The engine library contains 16 concrete classes: prop, collider, trigger
   volume, physics constraint, light, camera, audio source/environment, skybox,
-  fog, post process, relay, timer, auto, and marker.
+  environment probe, fog, post process, relay, timer, auto, and marker.
 - Entity schemas declare validated inputs and outputs. Scene connections carry
   an optional parameter, simulation-time delay, and fire count; dispatch is
   deterministic and bounded.
@@ -64,6 +64,10 @@ Cooked asset payloads use one schema-owned version-one format.
   Mixed lights contribute baked indirect only, the World contributes
   visibility-aware direct and indirect diffuse, and lightmapped surfaces do
   not receive the unoccluded global runtime IBL.
+- Box-influence environment probes provide locally baked diffuse GI and
+  box-projected roughness-filtered reflections only to dynamic/non-lightmapped
+  surfaces. OpenGL selects at most two nearby probes and falls back to the
+  global environment outside their volumes.
 - OpenGL owns backend-private skinning palette texture buffers and applies the
   same four-weight matrix skinning in deferred, forward, depth, and point
   shadow passes. Vulkan explicitly rejects skinning while its mesh path remains
@@ -74,8 +78,13 @@ Cooked asset payloads use one schema-owned version-one format.
   before hardware sRGB output, and UI blends in linear display space.
 - OpenGL implementation types live under `Renderer::OpenGL`; cascade fitting
   and shadow resource management are consolidated in `ShadowSystem`.
-- `.cparticle` is a separate generated asset type; a renderer simulation path
-  remains separate from meshes.
+- `.cparticle` drives generation-checked, capacity-bounded renderer emitters
+  with deterministic CPU lifetime, cone velocity, gravity, size/color
+  interpolation, looping-rate and explicit-burst emission, and local/world
+  space.
+- OpenGL draws particles through a separate depth-tested billboard pass with
+  alpha, additive, and premultiplied-alpha blending. It supports resolved sRGB
+  textures and a built-in soft disc when no texture is supplied.
 - Vulkan still compiles as an incomplete backend; it does not yet implement the
   full mesh rendering path.
 
@@ -97,14 +106,17 @@ Cooked asset payloads use one schema-owned version-one format.
   references.
 - Blender mesh cooking deduplicates complete packed vertices and emits a real
   index buffer.
-- Blender exports skeletons, animations, physics, compositions, scenes, and
-  simplified particle settings through the same schema path.
+- Blender exports skeletons, animations, physics, compositions, scenes,
+  environment probes, and simplified particle settings through the same schema
+  path. Native Eevee Sphere probes author the runtime volumes; the add-on bakes
+  native irradiance volumes and six-face Eevee HDR captures.
 - Skeleton and animation assets contain only engine records: canonical
   hierarchy/rest/inverse-bind data and evaluated local TRS tracks/events. No
   Ozz type or archive is part of `CEngineAssets` or the exported format.
 - Sponza scene, material, and mesh files are cooked in the current format. Its
   4096-square `Sponza_0.dds` lightmap contains the combined World/baked direct
-  and World/baked/mixed indirect Cycles passes.
+  and World/baked/mixed indirect Cycles passes. Three overlapping local probe
+  captures provide dynamic-object GI and reflections across the playable hall.
 
 ### Identity and pointers
 
@@ -156,7 +168,14 @@ Cooked asset payloads use one schema-owned version-one format.
   object selection, collider wire/bounds preview, and validation.
 - `physics_constraint` entities resolve Blender object names to semantic scene
   references and create/destroy Jolt constraints at runtime.
-- The viewer player uses the Jolt character controller and Space jump action.
+- The viewer player uses the Jolt character controller with normalized WASD
+  movement, Shift sprint, edge-triggered Space jump, and clearance-aware held
+  Ctrl crouch.
+- A concrete viewer-owned ball launcher uses primary mouse fire, a bounded fire
+  cadence, CCD-enabled dynamic sphere bodies, shared procedural mesh/material
+  assets with visible rolling marks, and deterministic lifetime/capacity
+  cleanup. Successful first-person shots emit an additive world-space burst
+  from the exact launcher muzzle transform.
 
 ### Input
 
@@ -167,25 +186,30 @@ Cooked asset payloads use one schema-owned version-one format.
 - The SDL3 adapter also normalizes pointer motion/buttons/wheel, key
   transitions, window leave, and text input at client-frame cadence without
   exposing SDL types.
+- Key, pointer-axis, and pointer-button bindings all feed the same semantic
+  action values used by viewer gameplay.
 
 ### UI
 
 - `UISystem` owns generation-checked screen handles, font loading, modal
   visibility, semantic click/change bindings, narrow text/form updates,
   display-frame updates, and event draining.
-- RmlUi 6.2 and FreeType 2.14.3 are pinned to immutable revisions and remain
-  private implementation dependencies. Lua, SVG, Lottie, and dependency
-  samples are disabled.
+- The HTML/CSS parser, layout, interaction, and frame-generation source is
+  engine-owned under `src/ui/html`, derived from RmlUi 6.2, and compiled
+  directly into `CEngineCore`. RmlUi is no longer fetched or linked as a
+  dependency; FreeType 2.14.3 remains pinned for font rasterization.
 - A read-only content-rooted file adapter rejects absolute paths and parent
-  traversal. RmlUi focus, hit testing, layout, and generated font atlases feed
-  a renderer-neutral `UiFrame`.
-- RmlUi composes at full drawable resolution with a density-independent layout
-  ratio. OpenGL draws `UiFrame` last with generated texture caching and
-  premultiplied alpha; RmlUi types do not cross the renderer boundary.
+  traversal. Engine-owned focus, hit testing, layout, and generated font
+  atlases feed a renderer-neutral `UiFrame`.
+- The UI runtime composes at full drawable resolution. Standard CSS `px`
+  values are treated as logical pixels and scale once for high-DPI output.
+  OpenGL draws `UiFrame` last with generated texture caching and premultiplied
+  alpha; parser/layout types do not cross the renderer boundary.
 - UI pointer input has one authority: ordered normalized SDL events. Motion,
   button, and wheel events carry logical-window coordinates which are converted
-  once at the RmlUi boundary; pressed state remains inside RmlUi across frames.
-- The viewer owns a modal start menu, a persistent FPS HUD, and an RmlUi
+  once at the UI boundary; pressed state remains inside the UI runtime across
+  frames.
+- The viewer owns HTML/CSS for a modal start menu, persistent FPS HUD, and
   runtime tuning panel. ImGui is no longer linked into the viewer.
 
 ### Audio
@@ -238,7 +262,6 @@ Cooked asset payloads use one schema-owned version-one format.
 - Collision asset deduplication is path/object based, not content-hash based.
 - Static/dynamic friction and restitution are per body rather than shared
   physics-material assets.
-- Character crouch exists in the runtime API; the viewer has no crouch action.
 - There is no debug-draw bridge from Jolt into the renderer.
 - SDL3 gamepad/touch bindings and mobile lifecycle interruption policy are not
   implemented yet; the input/platform backend seams do not expose desktop
@@ -247,8 +270,9 @@ Cooked asset payloads use one schema-owned version-one format.
   built in CI. Console SDL packages remain platform-SDK inputs.
 - Audio has one listener and one global sound-effects environment.
 - Vulkan accepts the neutral UI frame at the `RenderSystem` boundary but does
-  not draw it while that backend's general mesh path remains incomplete.
-- RML external image URLs are rejected until they can resolve through cooked
+  not draw it or particle billboards while that backend's general mesh path
+  remains incomplete.
+- HTML external image URLs are rejected until they can resolve through cooked
   `Store` textures. The UI facade exposes semantic click/change actions and
   narrow text/form updates, not scripting or a browser DOM.
 
@@ -296,3 +320,61 @@ git diff --check
   across event-free frames, inside/outside release rules, range and checkbox
   payloads, unloading, and stale-handle rejection;
 - all 131 Python asset tests passed with one intentional skip.
+
+The viewer FPS gameplay slice was verified on 2026-07-24 with:
+
+```sh
+cmake --build --preset mac-debug -j 8
+ctest --test-dir build/mac-debug --output-on-failure
+python3 -m unittest discover -s tools/ceasset/tests
+cmake --build --preset mac-debug --target format-check
+git diff --check
+```
+
+- all 15 CTest cases passed; the display-dependent OpenGL pixel test retained
+  its expected headless skip;
+- the focused viewer test drives Jolt crouch/stand transitions and creates a
+  rendered dynamic ball above a static plane;
+- the cooked Sponza acceptance test retains one grounded character and accounts
+  for the two launcher presentation records;
+- all 137 Python asset tests passed with two intentional skips;
+- focused clang-tidy runs accepted the new player, weapon, procedural asset,
+  input-action, SDL input, and viewer-game test translation units.
+
+The particle-rendering slice was verified on 2026-07-24 with:
+
+```sh
+cmake --build --preset mac-debug -j 8
+ctest --test-dir build/mac-debug --output-on-failure
+cmake --build --preset mac-debug --target format-check
+git diff --check
+```
+
+- all 17 CTest cases passed with the display-dependent particle and UI pixel
+  tests skipped in the sandbox;
+- the particle renderer test separately passed with a hidden native OpenGL
+  context, including shader compilation and exact center-pixel readback;
+- the focused particle test verifies bounded emission, deterministic motion,
+  gravity, size/color interpolation, looping rate accumulation, local/world
+  space, lifetime cleanup, emitter transform updates, and stale handles;
+- the viewer gameplay test verifies that primary fire creates a 12-particle
+  muzzle burst and that player shutdown removes its emitter.
+
+The engine-owned HTML/CSS UI migration was verified on 2026-07-24 with:
+
+```sh
+cmake --build --preset mac-debug -j 8
+ctest --test-dir build/mac-debug --output-on-failure
+python3 -m unittest discover -s tools/ceasset/tests
+cmake --build --preset mac-debug --target format-check
+git diff --check
+```
+
+- all 18 CTest cases passed, with the two display-dependent OpenGL pixel tests
+  retaining their expected headless skips;
+- the UI lifecycle test loads ordinary `.html`/`.css`, verifies standard
+  stylesheet links and density-scaled CSS pixels, rejects `.rml`, preserves
+  click/change semantics, and composes all three viewer screens;
+- all 139 Python asset tests passed with two intentional skips;
+- source/build searches found no RmlUi fetch, linked target, old authored
+  `.rml`/`.rcss` files, `text/rcss` links, or authored `dp` units.

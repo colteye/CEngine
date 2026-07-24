@@ -363,6 +363,7 @@ def scene_description(
     resolve_asset_path: Callable[[str], Path] | None = None,
     skeleton_outputs: dict[str, Path] | None = None,
     animation_outputs: dict[str, list[Path]] | None = None,
+    environment_probe_outputs: dict[str, Path] | None = None,
 ) -> SceneDescription:
     """TODO: Describe `scene_description`.
 
@@ -572,7 +573,7 @@ def scene_description(
             # Blender's dependency graph exposes the expanded objects as normal
             # mesh entries. The collection marker itself is not an entity.
             continue
-        elif obj_type in ("EMPTY", "CAMERA"):
+        elif obj_type in ("EMPTY", "CAMERA", "LIGHT_PROBE"):
             if obj_type == "CAMERA" and not classname:
                 classname = "camera"
             if classname in ("", "empty"):
@@ -589,6 +590,27 @@ def scene_description(
                     intensity=float(_property(obj, "ce_intensity", 1.0)),
                     rotation_radians=float(_property(
                         obj, "ce_rotation_radians", 0.0)),
+                    enabled=bool(_property(obj, "ce_enabled", True)))
+            elif classname == "environment_probe":
+                probe = getattr(obj, "data", None)
+                if str(getattr(probe, "type", "")) != "SPHERE":
+                    raise ValueError(
+                        f"environment probe must use a Blender Sphere probe: {name}")
+                if str(getattr(probe, "influence_type", "")) != "BOX":
+                    raise ValueError(
+                        f"environment probe must use box influence: {name}")
+                output = (environment_probe_outputs or {}).get(name)
+                if output is None:
+                    raise ValueError(
+                        f"environment probe has no baked HDR panorama: {name}")
+                data = make_schema_entity(
+                    schemas, "environment_probe",
+                    panorama=_reference(
+                        AssetType.TEXTURE, output, asset_path),
+                    transform=transform,
+                    blend_distance=min(abs(value) for value in transform.scale) *
+                        float(getattr(probe, "falloff", 0.25)),
+                    intensity=float(_property(obj, "ce_intensity", 1.0)),
                     enabled=bool(_property(obj, "ce_enabled", True)))
             else:
                 schema = schemas.entity(classname)

@@ -121,7 +121,7 @@ class FakeInputBackend final : public CEngine::Input::IInputBackend
 
 int main(int argc, char **argv)
 {
-    if (!Expect(argc == 2, "UI test requires the content directory"))
+    if (!Expect(argc == 2, "UI test requires the project content directory"))
         return 1;
 
     auto window_backend = std::make_unique<FakeWindowBackend>();
@@ -137,11 +137,16 @@ int main(int argc, char **argv)
     CEngine::Input::InputSystem input(std::move(input_backend));
     CEngine::UI::UISystem ui;
     if (!Expect(ui.Initialize(window, std::filesystem::path(argv[1])), "UI should initialize") ||
-        !Expect(ui.Initialized(), "UI should report initialized"))
+        !Expect(ui.Initialized(), "UI should report initialized") ||
+        !Expect(ui.LoadFont("samples/viewer/ui/fonts/LatoLatin-Regular.ttf"),
+                "test font should load"))
         return 1;
 
-    const CEngine::UI::UiScreenHandle screen = ui.LoadScreen("click.rml");
-    if (!Expect(static_cast<bool>(screen), "RML screen should load") ||
+    if (!Expect(!ui.LoadScreen("tests/ui/data/click.rml"), "legacy RML screens should be rejected"))
+        return 1;
+
+    const CEngine::UI::UiScreenHandle screen = ui.LoadScreen("tests/ui/data/click.html");
+    if (!Expect(static_cast<bool>(screen), "HTML screen should load") ||
         !Expect(ui.BindClick(screen, "start", "start_game"), "button action should bind") ||
         !Expect(ui.SetText(screen, "status", "Ready"), "text content should update") ||
         !Expect(ui.SetValue(screen, "amount", 7.0f), "range value should update") ||
@@ -164,6 +169,18 @@ int main(int argc, char **argv)
     down.position = {40.0f, 40.0f};
     CEngine::Input::InputEvent up = down;
     up.type = CEngine::Input::InputEventType::PointerButtonUp;
+
+    down.position = {15.0f, 30.0f};
+    up.position = down.position;
+    fake_input->events = {down, up};
+    input.BeginFrame();
+    ui.Update(input);
+    if (!Expect(ui.DrainEvents().empty(),
+                "CSS px should scale as logical pixels on a high-DPI drawable"))
+        return 1;
+
+    down.position = {40.0f, 40.0f};
+    up.position = down.position;
     fake_input->pointer = {300.0f, 150.0f};
     fake_input->events = {down};
     input.BeginFrame();
@@ -220,5 +237,36 @@ int main(int argc, char **argv)
         return 1;
 
     ui.Shutdown();
-    return Expect(!ui.Initialized(), "UI shutdown should be symmetric") ? 0 : 1;
+    if (!Expect(!ui.Initialized(), "UI shutdown should be symmetric") ||
+        !Expect(ui.Initialize(window, std::filesystem::path(argv[1])),
+                "UI should initialize with viewer content") ||
+        !Expect(ui.LoadFont("samples/viewer/ui/fonts/LatoLatin-Regular.ttf"),
+                "viewer regular font should load") ||
+        !Expect(ui.LoadFont("samples/viewer/ui/fonts/LatoLatin-Bold.ttf"),
+                "viewer bold font should load"))
+        return 1;
+
+    const CEngine::UI::UiScreenHandle start_menu = ui.LoadScreen("samples/viewer/ui/start_menu.html");
+    const CEngine::UI::UiScreenHandle hud = ui.LoadScreen("samples/viewer/ui/hud.html");
+    const CEngine::UI::UiScreenHandle tuning = ui.LoadScreen("samples/viewer/ui/tuning.html");
+    if (!Expect(static_cast<bool>(start_menu), "viewer start menu HTML should load") ||
+        !Expect(static_cast<bool>(hud), "viewer HUD HTML should load") ||
+        !Expect(static_cast<bool>(tuning), "viewer tuning HTML should load") ||
+        !Expect(ui.SetText(hud, "fps-value", "60"), "viewer HUD text should update") ||
+        !Expect(ui.Show(hud), "viewer HUD should show") ||
+        !Expect(ui.Show(tuning), "viewer tuning panel should show") ||
+        !Expect(ui.Show(start_menu, true), "viewer start menu should show modally"))
+        return 1;
+
+    fake_input->events.clear();
+    input.BeginFrame();
+    ui.Update(input);
+    const CEngine::Renderer::UiFrame viewer_frame = ui.Compose();
+    if (!Expect(viewer_frame.width == 640 && viewer_frame.height == 360,
+                "viewer UI should compose at drawable dimensions") ||
+        !Expect(!viewer_frame.Empty(), "viewer HTML/CSS screens should produce geometry"))
+        return 1;
+
+    ui.Shutdown();
+    return Expect(!ui.Initialized(), "viewer UI shutdown should be symmetric") ? 0 : 1;
 }

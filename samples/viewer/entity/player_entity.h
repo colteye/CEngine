@@ -17,6 +17,7 @@
 #define CENGINE_SAMPLES_VIEWER_ENTITY_PLAYER_ENTITY_H
 
 #include "entity/entity.h"
+#include "game/physics_ball_weapon.h"
 #include "input/actions.h"
 #include "physics/physics_types.h"
 #include "viewer/viewer_entities.generated.h"
@@ -46,8 +47,7 @@ class PlayerEntity final : public CEngine::Scene::Entity, public Generated::Play
      *
      * @param actions TODO: Describe this parameter.
      */
-    explicit PlayerEntity(
-        Actions actions, PlayerRuntimeConfig config = {});
+    explicit PlayerEntity(Actions actions, PlayerRuntimeConfig config = {});
     float move_speed = 5.0f;
     /**
      * @brief TODO: Describe Classname.
@@ -68,15 +68,14 @@ class PlayerEntity final : public CEngine::Scene::Entity, public Generated::Play
      * @param delta_seconds TODO: Describe this parameter.
      */
     void Update(CEngine::Context &context, float delta_seconds) override;
+    void LateUpdate(CEngine::Context &context, float delta_seconds) override;
     /**
      * @brief TODO: Describe Shutdown.
      *
      * @param context TODO: Describe this parameter.
      */
     void Shutdown(CEngine::Context &context) override;
-    void ConfigureRuntime(
-        std::uint64_t id, Generated::PlayerTeam team,
-        bool locally_controlled, Actions actions);
+    void ConfigureRuntime(std::uint64_t id, Generated::PlayerTeam team, bool locally_controlled, Actions actions);
     [[nodiscard]] std::uint64_t PlayerId() const
     {
         return player_id_;
@@ -89,6 +88,19 @@ class PlayerEntity final : public CEngine::Scene::Entity, public Generated::Play
     {
         return locally_controlled_;
     }
+    [[nodiscard]] bool IsCrouched() const
+    {
+        return crouched_;
+    }
+    [[nodiscard]] std::size_t ProjectileCount() const
+    {
+        return weapon_.ProjectileCount();
+    }
+
+    float crouch_height = 1.1f;
+    float crouch_eye_height = 0.95f;
+    float crouch_speed_multiplier = 0.55f;
+    float crouch_transition_speed = 6.0f;
 
   private:
     Actions actions_;
@@ -97,6 +109,10 @@ class PlayerEntity final : public CEngine::Scene::Entity, public Generated::Play
     bool locally_controlled_ = true;
     glm::vec2 look_angles_ = glm::vec2(0.0f);
     PhysicsCharacterHandle character_;
+    PhysicsBallWeapon weapon_;
+    float current_eye_height_ = 0.0f;
+    bool crouched_ = false;
+    bool jump_was_down_ = false;
 };
 
 } // namespace Viewer

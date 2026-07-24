@@ -110,6 +110,7 @@ def native_object_type(classname: str) -> str:
         "camera": "CAMERA",
         "player": "CAMERA",
         "audio_source": "SPEAKER",
+        "environment_probe": "LIGHT_PROBE",
     }.get(classname, "EMPTY")
 
 
@@ -309,7 +310,9 @@ def validate_entities(
             continue
         expected = native_object_type(classname)
         actual = str(getattr(obj, "type", ""))
-        if expected in {"MESH", "LIGHT", "CAMERA", "SPEAKER"} and actual != expected:
+        if expected in {
+                "MESH", "LIGHT", "CAMERA", "SPEAKER", "LIGHT_PROBE"
+        } and actual != expected:
             issues.append(
                 EntityIssue(
                     name,
@@ -321,7 +324,7 @@ def validate_entities(
                 continue
             if classname in {
                     "prop", "collider", "trigger_volume", "audio_source",
-                    "skybox"}:
+                    "skybox", "environment_probe"}:
                 continue
             getter = getattr(obj, "get", None)
             value = getter(property_name(field), "") if callable(getter) else ""
@@ -334,6 +337,20 @@ def validate_entities(
             panorama = getter("ce_panorama", "") if callable(getter) else ""
             if not panorama:
                 issues.append(EntityIssue(name, "Panorama is required"))
+        if classname == "environment_probe":
+            probe = getattr(obj, "data", None)
+            if actual != "LIGHT_PROBE" or \
+                    str(getattr(probe, "type", "")) != "SPHERE":
+                issues.append(EntityIssue(
+                    name, "Environment Probe must use a Blender Sphere probe"))
+            elif str(getattr(probe, "influence_type", "")) != "BOX":
+                issues.append(EntityIssue(
+                    name, "Environment Probe influence must be Box"))
+            getter = getattr(obj, "get", None)
+            panorama = getter("ce_panorama", "") if callable(getter) else ""
+            if not panorama:
+                issues.append(EntityIssue(
+                    name, "Environment Probe must be baked before export"))
         if classname == "physics_constraint":
             getter = getattr(obj, "get", None)
             first = str(getter(
@@ -615,6 +632,8 @@ def load_lightmap_bindings(
             and str(_get_property(
                 obj, "ce_physics_motion", "None")).lower()
                 not in {"dynamic", "kinematic"}
+            and str(_get_property(obj, "ce_classname", "")).lower()
+                not in {"collider", "trigger_volume"}
             and str(_get_property(obj, "ce_role", "")).lower() != "occluder"
             and str(getattr(obj, "name", "")) not in placements
         ]

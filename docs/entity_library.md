@@ -35,6 +35,7 @@ NPC, or weapon can express every game's rules.
 | `audio_source` | 2D/3D playback, buses, attenuation, cones, loops, fades, and playback I/O | Speaker |
 | `audio_environment` | the current single global reverb environment | Empty |
 | `skybox` | global image-based lighting and sky presentation | Empty |
+| `environment_probe` | local dynamic-object diffuse GI and box-projected reflections | Sphere Light Probe with box influence |
 | `fog` | global height fog | Empty |
 | `post_process` | global post process and SSAO settings | Empty |
 | `logic_relay` | immediate or delayed fan-out, optional fire once | Empty |
@@ -84,6 +85,6 @@ primary-view policy and creates live `PlayerEntity` instances through
 `Scene::CreateEntity`.
 
 The library also omits entities whose subsystem does not exist yet: animated
-actors, decals, reflection probes, local audio volumes, navigation links,
-terrain, and runtime particle emitters. They should be promoted only with a
-real runtime path, Blender authoring, schema validation, and automated gates.
+actors, decals, local audio volumes, navigation links, terrain, and runtime
+particle-emitter entities. They should be promoted only with a real runtime
+path, Blender authoring, schema validation, and automated gates.

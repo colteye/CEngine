@@ -46,6 +46,8 @@ Actions RegisterActions(
         input.RegisterAction(action_name("look_pitch"));
     actions.sprint = input.RegisterAction(action_name("sprint"));
     actions.jump = input.RegisterAction(action_name("jump"));
+    actions.crouch = input.RegisterAction(action_name("crouch"));
+    actions.fire = input.RegisterAction(action_name("fire"));
 
     input.BindKey(actions.move_forward, CEngine::Input::Key::W, 1.0f);
     input.BindKey(actions.move_forward, CEngine::Input::Key::S, -1.0f);
@@ -55,6 +57,8 @@ Actions RegisterActions(
     input.BindPointerAxis(actions.look_pitch, CEngine::Input::PointerAxis::Y, -0.003f);
     input.BindKey(actions.sprint, CEngine::Input::Key::LeftShift);
     input.BindKey(actions.jump, CEngine::Input::Key::Space);
+    input.BindKey(actions.crouch, CEngine::Input::Key::LeftControl);
+    input.BindPointerButton(actions.fire, CEngine::Input::PointerButton::Primary);
     return actions;
 }
 

@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cassert>
 #include <iostream>
+#include <unordered_set>
 #include <utility>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -75,13 +76,25 @@ glm::vec3 BoundsCenter(const Bounds &bounds, const glm::mat4 &transform)
  */
 void EnvironmentResources::Destroy()
 {
+    DiscardCaptureResources();
+    const GLuint textures[] = {irradiance_map, prefiltered_map};
+    glDeleteTextures(2, textures);
+    irradiance_map = prefiltered_map = 0;
+}
+
+void EnvironmentResources::DiscardCaptureResources()
+{
+    glUseProgram(0);
     panorama_to_cube.reset();
     irradiance.reset();
     prefilter.reset();
     skybox.reset();
-    const GLuint textures[] = {panorama, environment_map, irradiance_map, prefiltered_map};
-    glDeleteTextures(4, textures);
-    panorama = environment_map = irradiance_map = prefiltered_map = 0;
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+    const GLuint textures[] = {panorama, environment_map};
+    glDeleteTextures(2, textures);
+    panorama = environment_map = 0;
     if (capture_fbo != 0)
     {
         glDeleteFramebuffers(1, &capture_fbo);
@@ -320,8 +333,15 @@ bool RenderBackend::Initialize(RenderSystem &in_rendering, Window::WindowSystem 
         DestroyFrameResources();
         return false;
     }
+    if (!particle_renderer_.Initialize())
+    {
+        shadow_system_.Destroy();
+        DestroyFrameResources();
+        return false;
+    }
     if (!ui_renderer_.Initialize())
     {
+        particle_renderer_.Shutdown();
         shadow_system_.Destroy();
         DestroyFrameResources();
         return false;
@@ -340,6 +360,7 @@ bool RenderBackend::Initialize(RenderSystem &in_rendering, Window::WindowSystem 
         }
         default_white_texture_ = 0;
         default_normal_texture_ = 0;
+        particle_renderer_.Shutdown();
         shadow_system_.Destroy();
         DestroyFrameResources();
         return false;
@@ -361,7 +382,16 @@ bool RenderBackend::Initialize(RenderSystem &in_rendering, Window::WindowSystem 
 void RenderBackend::Shutdown()
 {
     ui_renderer_.Shutdown();
+    particle_renderer_.Shutdown();
     environment_resources_.Destroy();
+    for (auto &[texture, resources] : environment_probe_resources_)
+    {
+        static_cast<void>(texture);
+        resources.Destroy();
+    }
+    environment_probe_resources_.clear();
+    bound_environment_probes_.clear();
+    environment_probe_revision_ = 0;
     shader_passes_ = ShaderPasses();
 
     for (auto &it : material_resources_)
@@ -551,12 +581,10 @@ void RenderBackend::UpdateMeshInstance(std::uint32_t slot, const glm::mat4 &tran
     draw_items_[slot].flags = flags;
 }
 
-bool RenderBackend::UpdateSkinningPalette(
-    std::uint32_t slot, std::span<const glm::mat4> palette)
+bool RenderBackend::UpdateSkinningPalette(std::uint32_t slot, std::span<const glm::mat4> palette)
 {
-    if (slot >= draw_items_.size() || draw_items_[slot].mesh == nullptr ||
-        !draw_items_[slot].mesh->skinned || palette.empty() ||
-        palette.size() > 1024u)
+    if (slot >= draw_items_.size() || draw_items_[slot].mesh == nullptr || !draw_items_[slot].mesh->skinned ||
+        palette.empty() || palette.size() > 1024u)
     {
         return false;
     }
@@ -573,9 +601,7 @@ bool RenderBackend::UpdateSkinningPalette(
         glGenTextures(1, &item.joint_palette_texture);
     }
     glBindBuffer(GL_TEXTURE_BUFFER, item.joint_palette_buffer);
-    glBufferData(GL_TEXTURE_BUFFER,
-                 static_cast<GLsizeiptr>(palette.size_bytes()),
-                 palette.data(), GL_STREAM_DRAW);
+    glBufferData(GL_TEXTURE_BUFFER, static_cast<GLsizeiptr>(palette.size_bytes()), palette.data(), GL_STREAM_DRAW);
     glBindTexture(GL_TEXTURE_BUFFER, item.joint_palette_texture);
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, item.joint_palette_buffer);
     glBindTexture(GL_TEXTURE_BUFFER, 0);
@@ -670,11 +696,9 @@ MeshResources RenderBackend::UploadMesh(const Mesh &mesh)
     glEnableVertexAttribArray(3);
     glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void *>(offsetof(MeshVertex, tangent)));
     glEnableVertexAttribArray(5);
-    glVertexAttribIPointer(5, 4, GL_UNSIGNED_SHORT, stride,
-                          reinterpret_cast<void *>(offsetof(MeshVertex, joints)));
+    glVertexAttribIPointer(5, 4, GL_UNSIGNED_SHORT, stride, reinterpret_cast<void *>(offsetof(MeshVertex, joints)));
     glEnableVertexAttribArray(6);
-    glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, stride,
-                          reinterpret_cast<void *>(offsetof(MeshVertex, weights)));
+    glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void *>(offsetof(MeshVertex, weights)));
 
     glGenBuffers(1, &buffers.index_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers.index_buffer);
@@ -713,16 +737,14 @@ bool RenderBackend::RegisterMaterial(const Material *material)
     resources.owns_albedo_tex = !material->albedo.Empty();
     resources.owns_normal_tex = !material->normal.Empty();
     resources.owns_metallic_roughness_ao_tex = !material->metallic_roughness_ao.Empty();
-    resources.albedo_tex = resources.owns_albedo_tex
-                               ? TextureLoader::Load(material->albedo, TextureColorSpace::Srgb)
-                               : default_white_texture_;
-    resources.normal_tex = resources.owns_normal_tex
-                               ? TextureLoader::Load(material->normal, TextureColorSpace::Linear)
-                               : default_normal_texture_;
-    resources.metallic_roughness_ao_tex = resources.owns_metallic_roughness_ao_tex
-                                              ? TextureLoader::Load(material->metallic_roughness_ao,
-                                                                    TextureColorSpace::Linear)
-                                              : default_white_texture_;
+    resources.albedo_tex = resources.owns_albedo_tex ? TextureLoader::Load(material->albedo, TextureColorSpace::Srgb)
+                                                     : default_white_texture_;
+    resources.normal_tex = resources.owns_normal_tex ? TextureLoader::Load(material->normal, TextureColorSpace::Linear)
+                                                     : default_normal_texture_;
+    resources.metallic_roughness_ao_tex =
+        resources.owns_metallic_roughness_ao_tex
+            ? TextureLoader::Load(material->metallic_roughness_ao, TextureColorSpace::Linear)
+            : default_white_texture_;
     if (resources.albedo_tex == 0 || resources.normal_tex == 0 || resources.metallic_roughness_ao_tex == 0)
     {
         resources.Destroy();
@@ -1026,8 +1048,7 @@ void RenderBackend::RenderGeometryPass()
                                                  item.lightmap_tex);
         shader_passes_.pbr_geometry->UpdateObject(item.transform, *item.material, item.lightmap_scale,
                                                   item.lightmap_offset, item.lightmap_rgbm_range);
-        shader_passes_.pbr_geometry->UpdateSkinning(
-            item.joint_palette_texture, item.joint_count);
+        shader_passes_.pbr_geometry->UpdateSkinning(item.joint_palette_texture, item.joint_count);
         Draw(item);
     }
     glBindVertexArray(0);
@@ -1056,7 +1077,7 @@ void RenderBackend::RenderDeferredLightingPass()
         *rendering_, frame_resources_.g_albedo, frame_resources_.g_normal_roughness, frame_resources_.g_material,
         frame_resources_.g_baked_light, frame_resources_.scene_depth, window_width_, window_height_,
         shadow_system_.GetGpuData(), shadow_system_.GetAtlasTexture(), shadow_system_.GetPointTextures(),
-        environment_resources_.irradiance_map, environment_resources_.prefiltered_map);
+        environment_resources_.irradiance_map, environment_resources_.prefiltered_map, bound_environment_probes_);
     RenderScreenSpaceQuad();
 }
 
@@ -1088,15 +1109,10 @@ void RenderBackend::RenderAmbientOcclusionPass()
  *
  * @return TODO: Describe the return value.
  */
-bool RenderBackend::BuildEnvironmentResources()
+bool RenderBackend::BuildEnvironmentResources(const Texture &panorama, EnvironmentResources &resources,
+                                              bool keep_skybox)
 {
-    const ImageBasedLighting &lighting = rendering_->GetImageBasedLighting();
-    auto &resources = environment_resources_;
-    if (lighting.panorama == nullptr)
-    {
-        return false;
-    }
-    resources.panorama = TextureLoader::Load(*lighting.panorama, TextureColorSpace::Linear);
+    resources.panorama = TextureLoader::Load(panorama, TextureColorSpace::Linear);
     if (resources.panorama == 0)
     {
         return false;
@@ -1104,23 +1120,30 @@ bool RenderBackend::BuildEnvironmentResources()
     resources.panorama_to_cube = std::make_unique<ShaderProgram>();
     resources.irradiance = std::make_unique<ShaderProgram>();
     resources.prefilter = std::make_unique<ShaderProgram>();
-    resources.skybox = std::make_unique<ShaderProgram>();
+    if (keep_skybox)
+    {
+        resources.skybox = std::make_unique<ShaderProgram>();
+    }
     if (!resources.panorama_to_cube->Load("shaders/opengl/environment_cube.vert",
                                           "shaders/opengl/equirectangular_to_cube.frag") ||
         !resources.irradiance->Load("shaders/opengl/environment_cube.vert",
                                     "shaders/opengl/irradiance_convolution.frag") ||
         !resources.prefilter->Load("shaders/opengl/environment_cube.vert",
                                    "shaders/opengl/prefilter_environment.frag") ||
-        !resources.skybox->Load("shaders/opengl/skybox.vert", "shaders/opengl/skybox.frag"))
+        (keep_skybox &&
+         !resources.skybox->Load("shaders/opengl/skybox.vert", "shaders/opengl/skybox.frag")))
     {
         return false;
     }
-    const GLuint skybox_program = resources.skybox->GetId();
-    resources.skybox_view = glGetUniformLocation(skybox_program, "view");
-    resources.skybox_projection = glGetUniformLocation(skybox_program, "projection");
-    resources.skybox_intensity = glGetUniformLocation(skybox_program, "intensity");
-    resources.skybox_rotation = glGetUniformLocation(skybox_program, "rotation_radians");
-    resources.skybox_environment_map = glGetUniformLocation(skybox_program, "environment_map");
+    if (keep_skybox)
+    {
+        const GLuint skybox_program = resources.skybox->GetId();
+        resources.skybox_view = glGetUniformLocation(skybox_program, "view");
+        resources.skybox_projection = glGetUniformLocation(skybox_program, "projection");
+        resources.skybox_intensity = glGetUniformLocation(skybox_program, "intensity");
+        resources.skybox_rotation = glGetUniformLocation(skybox_program, "rotation_radians");
+        resources.skybox_environment_map = glGetUniformLocation(skybox_program, "environment_map");
+    }
 
     constexpr float Vertices[] = {-1, -1, -1, -1, -1, 1,  -1, 1,  1,  -1, 1,  1,  -1, -1, -1, -1, 1,  -1, 1,  -1, 1, 1,
                                   -1, -1, 1,  1,  -1, 1,  1,  -1, 1,  1,  1,  1,  -1, 1,  -1, -1, 1,  -1, -1, -1, 1, -1,
@@ -1176,7 +1199,9 @@ bool RenderBackend::BuildEnvironmentResources()
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, target,
                                    mip);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            DrawEnvironmentCube();
+            glBindVertexArray(resources.cube_vao);
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+            glBindVertexArray(0);
         }
     };
 
@@ -1237,7 +1262,12 @@ bool RenderBackend::BuildEnvironmentResources()
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, window_width_, window_height_);
     glEnable(GL_CULL_FACE);
-    return glGetError() == GL_NO_ERROR;
+    const bool valid = glGetError() == GL_NO_ERROR;
+    if (valid && !keep_skybox)
+    {
+        resources.DiscardCaptureResources();
+    }
+    return valid;
 }
 
 /**
@@ -1250,10 +1280,107 @@ void RenderBackend::SyncEnvironmentResources()
         return;
     }
     environment_resources_.Destroy();
-    if (rendering_->GetImageBasedLighting().enabled && !BuildEnvironmentResources())
+    const ImageBasedLighting &lighting = rendering_->GetImageBasedLighting();
+    if (lighting.enabled && lighting.panorama != nullptr &&
+        !BuildEnvironmentResources(*lighting.panorama, environment_resources_, true))
     {
         std::cerr << "Failed to build image-based lighting resources.\n";
         environment_resources_.Destroy();
+    }
+}
+
+void RenderBackend::SyncEnvironmentProbeResources()
+{
+    const std::uint64_t revision = rendering_->GetEnvironmentProbeRevision();
+    if (revision == environment_probe_revision_)
+    {
+        return;
+    }
+
+    std::unordered_set<const Texture *> desired;
+    for (const EnvironmentProbe &probe : rendering_->GetEnvironmentProbes())
+    {
+        if (probe.enabled && probe.panorama != nullptr)
+        {
+            desired.insert(probe.panorama.get());
+        }
+    }
+
+    for (auto iterator = environment_probe_resources_.begin(); iterator != environment_probe_resources_.end();)
+    {
+        if (desired.contains(iterator->first))
+        {
+            ++iterator;
+            continue;
+        }
+        iterator->second.Destroy();
+        iterator = environment_probe_resources_.erase(iterator);
+    }
+    for (const EnvironmentProbe &probe : rendering_->GetEnvironmentProbes())
+    {
+        const Texture *texture = probe.panorama.get();
+        if (!probe.enabled || texture == nullptr || environment_probe_resources_.contains(texture))
+        {
+            continue;
+        }
+        EnvironmentResources resources;
+        if (!BuildEnvironmentResources(*texture, resources, false))
+        {
+            std::cerr << "Failed to build local environment probe resources.\n";
+            resources.Destroy();
+            continue;
+        }
+        environment_probe_resources_.emplace(texture, std::move(resources));
+    }
+    environment_probe_revision_ = revision;
+}
+
+void RenderBackend::SelectEnvironmentProbes()
+{
+    struct Candidate
+    {
+        const EnvironmentProbe *probe = nullptr;
+        const EnvironmentResources *resources = nullptr;
+        bool contains_camera = false;
+        float distance_squared = 0.0f;
+    };
+
+    std::vector<Candidate> candidates;
+    const glm::vec3 camera_position = rendering_->GetCameraFrameData().camera_position;
+    for (const EnvironmentProbe &probe : rendering_->GetEnvironmentProbes())
+    {
+        const auto found = environment_probe_resources_.find(probe.panorama.get());
+        if (!probe.enabled || probe.panorama == nullptr || found == environment_probe_resources_.end())
+        {
+            continue;
+        }
+        const glm::vec3 local_position = glm::vec3(glm::inverse(probe.transform) * glm::vec4(camera_position, 1.0f));
+        const glm::vec3 center(probe.transform[3]);
+        candidates.push_back({
+            .probe = &probe,
+            .resources = &found->second,
+            .contains_camera = glm::all(glm::lessThanEqual(glm::abs(local_position), glm::vec3(1.0f))),
+            .distance_squared = glm::dot(center - camera_position, center - camera_position),
+        });
+    }
+    std::sort(candidates.begin(), candidates.end(), [](const Candidate &left, const Candidate &right) {
+        if (left.contains_camera != right.contains_camera)
+        {
+            return left.contains_camera;
+        }
+        return left.distance_squared < right.distance_squared;
+    });
+
+    bound_environment_probes_.clear();
+    const std::size_t count = std::min(candidates.size(), KMaxBoundEnvironmentProbes);
+    bound_environment_probes_.reserve(count);
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        bound_environment_probes_.push_back({
+            .probe = candidates[index].probe,
+            .irradiance = candidates[index].resources->irradiance_map,
+            .prefiltered = candidates[index].resources->prefiltered_map,
+        });
     }
 }
 
@@ -1349,7 +1476,7 @@ void RenderBackend::RenderForwardQueue(const std::vector<uint32_t> &queue, bool 
             shader->Use();
             shader->UpdateFrame(*rendering_, shadow_system_.GetGpuData(), shadow_system_.GetAtlasTexture(),
                                 shadow_system_.GetPointTextures(), environment_resources_.irradiance_map,
-                                environment_resources_.prefiltered_map);
+                                environment_resources_.prefiltered_map, bound_environment_probes_);
             bound_shader = shader;
         }
         shader->SetTextures(item.albedo_tex, item.normal_tex, item.metallic_roughness_ao_tex, item.lightmap_tex);
@@ -1436,6 +1563,8 @@ void RenderBackend::Render()
 {
     glEnable(GL_FRAMEBUFFER_SRGB);
     SyncEnvironmentResources();
+    SyncEnvironmentProbeResources();
+    SelectEnvironmentProbes();
     BuildRenderQueues();
     shadow_system_.Render(draw_items_, render_queues_);
     RenderGeometryPass();
@@ -1444,6 +1573,8 @@ void RenderBackend::Render()
     RenderSkybox();
     RenderForwardQueue(render_queues_.forward, false);
     RenderForwardQueue(render_queues_.transparent, true);
+    particle_renderer_.Render(rendering_->GetParticleDraws(), rendering_->GetCameraFrameData(),
+                              frame_resources_.scene_color_fbo, window_width_, window_height_);
     PresentSceneColor();
     ui_renderer_.Render(rendering_->GetUiFrame(), window_width_, window_height_);
 

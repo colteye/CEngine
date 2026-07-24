@@ -47,8 +47,8 @@ struct UiTexture
 
 /**
  * Packed two-dimensional vertex in top-left-origin drawable pixel space.
- * Colors use premultiplied sRGBA8, matching RmlUi. The renderer converts them
- * to linear premultiplied values before interpolation and blending.
+ * Colors use premultiplied sRGBA8. The renderer converts them to linear
+ * premultiplied values before interpolation and blending.
  */
 struct UiVertex
 {

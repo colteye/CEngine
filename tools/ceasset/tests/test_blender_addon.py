@@ -397,6 +397,17 @@ class BlenderAddonTests(unittest.TestCase):
 
         self.assertEqual([obj.name for obj in objects], ["SM_Visible", "SM_VisibleChild"])
 
+    def test_exported_collection_objects_keeps_hidden_engine_entities(self) -> None:
+        """Hidden authoring helpers still serialize as runtime entities."""
+        collider = FakeObject("SponzaCollision", hide_render=True)
+        collider.get = lambda key, default=None: \
+            "collider" if key == "ce_classname" else default
+        root = FakeCollection("SCENE_Sponza", [collider])
+
+        objects = addon.exported_collection_objects([root])
+
+        self.assertEqual([obj.name for obj in objects], ["SponzaCollision"])
+
     def test_exported_collection_objects_walks_nested_child_collections(self) -> None:
         """TODO: Describe `test_exported_collection_objects_walks_nested_child_collections`."""
         deep_mesh = FakeObject("SM_Deep")

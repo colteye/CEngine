@@ -389,6 +389,7 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
     const auto &fog = renderer.GetExponentialHeightFog();
     const auto &lights = renderer.GetDirectLights();
 #ifdef CENGINE_ENABLE_JOLT_PHYSICS
+    std::size_t viewer_mesh_instance_count = 0;
     bool collision_result =
         Expect(physics.BodyCount() == 1,
                "Sponza should create one static structural collision body");
@@ -408,6 +409,7 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
         collision_result;
     if (player != nullptr)
     {
+        viewer_mesh_instance_count = 2;
         constexpr float FixedDelta = 1.0f / 60.0f;
         for (int tick = 0; tick < 120; ++tick)
         {
@@ -419,6 +421,7 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
             collision_result;
     }
 #else
+    constexpr std::size_t viewer_mesh_instance_count = 0;
     const bool collision_result = true;
 #endif
     std::size_t shadow_only_mesh_instance_count = 0;
@@ -441,6 +444,19 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
     }
     std::size_t directional_count = 0;
     std::size_t point_count = 0;
+    std::size_t environment_probe_count = 0;
+    bool environment_probes_are_valid = true;
+    for (const auto &probe : renderer.GetEnvironmentProbes())
+    {
+        if (probe.panorama == nullptr)
+        {
+            continue;
+        }
+        ++environment_probe_count;
+        environment_probes_are_valid =
+            environment_probes_are_valid && probe.enabled && !probe.panorama->Empty() &&
+            probe.intensity > 0.0f && probe.blend_distance > 0.0f;
+    }
     const CEngine::Renderer::Light *sun = nullptr;
     for (const auto &light : lights)
     {
@@ -456,8 +472,8 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
     }
     return Expect(scene->EntityCount() > 0, "cooked scene should contain entities") &&
            Expect(prop_count > 0, "cooked scene should contain prop entities") &&
-           Expect(active_mesh_instance_count == visible_prop_count,
-                  "each visible prop should own exactly one renderer record") &&
+           Expect(active_mesh_instance_count == visible_prop_count + viewer_mesh_instance_count,
+                  "visible props and the viewer weapon should own their renderer records") &&
            Expect(shadow_only_prop_count == 1 && shadow_only_mesh_instance_count == 1 && shadow_only_flags_are_valid,
                   "Sponza should bind one cast-only occluder mesh instance") &&
            Expect(lightmapped_prop_count + shadow_only_prop_count == prop_count && lightmapped_props_are_static,
@@ -465,6 +481,8 @@ bool ValidateCookedScene(const std::filesystem::path &scene_path, const std::fil
            Expect(scene->AssetReferenceCount() > 0, "cooked scene should reference target assets") &&
            Expect(found_skybox && ibl.enabled && !ambient.enabled && ibl.panorama != nullptr && !ibl.panorama->Empty(),
                   "authored skybox should replace fallback ambient lighting with IBL") &&
+           Expect(environment_probe_count == 3 && environment_probes_are_valid,
+                  "Sponza should bind three baked local dynamic-lighting probes") &&
            Expect(found_fog && fog.enabled && fog.density > 0.0f,
                   "authored exponential height fog should reach the renderer") &&
            Expect(lights.size() == expected_realtime_lights,

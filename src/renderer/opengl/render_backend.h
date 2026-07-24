@@ -18,6 +18,7 @@
 
 #include "renderer/material.h"
 #include "renderer/mesh_instance.h"
+#include "renderer/opengl/particle_renderer.h"
 #include "renderer/opengl/render_data.h"
 #include "renderer/opengl/shaders/deferred_lighting.h"
 #include "renderer/opengl/shaders/fullscreen_blit.h"
@@ -128,6 +129,10 @@ struct EnvironmentResources
      * @brief TODO: Describe Destroy.
      */
     void Destroy();
+    /**
+     * @brief Release conversion-only resources after a local probe is built.
+     */
+    void DiscardCaptureResources();
 };
 
 /**
@@ -238,8 +243,7 @@ class RenderBackend final : public IRenderBackend
      */
     void UpdateMeshInstance(std::uint32_t slot, const glm::mat4 &transform, const Bounds &world_bounds,
                             std::uint32_t flags) override;
-    bool UpdateSkinningPalette(std::uint32_t slot,
-                               std::span<const glm::mat4> palette) override;
+    bool UpdateSkinningPalette(std::uint32_t slot, std::span<const glm::mat4> palette) override;
 
   private:
     /**
@@ -308,12 +312,14 @@ class RenderBackend final : public IRenderBackend
      * @brief TODO: Describe SyncEnvironmentResources.
      */
     void SyncEnvironmentResources();
+    void SyncEnvironmentProbeResources();
+    void SelectEnvironmentProbes();
     /**
      * @brief TODO: Describe BuildEnvironmentResources.
      *
      * @return TODO: Describe the return value.
      */
-    bool BuildEnvironmentResources();
+    bool BuildEnvironmentResources(const Texture &panorama, EnvironmentResources &resources, bool keep_skybox);
     /**
      * @brief TODO: Describe RenderSkybox.
      */
@@ -379,6 +385,10 @@ class RenderBackend final : public IRenderBackend
     RenderQueues render_queues_;
     ShaderPasses shader_passes_;
     EnvironmentResources environment_resources_;
+    std::unordered_map<const Texture *, EnvironmentResources> environment_probe_resources_;
+    std::vector<EnvironmentProbeBinding> bound_environment_probes_;
+    std::uint64_t environment_probe_revision_ = 0;
+    ParticleRenderer particle_renderer_;
     UiRenderer ui_renderer_;
     std::unordered_map<const Mesh *, MeshResources> mesh_resources_;
     std::unordered_map<const Material *, MaterialResources> material_resources_;

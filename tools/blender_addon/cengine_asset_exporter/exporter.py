@@ -540,6 +540,50 @@ def export_skybox_panoramas(
     return by_entity, outputs
 
 
+def export_environment_probe_panoramas(
+    blender: object,
+    blend_source: Path,
+    output_root: Path,
+    objects: list[object],
+    logger: Callable[[str], None] | None = None,
+) -> tuple[dict[str, Path], list[TextureExport]]:
+    """Convert baked native Blender environment-probe panoramas to HDR DDS."""
+    by_entity: dict[str, Path] = {}
+    outputs: list[TextureExport] = []
+    by_source: dict[Path, Path] = {}
+    for obj in objects:
+        getter = getattr(obj, "get", None)
+        if not callable(getter) or \
+                str(getter("ce_classname", "")) != "environment_probe":
+            continue
+        authored_path = str(getter("ce_panorama", "") or "")
+        source = Path(blender.path.abspath(authored_path)).absolute()
+        if source.suffix.lower() != ".exr" or not source.is_file():
+            raise RuntimeError(
+                f"environment probe must be baked to an existing .exr: {obj.name}")
+        output = by_source.get(source)
+        if output is None:
+            output = output_dir_for_source(
+                blend_source, output_root) / "probes" / \
+                f"{clean_asset_filename(str(obj.name))}.dds"
+            image = blender.data.images.load(str(source), check_existing=True)
+            width, height = int(image.size[0]), int(image.size[1])
+            if width <= 0 or height <= 0 or width != height * 2:
+                raise RuntimeError(
+                    f"environment probe panorama must use a 2:1 layout: {source}")
+            pixels = tuple(float(value) for value in image.pixels[:])
+            write_rgbexp32_dds(
+                output, width, height, encode_rgbexp32(pixels))
+            by_source[source] = output
+            outputs.append(TextureExport(source, output))
+            if logger is not None:
+                logger(
+                    f"Environment probe: {source} -> {output} "
+                    f"({width}x{height} RGBE HDR)")
+        by_entity[str(obj.name)] = output
+    return by_entity, outputs
+
+
 def bool_attr(value: object, name: str) -> bool:
     """TODO: Describe `bool_attr`.
 
@@ -600,6 +644,11 @@ def object_is_exportable(obj: object) -> bool:
     Returns:
         TODO: Describe the produced value.
     """
+    getter = getattr(obj, "get", None)
+    if callable(getter) and str(getter("ce_classname", "") or ""):
+        # Collision and other runtime authoring entities can be hidden from
+        # Blender renders without being omitted from the exported scene.
+        return True
     return not (
         bool_attr(obj, "hide_render")
         or bool_attr(obj, "hide_viewport")
@@ -872,6 +921,7 @@ def register_outputs(
     outputs: list[Path],
     logger: Callable[[str], None] | None = None,
     source_hash: int | None = None,
+    prune_source: bool = False,
 ) -> None:
     """TODO: Describe `register_outputs`.
 
@@ -888,11 +938,20 @@ def register_outputs(
     paths = make_project_paths(project_root)
     records = load_registry(paths)
     record_source_hash = source_hash if source_hash is not None else source_fingerprint(source)
+    stored_source = stored_path(paths.root, source)
+    if prune_source:
+        retained_outputs = {
+            stored_path(paths.root, output) for output in outputs
+        }
+        records = [
+            record for record in records
+            if record.source != stored_source or
+            record.output in retained_outputs
+        ]
     for output in outputs:
         asset_type = asset_type_for_extension(output.suffix)
         if asset_type == AssetType.UNKNOWN:
             raise RuntimeError(f"unsupported CEngine output extension: {output.suffix}")
-        stored_source = stored_path(paths.root, source)
         stored_output = stored_path(paths.root, output)
         guid = guid_from_stable_name(generic_path(stored_output))
         record = AssetRecord(guid, stored_source, stored_output, asset_type, record_source_hash)
@@ -993,18 +1052,26 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         raise RuntimeError("selected collection has no CEngine export type")
     is_scene = collection_spec.asset_type == AssetType.SCENE
     objects = exported_collection_objects([collection], log)
+    material_objects = [
+        obj for obj in objects
+        if str(obj.get("ce_classname", "") if callable(
+            getattr(obj, "get", None)) else "") not in {
+                "collider", "trigger_volume"}
+    ]
 
     packed_sources: dict[int, Path] = {}
     image_resolver = lambda image: image_source_path_for_export(image, source, root, packed_sources, log)
 
-    texture_outputs = export_textures(source, root, dds_format, material_images(objects, log), log, image_resolver)
+    texture_outputs = export_textures(
+        source, root, dds_format, material_images(material_objects, log),
+        log, image_resolver)
     texture_outputs_by_source = {texture.source: texture.output for texture in texture_outputs}
     phase_start = time.perf_counter()
     log("Material export started")
     material_outputs = write_material_assets(
         source,
         root,
-        objects,
+        material_objects,
         image_resolver,
         texture_outputs_by_source.get,
         asset_path,
@@ -1039,10 +1106,15 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
     scene_objects = objects if is_scene else []
     skybox_outputs: dict[str, Path] = {}
     skybox_texture_outputs: list[TextureExport] = []
+    environment_probe_outputs: dict[str, Path] = {}
+    environment_probe_texture_outputs: list[TextureExport] = []
     audio_exports: list[AudioExport] = []
     if is_scene:
         skybox_outputs, skybox_texture_outputs = export_skybox_panoramas(
             blender, source, root, scene_objects, log)
+        environment_probe_outputs, environment_probe_texture_outputs = \
+            export_environment_probe_panoramas(
+                blender, source, root, scene_objects, log)
         audio_exports = export_speaker_audio(
             blender, source, root, scene_objects)
     if is_scene:
@@ -1131,7 +1203,8 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
             resolve_asset_path=lambda value: Path(
                 blender.path.abspath(value)).absolute(),
             skeleton_outputs=skeleton_outputs_by_name,
-            animation_outputs=animation_outputs_by_armature)
+            animation_outputs=animation_outputs_by_armature,
+            environment_probe_outputs=environment_probe_outputs)
         settings = blender_scene_settings(blender)
         active_camera = getattr(getattr(blender, "context", None), "scene", None)
         active_camera = getattr(active_camera, "camera", None)
@@ -1173,6 +1246,7 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
         + lightmap_outputs,
         log,
         source_hash,
+        prune_source=True,
     )
     for texture_output in texture_outputs:
         register_outputs(
@@ -1183,6 +1257,14 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
             source_fingerprint(texture_output.source),
         )
     for texture_output in skybox_texture_outputs:
+        register_outputs(
+            project_root,
+            texture_output.source,
+            [texture_output.output],
+            log,
+            source_fingerprint(texture_output.source),
+        )
+    for texture_output in environment_probe_texture_outputs:
         register_outputs(
             project_root,
             texture_output.source,
@@ -1201,7 +1283,8 @@ def export_current_file(output_root: Path | None = None, dds_format: str = "DXT5
 
     result = ExportResult(
         len(collection_outputs),
-        len(texture_outputs) + len(skybox_texture_outputs) + len(lightmap_outputs) +
+        len(texture_outputs) + len(skybox_texture_outputs) +
+        len(environment_probe_texture_outputs) + len(lightmap_outputs) +
         sum(len(getattr(material, "generated_textures", ())) for material in material_outputs),
         len(material_outputs),
         len(skeleton_outputs),

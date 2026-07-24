@@ -33,6 +33,8 @@ add_custom_target(CEngineViewerSchemas
 set(VIEWER_GAME_SOURCES
     "${VIEWER_GENERATED_HEADER}"
     game/game_coordinator.cpp
+    game/physics_ball_assets.cpp
+    game/physics_ball_weapon.cpp
     entity/player_entity.cpp
     input/actions.cpp
 )
@@ -69,12 +71,12 @@ if(CENGINE_BUILD_VIEWER)
     set(VIEWER_EXECUTABLE_SOURCES
         ${VIEWER_GAME_SOURCES}
         main.cpp
-        ui/hud.rml
-        ui/hud.rcss
-        ui/start_menu.rml
-        ui/start_menu.rcss
-        ui/tuning.rml
-        ui/tuning.rcss
+        ui/hud.html
+        ui/hud.css
+        ui/start_menu.html
+        ui/start_menu.css
+        ui/tuning.html
+        ui/tuning.css
     )
     add_executable(CEngine ${VIEWER_EXECUTABLE_SOURCES})
     add_dependencies(CEngine CEngineViewerSchemas)
@@ -122,21 +124,21 @@ if(CENGINE_BUILD_VIEWER)
         COMMAND "${CMAKE_COMMAND}" -E make_directory
             "$<TARGET_FILE_DIR:CEngine>/ui/viewer"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${rmlui_SOURCE_DIR}/Samples/assets/LatoLatin-Regular.ttf"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/fonts/LatoLatin-Regular.ttf"
             "$<TARGET_FILE_DIR:CEngine>/ui/fonts/LatoLatin-Regular.ttf"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${rmlui_SOURCE_DIR}/Samples/assets/LatoLatin-Bold.ttf"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/fonts/LatoLatin-Bold.ttf"
             "$<TARGET_FILE_DIR:CEngine>/ui/fonts/LatoLatin-Bold.ttf"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${rmlui_SOURCE_DIR}/Samples/assets/LICENSE.txt"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/fonts/LICENSE.txt"
             "$<TARGET_FILE_DIR:CEngine>/ui/fonts/LICENSE.txt"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/ui/start_menu.rml"
-            "${CMAKE_CURRENT_SOURCE_DIR}/ui/start_menu.rcss"
-            "${CMAKE_CURRENT_SOURCE_DIR}/ui/hud.rml"
-            "${CMAKE_CURRENT_SOURCE_DIR}/ui/hud.rcss"
-            "${CMAKE_CURRENT_SOURCE_DIR}/ui/tuning.rml"
-            "${CMAKE_CURRENT_SOURCE_DIR}/ui/tuning.rcss"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/start_menu.html"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/start_menu.css"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/hud.html"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/hud.css"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/tuning.html"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/tuning.css"
             "$<TARGET_FILE_DIR:CEngine>/ui/viewer"
         VERBATIM
     )

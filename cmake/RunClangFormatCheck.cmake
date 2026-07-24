@@ -16,6 +16,8 @@ file(GLOB_RECURSE FORMAT_FILES
     "${SOURCE_DIR}/tests/*.h"
 )
 
+list(FILTER FORMAT_FILES EXCLUDE REGEX "/src/ui/html/")
+
 set(FAILED_FILES "")
 
 foreach(FORMAT_FILE IN LISTS FORMAT_FILES)

@@ -37,6 +37,7 @@ The add-on uses native Blender data whenever it represents the same concept:
 | `player` | camera | transform, vertical field of view, near/far clip |
 | `player_spawn` | empty | team, spawn group, priority, clearance radius, transform |
 | `skybox` | empty | HDR panorama plus engine settings |
+| `environment_probe` | sphere light probe | box influence/parallax, falloff, HDR bake |
 | `fog` | empty | schema-defined fog settings |
 | `post_process` | empty | schema-defined presentation settings |
 | `physics_constraint` | empty | two physics-enabled prop references, anchors, limits, springs, and optional motor |
@@ -119,6 +120,23 @@ remain runtime work.
 This separation keeps ordinary iteration fast: material, entity, transform, or
 gameplay-property changes do not force a lighting render. Rebake only after a
 change that affects static lighting.
+
+## Environment probes
+
+Environment probes are the separate lighting path for dynamic objects. Add
+`environment_probe` entities as native Blender Sphere Light Probes, place and
+scale their box influence volumes over playable areas, and use **Bake
+Environment Probes** after static geometry or lighting changes. A small native
+Irradiance Volume may overlap the same area; the command first invokes Eevee's
+native light-probe cache bake, then captures six Eevee HDR faces at each engine
+Sphere probe and stores a portable panorama binding on it.
+
+Export converts each panorama to an RGBE DDS. At runtime the closest two probe
+volumes provide diffuse GI and box-projected, roughness-filtered reflections
+for non-lightmapped objects. Static meshes continue to use their Cycles
+lightmaps and do not receive probe diffuse lighting. Keep volumes coarse and
+overlapping: one per materially distinct room or hall segment is preferable to
+dense grids.
 
 ## Adding a game entity
 

@@ -135,7 +135,10 @@ runtime supports velocity commands, gravity, stairs, floor sticking, slope
 classification, ground body/velocity reporting, and safe capsule-height
 replacement. The viewer converts the authored eye transform to this bottom
 origin and back, applies planar WASD/sprint movement, and jumps on Space when
-grounded.
+grounded. Held Ctrl requests a shorter capsule and lower eye position; releasing
+Ctrl restores the standing capsule only when the taller shape fits. Primary
+mouse fire launches bounded, CCD-enabled dynamic spheres that retain their
+physics rotation in the rendered presentation.
 
 ## Blender requirements
 
@@ -178,7 +181,6 @@ Only a fully validated `PhysicsShape` is published.
 - no Jolt debug-draw bridge;
 - no step-time, active-body, shape-memory, or high-water telemetry;
 - no content-hash collision-asset deduplication;
-- no viewer crouch binding, although runtime height changes are supported.
 
 These are future work only when a concrete consumer and test justify the added
 surface.

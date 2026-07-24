@@ -22,6 +22,12 @@ file(GLOB_RECURSE CENGINE_TIDY_FILES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/tests/*.cpp"
 )
 
+# The engine-owned HTML runtime retains the formatting of its RmlUi-derived
+# implementation so upstream provenance remains reviewable. CEngine's adapter
+# files beside it remain part of both checks.
+list(FILTER CENGINE_FORMAT_FILES EXCLUDE REGEX "/src/ui/html/")
+list(FILTER CENGINE_TIDY_FILES EXCLUDE REGEX "/src/ui/html/")
+
 find_program(CLANG_FORMAT_EXE NAMES
     clang-format
     clang-format-19

@@ -39,6 +39,7 @@ class SdlInputBackend final : public IInputBackend
     [[nodiscard]] bool IsDown(Key key) const override;
     [[nodiscard]] glm::vec2 PointerDelta() const override;
     [[nodiscard]] glm::vec2 PointerPosition() const override;
+    [[nodiscard]] bool IsPointerDown(PointerButton button) const override;
     void SetPointerCaptured(bool captured) override;
 
   private:

@@ -18,12 +18,14 @@
 
 #include <glm/vec2.hpp>
 
+#include <cstdint>
 #include <span>
 
 namespace CEngine::Input
 {
 
 enum class Key;
+enum class PointerButton : std::uint8_t;
 struct InputEvent;
 
 /**
@@ -100,6 +102,13 @@ class IInputBackend
     [[nodiscard]] virtual glm::vec2 PointerPosition() const
     {
         return glm::vec2(0.0f);
+    }
+    /**
+     * Return whether a normalized pointer button is currently held.
+     */
+    [[nodiscard]] virtual bool IsPointerDown(PointerButton /*button*/) const
+    {
+        return false;
     }
     /**
      * @brief TODO: Describe SetPointerCaptured.

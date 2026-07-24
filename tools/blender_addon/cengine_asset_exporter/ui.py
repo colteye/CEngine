@@ -49,6 +49,12 @@ from .lightmaps import (
     bake_scene_lightmaps,
     ensure_lightmap_uvs,
 )
+from .environment_probes import (
+    DEFAULT_PROBE_RESOLUTION,
+    DEFAULT_PROBE_SAMPLES,
+    EnvironmentProbeBakeSettings,
+    bake_environment_probes,
+)
 from .physics_mesh import PhysicsMeshSettings, generate_physics_mesh
 
 _ENUM_ITEM_CACHE: dict[tuple[str, str], tuple[tuple[str, str, str], ...]] = {}
@@ -132,6 +138,14 @@ def _lightmap_settings(context) -> LightmapSettings:
     )
 
 
+def _environment_probe_settings(context) -> EnvironmentProbeBakeSettings:
+    settings = _settings(context)
+    return EnvironmentProbeBakeSettings(
+        resolution=settings.environment_probe_resolution,
+        samples=settings.environment_probe_samples,
+    )
+
+
 def _select_only(context, obj) -> None:
     """TODO: Describe `_select_only`.
 
@@ -178,6 +192,20 @@ def _new_entity_object(context, classname: str):
         obj = bpy.data.objects.new(name, data)
         context.collection.objects.link(obj)
         obj.location = context.scene.cursor.location
+        _select_only(context, obj)
+    elif object_type == "LIGHT_PROBE":
+        data = bpy.data.lightprobes.new(name, type="SPHERE")
+        data.influence_type = "BOX"
+        data.influence_distance = 1.0
+        data.falloff = 0.25
+        data.parallax_type = "BOX"
+        data.use_custom_parallax = False
+        data.show_influence = True
+        data.show_parallax = True
+        obj = bpy.data.objects.new(name, data)
+        context.collection.objects.link(obj)
+        obj.location = context.scene.cursor.location
+        obj.scale = (4.0, 4.0, 3.0)
         _select_only(context, obj)
     else:
         obj = bpy.data.objects.new(name, None)
@@ -227,6 +255,10 @@ def _apply_native_defaults(obj, schema: dict[str, object]) -> None:
         data.pitch = float(fields["pitch"]["default"])
         data.distance_reference = float(fields["min_distance"]["default"])
         data.distance_max = float(fields["max_distance"]["default"])
+    elif classname == "environment_probe" and obj.type == "LIGHT_PROBE":
+        obj.data.influence_type = "BOX"
+        obj.data.parallax_type = "BOX"
+        obj.data.use_custom_parallax = False
 
 
 def _draw_id_property(layout, obj, key: str, label: str) -> None:
@@ -362,6 +394,15 @@ def _draw_entity_fields(layout, obj, schema: dict[str, object]) -> None:
         layout.prop(obj.data, "cone_angle_inner", text="Inner Cone")
         layout.prop(obj.data, "cone_angle_outer", text="Outer Cone")
         layout.prop(obj.data, "cone_volume_outer", text="Outer Cone Gain")
+    elif classname == "environment_probe" and obj.type == "LIGHT_PROBE":
+        layout.prop(obj.data, "influence_type")
+        layout.prop(obj.data, "falloff")
+        layout.prop(obj.data, "clip_start")
+        layout.prop(obj.data, "clip_end")
+        layout.prop(obj.data, "parallax_type")
+        layout.prop(obj.data, "use_custom_parallax")
+        layout.prop(obj.data, "show_influence")
+        layout.prop(obj.data, "show_parallax")
 
     hidden_native_fields = {
         "prop": {
@@ -378,6 +419,7 @@ def _draw_entity_fields(layout, obj, schema: dict[str, object]) -> None:
             "audio", "gain", "pitch", "min_distance", "max_distance",
             "cone_inner_angle", "cone_outer_angle", "cone_outer_gain",
         },
+        "environment_probe": {"panorama", "blend_distance"},
         "collider": {"collision"},
         "trigger_volume": {"collision"},
     }.get(classname, set())
@@ -522,6 +564,14 @@ if bpy is not None:
             name="Samples", default=DEFAULT_SAMPLES, min=1, max=16384)
         lightmap_denoise: bpy.props.BoolProperty(  # type: ignore[valid-type]
             name="Denoise", default=DEFAULT_DENOISE)
+        environment_probe_resolution: bpy.props.IntProperty(  # type: ignore[valid-type]
+            name="Face Resolution", default=DEFAULT_PROBE_RESOLUTION,
+            min=16, max=1024)
+        environment_probe_samples: bpy.props.IntProperty(  # type: ignore[valid-type]
+            name="Samples", default=DEFAULT_PROBE_SAMPLES,
+            min=1, max=4096)
+
+
     class CENGINE_OT_export_assets(bpy.types.Operator):
         """TODO: Describe `CENGINE_OT_export_assets`."""
 
@@ -984,6 +1034,45 @@ if bpy is not None:
             return {"FINISHED"}
 
 
+    class CENGINE_OT_bake_environment_probes(bpy.types.Operator):
+        """Bake native sphere probes for dynamic GI and reflections."""
+
+        bl_idname = "cengine.bake_environment_probes"
+        bl_label = "Bake Environment Probes"
+        bl_description = (
+            "Bake native Blender sphere probes to local dynamic GI and "
+            "reflection environments"
+        )
+        bl_options = {"REGISTER"}
+
+        def execute(self, context):
+            """Bake every engine environment probe in the active scene."""
+            source = exporter.maybe_blend_source_path()
+            root = _output_root(context)
+            if source is None or root is None:
+                self.report(
+                    {"ERROR"},
+                    "Save the Blender file and choose an output root first")
+                return {"CANCELLED"}
+            try:
+                collection, _spec = _scene_collection(context)
+                objects = exporter.exported_collection_objects([collection])
+                outputs = bake_environment_probes(
+                    bpy, source, root, objects,
+                    _environment_probe_settings(context), exporter.log)
+                if not outputs:
+                    self.report(
+                        {"WARNING"},
+                        "Nothing to bake; add an Environment Probe entity")
+                    return {"CANCELLED"}
+            except (OSError, RuntimeError, ValueError) as error:
+                self.report({"ERROR"}, str(error))
+                return {"CANCELLED"}
+            self.report(
+                {"INFO"}, f"Baked {len(outputs)} environment probe(s)")
+            return {"FINISHED"}
+
+
     class CENGINE_OT_validate_asset(bpy.types.Operator):
         """TODO: Describe `CENGINE_OT_validate_asset`."""
 
@@ -1306,6 +1395,33 @@ if bpy is not None:
                 CENGINE_OT_clear_lightmaps.bl_idname, icon="X")
 
 
+    class CENGINE_PT_environment_probes(bpy.types.Panel):
+        """Native Blender probe baking for dynamic engine lighting."""
+
+        bl_label = "Environment Probes"
+        bl_idname = "CENGINE_PT_environment_probes"
+        bl_space_type = "VIEW_3D"
+        bl_region_type = "UI"
+        bl_category = "CEngine"
+        bl_parent_id = "CENGINE_PT_asset_workspace"
+
+        @classmethod
+        def poll(cls, context):
+            """Show only while authoring a CEngine scene collection."""
+            return CENGINE_PT_lightmaps.poll(context)
+
+        def draw(self, context):
+            """Draw the local dynamic-lighting bake controls."""
+            layout = self.layout
+            settings = _settings(context)
+            layout.label(text="Dynamic GI + local reflections")
+            layout.prop(settings, "environment_probe_resolution")
+            layout.prop(settings, "environment_probe_samples")
+            layout.operator(
+                CENGINE_OT_bake_environment_probes.bl_idname,
+                icon="LIGHTPROBE_SPHERE")
+
+
     class CENGINE_PT_entity(bpy.types.Panel):
         """TODO: Describe `CENGINE_PT_entity`."""
 
@@ -1456,12 +1572,14 @@ if bpy is not None:
         CENGINE_OT_prepare_lightmaps,
         CENGINE_OT_bake_lightmaps,
         CENGINE_OT_clear_lightmaps,
+        CENGINE_OT_bake_environment_probes,
         CENGINE_OT_validate_asset,
         CENGINE_OT_generate_physics_mesh,
         CENGINE_OT_preview_collider,
         CENGINE_OT_preview_entity,
         CENGINE_PT_asset_workspace,
         CENGINE_PT_lightmaps,
+        CENGINE_PT_environment_probes,
         CENGINE_PT_entity,
         CENGINE_PT_material,
     )

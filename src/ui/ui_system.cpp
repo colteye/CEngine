@@ -15,7 +15,7 @@
 
 #include "ui/ui_system.h"
 
-#include "ui/rmlui/rmlui_runtime.h"
+#include "ui/html_runtime.h"
 
 #include <utility>
 
@@ -25,7 +25,7 @@ namespace CEngine::UI
 class UISystem::Impl
 {
   public:
-    RmlUiRuntime runtime;
+    HtmlRuntime runtime;
 };
 
 UISystem::UISystem() : impl_(std::make_unique<Impl>())

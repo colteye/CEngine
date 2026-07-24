@@ -106,6 +106,7 @@ vec3 CalculateNormals()
 }
 
 #include "pbr_lighting.glsl"
+#include "environment_probes.glsl"
 
 void main()
 {		
@@ -145,7 +146,7 @@ void main()
     vec3 ambient_color = mix(ambient_ground_color, ambient_sky_color, sky_weight);
 	vec3 ambient = ambient_enabled && !has_lightmap ?
 		ambient_color * ambient_intensity * albedo * ao : vec3(0.0);
-	vec3 ibl = vec3(0.0);
+	vec3 global_ibl = vec3(0.0);
 	if (ibl_enabled) {
 		float ndotv = max(dot(N, V), 0.0);
 		vec3 f = fresnel_schlick_roughness(ndotv, F0, roughness);
@@ -161,10 +162,16 @@ void main()
 		// The global environment has no local visibility. Lightmapped surfaces
 		// contain their World diffuse transport already and receive no global
 		// runtime IBL; spatial reflection probes can add specular separately.
-		ibl = has_lightmap
+		global_ibl = has_lightmap
 			? vec3(0.0)
 			: (kd * diffuse_ibl * ao + specular_ibl * ao) * ibl_intensity;
 	}
+	float probe_coverage = 0.0;
+	vec3 probe_ibl = has_lightmap ? vec3(0.0) :
+		evaluate_environment_probes(vertex_pos_world, N, V, albedo,
+			metallic, roughness, ao, probe_coverage);
+	vec3 ibl = probe_ibl + global_ibl * (1.0 - probe_coverage);
+	ambient *= 1.0 - probe_coverage;
 	vec3 baked_irradiance = vec3(0.0);
 	if (has_lightmap) {
 		vec2 atlas_uv = lightmap_uv * lightmap_scale_offset.xy + lightmap_scale_offset.zw;

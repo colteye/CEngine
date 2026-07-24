@@ -463,6 +463,35 @@ class BlenderSceneTests(unittest.TestCase):
             sky.values["panorama"].path, "environments/test.dds")
         self.assertEqual(sky.values["intensity"], 1.5)
 
+    def test_native_environment_probe_exports_baked_dynamic_lighting(self) -> None:
+        """A native sphere probe binds one baked GI/reflection panorama."""
+        probe_data = types.SimpleNamespace(
+            type="SPHERE", influence_type="BOX", falloff=0.25)
+        probe = FakeObject(
+            "Interior Probe", "LIGHT_PROBE",
+            matrix=[
+                [4.0, 0.0, 0.0, 1.0],
+                [0.0, 6.0, 0.0, 2.0],
+                [0.0, 0.0, 3.0, 3.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            data=probe_data,
+            props={
+                "ce_classname": "environment_probe",
+                "ce_intensity": 1.25,
+                "ce_enabled": True,
+            })
+        scene = scene_description(
+            (probe,), {}, {}, lambda path: path.as_posix(),
+            environment_probe_outputs={
+                "Interior Probe": Path("probes/interior.dds")})
+        environment = scene.entities[0].data
+        self.assertEqual(environment.classname, "environment_probe")
+        self.assertEqual(
+            environment.values["panorama"].path, "probes/interior.dds")
+        self.assertEqual(environment.values["intensity"], 1.25)
+        self.assertAlmostEqual(environment.values["blend_distance"], 0.75)
+
 
 if __name__ == "__main__":
     unittest.main()

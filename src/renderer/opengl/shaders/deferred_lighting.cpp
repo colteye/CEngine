@@ -60,7 +60,8 @@ void DeferredLighting::Update(RenderSystem &rendering, GLuint albedo, GLuint nor
                               GLuint baked_light, GLuint depth, int width, int height, const ShadowGpuData &shadow_data,
                               GLuint shadow_atlas,
                               const std::array<GLuint, ShadowLimits::KMaxPointShadows> &point_shadow_maps,
-                              GLuint irradiance_map, GLuint prefiltered_map)
+                              GLuint irradiance_map, GLuint prefiltered_map,
+                              std::span<const EnvironmentProbeBinding> probes)
 {
     const CameraFrameData &camera_frame_data = rendering.GetCameraFrameData();
     const glm::mat4 inverse_view = glm::inverse(camera_frame_data.view);
@@ -98,6 +99,7 @@ void DeferredLighting::Update(RenderSystem &rendering, GLuint albedo, GLuint nor
     shadow_buffer_.Upload(shadow_data);
     shadow_samplers_.Bind(shadow_atlas, point_shadow_maps);
     environment_uniforms_.BindAndUpload(rendering, irradiance_map, prefiltered_map);
+    environment_probe_uniforms_.BindAndUpload(probes);
 }
 
 /**
@@ -111,6 +113,7 @@ void DeferredLighting::InitializeParameters()
     shadow_samplers_.Initialize(shader_id);
     ambient_uniforms_.Initialize(shader_id);
     environment_uniforms_.Initialize(shader_id);
+    environment_probe_uniforms_.Initialize(shader_id);
 
     albedo_id_ = glGetUniformLocation(shader_id, "g_albedo");
     normal_roughness_id_ = glGetUniformLocation(shader_id, "g_normal_roughness");

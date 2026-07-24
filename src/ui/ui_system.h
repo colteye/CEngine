@@ -50,8 +50,8 @@ struct UiEvent
 };
 
 /**
- * Engine-owned game UI facade. RmlUi is private to the implementation; callers
- * exchange only CEngine handles, events, and renderer-neutral frame data.
+ * Engine-owned HTML/CSS game UI facade. Callers exchange only CEngine handles,
+ * events, and renderer-neutral frame data.
  */
 class UISystem
 {
@@ -74,7 +74,7 @@ class UISystem
     bool Hide(UiScreenHandle screen);
 
     /**
-     * Bind a clicked RML element to a game-owned semantic action.
+     * Bind a clicked HTML element to a game-owned semantic action.
      */
     bool BindClick(UiScreenHandle screen, std::string_view element_id, std::string action);
     bool BindChange(UiScreenHandle screen, std::string_view element_id, std::string action);

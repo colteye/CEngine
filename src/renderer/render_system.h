@@ -17,8 +17,10 @@
 #define RENDER_SYSTEM_H
 
 #include "renderer/camera.h"
+#include "renderer/environment_probe.h"
 #include "renderer/light.h"
 #include "renderer/mesh_instance.h"
+#include "renderer/particle_emitter.h"
 #include "renderer/render_backend.h"
 #include "renderer/texture.h"
 #include "renderer/ui_frame.h"
@@ -120,6 +122,7 @@ class RenderSystem
 {
   public:
     static constexpr std::size_t MaxGpuLights = 64;
+    static constexpr std::size_t MaxParticlesPerEmitter = 4096;
 
     /**
      * @brief TODO: Describe RenderSystem.
@@ -200,8 +203,24 @@ class RenderSystem
      * @param flags TODO: Describe this parameter.
      */
     void UpdateMeshInstance(MeshInstanceHandle handle, const glm::mat4 &transform, std::uint32_t flags);
-    bool UpdateMeshSkinning(MeshInstanceHandle handle,
-                            std::span<const glm::mat4> palette);
+    bool UpdateMeshSkinning(MeshInstanceHandle handle, std::span<const glm::mat4> palette);
+
+    ParticleEmitterHandle RegisterParticleEmitter(const ParticleEmitter &emitter);
+    void RemoveParticleEmitter(ParticleEmitterHandle handle);
+    void UpdateParticleEmitter(ParticleEmitterHandle handle, const glm::mat4 &transform, bool emitting);
+    std::uint32_t EmitParticles(ParticleEmitterHandle handle, std::uint32_t count);
+    void UpdateParticles(float delta_seconds);
+    [[nodiscard]] const ParticleEmitter *ResolveParticleEmitter(ParticleEmitterHandle handle) const;
+    [[nodiscard]] std::size_t GetParticleCount(ParticleEmitterHandle handle) const;
+    [[nodiscard]] std::size_t GetParticleEmitterCount() const;
+    [[nodiscard]] std::span<const ParticleDraw> GetParticleDraws() const;
+
+    EnvironmentProbeHandle RegisterEnvironmentProbe(const EnvironmentProbe &probe);
+    void RemoveEnvironmentProbe(EnvironmentProbeHandle handle);
+    void UpdateEnvironmentProbe(EnvironmentProbeHandle handle, const EnvironmentProbe &probe);
+    [[nodiscard]] const EnvironmentProbe *ResolveEnvironmentProbe(EnvironmentProbeHandle handle) const;
+    [[nodiscard]] const std::vector<EnvironmentProbe> &GetEnvironmentProbes() const;
+    [[nodiscard]] std::uint64_t GetEnvironmentProbeRevision() const;
 
     /**
      * @brief TODO: Describe RegisterLight.
@@ -372,10 +391,30 @@ class RenderSystem
     bool ConsumeImageBasedLightingResourcesDirty();
 
   private:
+    struct SimulatedParticle
+    {
+        glm::vec3 position = glm::vec3(0.0f);
+        glm::vec3 velocity = glm::vec3(0.0f);
+        float age_seconds = 0.0f;
+        float lifetime_seconds = 0.0f;
+    };
+
+    struct ParticleEmitterState
+    {
+        ParticleEmitter emitter;
+        std::vector<SimulatedParticle> particles;
+        float emission_accumulator = 0.0f;
+        std::uint32_t emission_sequence = 0;
+    };
+
     /**
      * @brief TODO: Describe RebuildGpuLights.
      */
     void RebuildGpuLights();
+    [[nodiscard]] ParticleEmitterState *ResolveParticleEmitterState(ParticleEmitterHandle handle);
+    [[nodiscard]] const ParticleEmitterState *ResolveParticleEmitterState(ParticleEmitterHandle handle) const;
+    static void SpawnParticle(ParticleEmitterState &state, std::uint32_t emitter_index);
+    void RebuildParticleDraws();
 
     std::unique_ptr<IRenderBackend> backend_;
     UiFrame ui_frame_;
@@ -385,6 +424,15 @@ class RenderSystem
     std::vector<std::uint32_t> mesh_instance_generations_;
     std::vector<std::uint32_t> free_mesh_instances_;
     std::uint64_t mesh_instance_revision_ = 1;
+    std::vector<ParticleEmitterState> particle_emitters_;
+    std::vector<std::uint32_t> particle_emitter_generations_;
+    std::vector<std::uint32_t> free_particle_emitters_;
+    std::vector<ParticleDraw> particle_draws_;
+    std::size_t particle_emitter_count_ = 0;
+    std::vector<EnvironmentProbe> environment_probes_;
+    std::vector<std::uint32_t> environment_probe_generations_;
+    std::vector<std::uint32_t> free_environment_probes_;
+    std::uint64_t environment_probe_revision_ = 1;
     std::vector<Light> direct_lights_;
     std::vector<std::uint32_t> light_generations_;
     std::vector<std::uint32_t> free_lights_;

@@ -60,7 +60,7 @@ class PBRStandard
      */
     void UpdateFrame(RenderSystem &rendering, const ShadowGpuData &shadow_data, GLuint shadow_atlas,
                      const std::array<GLuint, ShadowLimits::KMaxPointShadows> &point_shadow_maps, GLuint irradiance_map,
-                     GLuint prefiltered_map);
+                     GLuint prefiltered_map, std::span<const EnvironmentProbeBinding> probes);
     /**
      * @brief TODO: Describe UpdateObject.
      *
@@ -108,6 +108,7 @@ class PBRStandard
     ShadowSamplers shadow_samplers_;
     AmbientUniforms ambient_uniforms_;
     EnvironmentUniforms environment_uniforms_;
+    EnvironmentProbeUniforms environment_probe_uniforms_;
     GLint cam_pos_id_ = -1;
     GLint m_id_ = -1;
     GLint v_id_ = -1;

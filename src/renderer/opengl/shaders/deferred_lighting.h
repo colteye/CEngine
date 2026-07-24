@@ -63,7 +63,7 @@ class DeferredLighting
     void Update(RenderSystem &rendering, GLuint albedo, GLuint normal_roughness, GLuint material, GLuint baked_light,
                 GLuint depth, int width, int height, const ShadowGpuData &shadow_data, GLuint shadow_atlas,
                 const std::array<GLuint, ShadowLimits::KMaxPointShadows> &point_shadow_maps, GLuint irradiance_map,
-                GLuint prefiltered_map);
+                GLuint prefiltered_map, std::span<const EnvironmentProbeBinding> probes);
 
   private:
     /**
@@ -77,6 +77,7 @@ class DeferredLighting
     ShadowSamplers shadow_samplers_;
     AmbientUniforms ambient_uniforms_;
     EnvironmentUniforms environment_uniforms_;
+    EnvironmentProbeUniforms environment_probe_uniforms_;
 
     GLint albedo_id_ = -1;
     GLint normal_roughness_id_ = -1;

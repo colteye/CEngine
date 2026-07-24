@@ -239,6 +239,13 @@ class InputSystem
                 values_[binding.action.Index()] += binding.scale;
             }
         }
+        for (const PointerButtonBinding &binding : pointer_button_bindings_)
+        {
+            if (backend_->IsPointerDown(binding.button))
+            {
+                values_[binding.action.Index()] += binding.scale;
+            }
+        }
         const glm::vec2 pointer_delta = backend_->PointerDelta();
         for (const PointerBinding &binding : pointer_bindings_)
         {
@@ -291,6 +298,13 @@ class InputSystem
         return backend_ != nullptr ? backend_->PointerPosition() : glm::vec2(0.0f);
     }
     /**
+     * Return whether a normalized pointer button is currently held.
+     */
+    [[nodiscard]] bool IsPointerDown(PointerButton button) const
+    {
+        return backend_ != nullptr && backend_->IsPointerDown(button);
+    }
+    /**
      * @brief TODO: Describe SetPointerCaptured.
      *
      * @param captured TODO: Describe this parameter.
@@ -318,6 +332,10 @@ class InputSystem
      * @return TODO: Describe the return value.
      */
     bool BindKey(ActionHandle action, Key key, float scale = 1.0f);
+    /**
+     * Bind a normalized pointer button to a logical action.
+     */
+    bool BindPointerButton(ActionHandle action, PointerButton button, float scale = 1.0f);
     /**
      * @brief TODO: Describe BindPointerAxis.
      *
@@ -361,11 +379,18 @@ class InputSystem
         PointerAxis axis{};
         float scale{};
     };
+    struct PointerButtonBinding
+    {
+        ActionHandle action;
+        PointerButton button{};
+        float scale{};
+    };
 
     std::unique_ptr<IInputBackend> backend_;
     std::unordered_map<std::string, ActionHandle> actions_by_name_;
     std::vector<float> values_;
     std::vector<KeyBinding> key_bindings_;
+    std::vector<PointerButtonBinding> pointer_button_bindings_;
     std::vector<PointerBinding> pointer_bindings_;
 };
 

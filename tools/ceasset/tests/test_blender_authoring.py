@@ -136,6 +136,16 @@ class BlenderAuthoringTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Floor"):
             load_lightmap_bindings((light, mesh), Path)
 
+    def test_baked_lights_do_not_require_collider_lightmaps(self) -> None:
+        """Collision-only meshes are not static lighting receivers."""
+        light = FakeObject(
+            "Sun", "LIGHT", ce_classname="light", ce_light_mode="Mixed")
+        collider = FakeObject(
+            "Collision", "MESH", ce_classname="collider")
+
+        self.assertEqual(
+            load_lightmap_bindings((light, collider), Path), ({}, []))
+
 
 if __name__ == "__main__":
     unittest.main()

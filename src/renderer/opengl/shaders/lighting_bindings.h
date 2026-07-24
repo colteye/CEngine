@@ -16,10 +16,12 @@
 #ifndef CENGINE_RENDERER_OPENGL_SHADERS_LIGHTING_BINDINGS_H
 #define CENGINE_RENDERER_OPENGL_SHADERS_LIGHTING_BINDINGS_H
 
+#include "renderer/environment_probe.h"
 #include "renderer/opengl/shadow_types.h"
 
 #include <array>
 #include <cstdint>
+#include <span>
 
 #include <glad/glad.h>
 
@@ -227,6 +229,29 @@ struct EnvironmentUniforms
      * @param prefiltered_texture TODO: Describe this parameter.
      */
     void BindAndUpload(const RenderSystem &rendering, GLuint irradiance_texture, GLuint prefiltered_texture) const;
+};
+
+inline constexpr std::size_t KMaxBoundEnvironmentProbes = 2;
+
+struct EnvironmentProbeBinding
+{
+    const EnvironmentProbe *probe = nullptr;
+    GLuint irradiance = 0;
+    GLuint prefiltered = 0;
+};
+
+struct EnvironmentProbeUniforms
+{
+    GLint count = -1;
+    GLint world_to_local = -1;
+    GLint local_to_world = -1;
+    GLint position_intensity = -1;
+    GLint extents_blend = -1;
+    std::array<GLint, KMaxBoundEnvironmentProbes> irradiance{};
+    std::array<GLint, KMaxBoundEnvironmentProbes> prefiltered{};
+
+    void Initialize(GLuint shader_id);
+    void BindAndUpload(std::span<const EnvironmentProbeBinding> probes) const;
 };
 
 } // namespace CEngine::Renderer::OpenGL

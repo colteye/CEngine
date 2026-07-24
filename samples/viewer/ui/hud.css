@@ -1,0 +1,95 @@
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    font-family: LatoLatin;
+    pointer-events: none;
+}
+
+#crosshair {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 18px;
+    height: 18px;
+    margin-left: -9px;
+    margin-top: -9px;
+}
+
+#crosshair-horizontal {
+    position: absolute;
+    left: 1px;
+    top: 8px;
+    width: 16px;
+    height: 2px;
+    background-color: #f4f7f7d8;
+}
+
+#crosshair-vertical {
+    position: absolute;
+    left: 8px;
+    top: 1px;
+    width: 2px;
+    height: 16px;
+    background-color: #f4f7f7d8;
+}
+
+#performance {
+    position: absolute;
+    top: 24px;
+    right: 30px;
+    width: 82px;
+    height: 30px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 8px;
+    color: #f4f7f7;
+    background-color: #0b141ac9;
+    border-left-width: 2px;
+    border-left-color: #d7ad69;
+}
+
+#fps-value {
+    width: 34px;
+    text-align: right;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+#fps-label {
+    margin-left: 7px;
+    color: #8d9ba0;
+    font-size: 8px;
+    font-weight: bold;
+    letter-spacing: 1.5px;
+}
+
+#weapon {
+    position: absolute;
+    right: 30px;
+    bottom: 28px;
+    display: flex;
+    align-items: center;
+    height: 30px;
+    padding: 0 9px;
+    color: #f4f7f7;
+    background-color: #0b141ac9;
+    border-right-width: 2px;
+    border-right-color: #d7ad69;
+}
+
+#weapon-name {
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 1.1px;
+}
+
+#weapon-hint {
+    margin-left: 12px;
+    color: #d7ad69;
+    font-size: 8px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}

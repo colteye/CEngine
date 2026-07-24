@@ -199,9 +199,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(ozz_animation)
 
-# RmlUi is an implementation detail of UISystem. Keep the dependency surface
-# deliberately small: FreeType supplies font rasterization, while the optional
-# sample, scripting, vector-image, and animation integrations stay disabled.
+# The UI parser, layout, interaction, and frame-generation source is owned
+# directly under src/ui/html. FreeType remains the one external UI dependency
+# and supplies font rasterization.
 set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
@@ -219,27 +219,12 @@ if(NOT TARGET Freetype::Freetype)
     add_library(Freetype::Freetype ALIAS freetype-interface)
 endif()
 
-set(RMLUI_SAMPLES OFF CACHE BOOL "" FORCE)
-set(RMLUI_TESTS OFF CACHE BOOL "" FORCE)
-set(RMLUI_LUA_BINDINGS OFF CACHE BOOL "" FORCE)
-set(RMLUI_LOTTIE_PLUGIN OFF CACHE BOOL "" FORCE)
-set(RMLUI_SVG_PLUGIN OFF CACHE BOOL "" FORCE)
-set(RMLUI_FONT_ENGINE freetype CACHE STRING "" FORCE)
-set(RMLUI_PRECOMPILED_HEADERS OFF CACHE BOOL "" FORCE)
-set(RMLUI_COMPILER_OPTIONS OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-    RmlUi
-    GIT_REPOSITORY https://github.com/mikke89/RmlUi.git
-    # RmlUi 6.2, pinned to an immutable revision.
-    GIT_TAG 2230d1a6e8e0848ed87a5761e2a5160b2a175ba4
-)
-FetchContent_MakeAvailable(RmlUi)
-
 if(CENGINE_ENABLE_OPENGL)
     set(CENGINE_OPENGL_SHADER_SOURCES
         src/renderer/opengl/glsl/deferred_lighting.frag
         src/renderer/opengl/glsl/environment_cube.vert
         src/renderer/opengl/glsl/equirectangular_to_cube.frag
+        src/renderer/opengl/glsl/environment_probes.glsl
         src/renderer/opengl/glsl/irradiance_convolution.frag
         src/renderer/opengl/glsl/prefilter_environment.frag
         src/renderer/opengl/glsl/skybox.vert
@@ -250,6 +235,8 @@ if(CENGINE_ENABLE_OPENGL)
         src/renderer/opengl/glsl/pbr_lighting.glsl
         src/renderer/opengl/glsl/pbr_geometry_pass.vert
         src/renderer/opengl/glsl/pbr_geometry_pass.frag
+        src/renderer/opengl/glsl/particle.vert
+        src/renderer/opengl/glsl/particle.frag
         src/renderer/opengl/glsl/point_shadow_depth.vert
         src/renderer/opengl/glsl/point_shadow_depth.frag
         src/renderer/opengl/glsl/shadow_sampling.glsl
@@ -286,6 +273,7 @@ add_library(CEngineScene STATIC
     src/entity/audio_entities.cpp
     src/entity/camera_entity.cpp
     src/entity/collider_entity.cpp
+    src/entity/environment_probe_entity.cpp
     src/entity/fog_entity.cpp
     src/entity/entity.cpp
     src/entity/entity_factory.cpp
@@ -400,8 +388,48 @@ if(CENGINE_BUILD_TESTS)
         target_compile_options(CEngineUiSystemTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME ui_system
-        COMMAND CEngineUiSystemTests "${CMAKE_CURRENT_SOURCE_DIR}/tests/ui/data")
+        COMMAND CEngineUiSystemTests "${CMAKE_CURRENT_SOURCE_DIR}")
+    add_executable(CEngineParticleSystemTests
+        tests/renderer/particle_system_tests.cpp
+    )
+    target_link_libraries(CEngineParticleSystemTests PRIVATE CEngineCore)
+    if(MSVC)
+        target_compile_options(CEngineParticleSystemTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+    else()
+        target_compile_options(CEngineParticleSystemTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME particle_system COMMAND CEngineParticleSystemTests)
+    add_executable(CEngineEnvironmentProbeTests
+        tests/renderer/environment_probe_tests.cpp
+    )
+    target_link_libraries(CEngineEnvironmentProbeTests PRIVATE CEngineCore)
+    if(MSVC)
+        target_compile_options(CEngineEnvironmentProbeTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+    else()
+        target_compile_options(CEngineEnvironmentProbeTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME environment_probe COMMAND CEngineEnvironmentProbeTests)
     if(CENGINE_ENABLE_OPENGL)
+        add_executable(CEngineParticleRendererTests
+            tests/renderer/particle_renderer_tests.cpp
+        )
+        target_link_libraries(CEngineParticleRendererTests PRIVATE CEngineCore)
+        if(MSVC)
+            target_compile_options(CEngineParticleRendererTests PRIVATE /W4 /permissive- /Zc:__cplusplus)
+        else()
+            target_compile_options(CEngineParticleRendererTests PRIVATE -Wall -Wextra -Wpedantic)
+        endif()
+        add_custom_command(TARGET CEngineParticleRendererTests POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E make_directory
+                "$<TARGET_FILE_DIR:CEngineParticleRendererTests>/shaders/opengl"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/opengl/glsl/particle.vert"
+                "${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/opengl/glsl/particle.frag"
+                "$<TARGET_FILE_DIR:CEngineParticleRendererTests>/shaders/opengl"
+            VERBATIM
+        )
+        add_test(NAME particle_renderer COMMAND CEngineParticleRendererTests)
+        set_tests_properties(particle_renderer PROPERTIES SKIP_RETURN_CODE 77)
         add_executable(CEngineUiRendererTests
             tests/renderer/ui_renderer_tests.cpp
         )
@@ -451,7 +479,12 @@ if(CENGINE_BUILD_TESTS)
     endif()
 endif()
 
+file(GLOB_RECURSE CENGINE_UI_HTML_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/html/Source/Core/*.cpp"
+)
+
 set(CENGINE_CORE_SOURCES
+    ${CENGINE_UI_HTML_SOURCES}
     src/animation/animation_system.cpp
     src/animation/ozz/ozz_animation_backend.cpp
     src/physics/physics_system.cpp
@@ -460,10 +493,10 @@ set(CENGINE_CORE_SOURCES
     src/input/input_system.cpp
     src/renderer/mesh_instance.cpp
     src/renderer/render_system.cpp
-    src/ui/rmlui/rmlui_file_interface.cpp
-    src/ui/rmlui/rmlui_render_interface.cpp
-    src/ui/rmlui/rmlui_runtime.cpp
-    src/ui/rmlui/rmlui_system_interface.cpp
+    src/ui/html_file_interface.cpp
+    src/ui/html_render_interface.cpp
+    src/ui/html_runtime.cpp
+    src/ui/html_system_interface.cpp
     src/ui/ui_system.cpp
     src/window/sdl/sdl_window_backend.cpp
     src/window/window_system.cpp
@@ -488,6 +521,7 @@ if(CENGINE_ENABLE_OPENGL)
     list(APPEND CENGINE_CORE_SOURCES
         third_party/glad/src/glad.c
         src/renderer/opengl/render_backend.cpp
+        src/renderer/opengl/particle_renderer.cpp
         src/renderer/opengl/shadow_system.cpp
         src/renderer/opengl/texture.cpp
         src/renderer/opengl/ui_renderer.cpp
@@ -528,13 +562,21 @@ target_include_directories(CEngineCore
     PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
+target_include_directories(CEngineCore SYSTEM PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/html/Include"
+)
 
 target_link_libraries(CEngineCore PUBLIC ${CENGINE_SDL3_TARGET})
 target_link_libraries(CEngineCore PUBLIC CEngineAssets)
 target_link_libraries(CEngineCore PRIVATE ozz_animation_offline)
-target_link_libraries(CEngineCore PRIVATE RmlUi::Core)
+target_link_libraries(CEngineCore PRIVATE Freetype::Freetype)
 target_link_libraries(CEngineCore PRIVATE ${CMAKE_DL_LIBS})
 target_link_libraries(CEngineScene PUBLIC CEngineCore)
+target_compile_definitions(CEngineCore PRIVATE
+    RMLUI_FONT_ENGINE_FREETYPE
+    RMLUI_STATIC_LIB
+    RMLUI_VERSION="6.2-cengine"
+)
 
 if(CENGINE_ENABLE_AUDIO)
     target_include_directories(CEngineCore SYSTEM PRIVATE
@@ -568,7 +610,7 @@ if(CENGINE_ENABLE_OPENGL)
 endif()
 
 if(MSVC)
-    set(CENGINE_SILENCED_THIRD_PARTY_SOURCES)
+    set(CENGINE_SILENCED_THIRD_PARTY_SOURCES ${CENGINE_UI_HTML_SOURCES})
     if(CENGINE_ENABLE_OPENGL)
         list(APPEND CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/glad/src/glad.c)
     endif()
@@ -579,7 +621,7 @@ if(MSVC)
         set_source_files_properties(${CENGINE_SILENCED_THIRD_PARTY_SOURCES} PROPERTIES COMPILE_OPTIONS /W0)
     endif()
 else()
-    set(CENGINE_SILENCED_THIRD_PARTY_SOURCES)
+    set(CENGINE_SILENCED_THIRD_PARTY_SOURCES ${CENGINE_UI_HTML_SOURCES})
     if(CENGINE_ENABLE_OPENGL)
         list(APPEND CENGINE_SILENCED_THIRD_PARTY_SOURCES third_party/glad/src/glad.c)
     endif()

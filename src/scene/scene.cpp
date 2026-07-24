@@ -132,6 +132,12 @@ void Scene::Update(Context &context, float delta_seconds)
     {
         return;
     }
+    if (context.rendering != nullptr)
+    {
+        // Advance particles from the previous tick before entities publish
+        // current-tick transforms and bursts.
+        context.rendering->UpdateParticles(delta_seconds);
+    }
     for (const auto &entity : entities_)
     {
         if (entity != nullptr && entity->Enabled())
@@ -374,10 +380,8 @@ EntityHandle Scene::PhysicsCharacterOwner(PhysicsCharacterHandle character) cons
 bool Scene::SetActiveEntity(EntityHandle entity)
 {
     const Entity *candidate = GetEntity(entity);
-    if (entity &&
-        (candidate == nullptr || !candidate->Enabled() ||
-         (candidate->Classname() != "camera" &&
-          candidate->Classname() != "player")))
+    if (entity && (candidate == nullptr || !candidate->Enabled() ||
+                   (candidate->Classname() != "camera" && candidate->Classname() != "player")))
     {
         return false;
     }
@@ -398,27 +402,19 @@ void Scene::ProcessPhysicsContacts(Context &context)
         for (std::size_t index = 0; index < count; ++index)
         {
             const PhysicsContactEvent &event = events[index];
-            const EntityHandle first = event.first
-                                           ? PhysicsBodyOwner(event.first)
-                                           : PhysicsCharacterOwner(
-                                                 event.first_character);
-            const EntityHandle second = event.second
-                                            ? PhysicsBodyOwner(event.second)
-                                            : PhysicsCharacterOwner(
-                                                  event.second_character);
+            const EntityHandle first =
+                event.first ? PhysicsBodyOwner(event.first) : PhysicsCharacterOwner(event.first_character);
+            const EntityHandle second =
+                event.second ? PhysicsBodyOwner(event.second) : PhysicsCharacterOwner(event.second_character);
             if (Entity *entity = GetEntity(first))
             {
-                entity->OnPhysicsContact(context,
-                                         {second, ContactPhase(event.type), event.position, event.normal, event.sensor,
-                                          static_cast<bool>(
-                                              event.second_character)});
+                entity->OnPhysicsContact(context, {second, ContactPhase(event.type), event.position, event.normal,
+                                                   event.sensor, static_cast<bool>(event.second_character)});
             }
             if (Entity *entity = GetEntity(second))
             {
-                entity->OnPhysicsContact(context,
-                                         {first, ContactPhase(event.type), event.position, -event.normal, event.sensor,
-                                          static_cast<bool>(
-                                              event.first_character)});
+                entity->OnPhysicsContact(context, {first, ContactPhase(event.type), event.position, -event.normal,
+                                                   event.sensor, static_cast<bool>(event.first_character)});
             }
         }
         if (count < events.size())
@@ -449,13 +445,11 @@ void Scene::ProcessPendingInputs(Context &context)
         const PendingInput pending = pending_inputs_[processed];
         if (Entity *target = GetEntity(pending.target))
         {
-            target->HandleInput(context,
-                                {pending.source, pending.activator, pending.input, pending.parameter});
+            target->HandleInput(context, {pending.source, pending.activator, pending.input, pending.parameter});
         }
         ++processed;
     }
-    pending_inputs_.erase(pending_inputs_.begin(),
-                          pending_inputs_.begin() + static_cast<std::ptrdiff_t>(processed));
+    pending_inputs_.erase(pending_inputs_.begin(), pending_inputs_.begin() + static_cast<std::ptrdiff_t>(processed));
 }
 
 void Scene::SynchronizeAudioListener(Context &context, float delta_seconds)

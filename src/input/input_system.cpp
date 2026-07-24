@@ -61,6 +61,16 @@ bool InputSystem::BindKey(ActionHandle action, Key key, float scale)
     return true;
 }
 
+bool InputSystem::BindPointerButton(ActionHandle action, PointerButton button, float scale)
+{
+    if (!action || action.Index() >= values_.size() || !std::isfinite(scale))
+    {
+        return false;
+    }
+    pointer_button_bindings_.push_back({action, button, scale});
+    return true;
+}
+
 /**
  * @brief TODO: Describe InputSystem::BindPointerAxis.
  *

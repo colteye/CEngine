@@ -19,6 +19,7 @@
 #include "entity/audio_entities.h"
 #include "entity/camera_entity.h"
 #include "entity/collider_entity.h"
+#include "entity/environment_probe_entity.h"
 #include "entity/fog_entity.h"
 #include "entity/light_entity.h"
 #include "entity/logic_entities.h"
@@ -42,6 +43,7 @@ EntityFactory::EntityFactory()
     Register<PhysicsConstraintEntity, Generated::EngineEntities::PhysicsConstraint>("physics_constraint");
     Register<LightEntity, Generated::EngineEntities::Light>("light");
     Register<SkyboxEntity, Generated::EngineEntities::Skybox>("skybox");
+    Register<EnvironmentProbeEntity, Generated::EngineEntities::EnvironmentProbe>("environment_probe");
     Register<FogEntity, Generated::EngineEntities::Fog>("fog");
     Register<PostProcessEntity, Generated::EngineEntities::PostProcess>("post_process");
     Register<CameraEntity, Generated::EngineEntities::Camera>("camera");
